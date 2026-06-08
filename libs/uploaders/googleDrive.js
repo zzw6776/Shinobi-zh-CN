@@ -8,48 +8,32 @@ module.exports = (s,config,lang,app,io) => {
         const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
         return oAuth2Client
     }
-    const getVideoDirectoryId = (video) => {
-        return new Promise((resolve, reject) => {
-            const videoDirectory = s.group[video.ke].init.googd_dir + video.ke + '/' + video.mid
-            if(!s.group[video.ke].googleDriveFolderIds[video.ke + video.mid]){
-                var pageToken = null;
-                s.group[video.ke].googleDrive.files.list({
-                  q: `name='${videoDirectory}'`,
-                  fields: 'nextPageToken, files(id, name)',
-                  spaces: 'drive',
-                  pageToken: pageToken
-                }, function (err, res) {
-                  if (err) {
-                      reject(err)
-                  } else {
-                      var file = res.data.files
-                      if(file[0]){
-                          file = file[0]
-                          s.group[video.ke].googleDriveFolderIds[video.ke + video.mid] = file.id
-                          resolve(file.id)
-                      }else{
-                          s.group[video.ke].googleDrive.files.create({
-                            resource: {
-                              'name': videoDirectory,
-                              'mimeType': 'application/vnd.google-apps.folder'
-                            },
-                            fields: 'id'
-                          }, function (err, response) {
-                            if (err) {
-                              reject(err)
-                            } else {
-                                s.group[video.ke].googleDriveFolderIds[video.ke + video.mid] = response.data.id
-                                resolve(response.data.id)
-                            }
-                          })
-                      }
-                  }
-                })
-            }else{
-                resolve(s.group[video.ke].googleDriveFolderIds[video.ke + video.mid])
-            }
-
+    const getVideoDirectoryId = async (video) => {
+        const videoDirectory = s.group[video.ke].init.googd_dir + video.ke + '/' + video.mid
+        const cacheKey = video.ke + video.mid
+        if(s.group[video.ke].googleDriveFolderIds[cacheKey]){
+            return s.group[video.ke].googleDriveFolderIds[cacheKey]
+        }
+        const drive = s.group[video.ke].googleDrive
+        const listResponse = await drive.files.list({
+            q: `name='${videoDirectory}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive',
         })
+        const files = listResponse.data.files
+        if(files && files[0]){
+            s.group[video.ke].googleDriveFolderIds[cacheKey] = files[0].id
+            return files[0].id
+        }
+        const createResponse = await drive.files.create({
+            requestBody: {
+                name: videoDirectory,
+                mimeType: 'application/vnd.google-apps.folder'
+            },
+            fields: 'id'
+        })
+        s.group[video.ke].googleDriveFolderIds[cacheKey] = createResponse.data.id
+        return createResponse.data.id
     }
     //Google Drive Storage
     var beforeAccountSaveForGoogleDrive = function(d){
@@ -89,26 +73,28 @@ module.exports = (s,config,lang,app,io) => {
             }else{
                 oAuth2Client = s.group[e.ke].googleDriveOAuth2Client
             }
+            if(!oAuth2Client) return
             if(userDetails.googd_code && userDetails.googd_code !== 'Authorized. Token Set.' && userDetails.googd_code !== '***************' && !s.group[e.ke].googleDrive){
-                oAuth2Client.getToken(userDetails.googd_code, (err, token) => {
-                    if (err) return console.error('Error retrieving access token', err)
-                    oAuth2Client.setCredentials(token)
+                try {
+                    const { tokens } = await oAuth2Client.getToken(userDetails.googd_code)
+                    oAuth2Client.setCredentials(tokens)
                     s.accountSettingsEdit({
                         ke: e.ke,
                         uid: e.uid,
                         form: {
                             details: JSON.stringify(Object.assign(userDetails,{
                                 googd_code: '***************',
-                                googd_token: token,
+                                googd_token: tokens,
                             }))
                         },
                     },true)
-                })
+                    s.group[e.ke].googleDrive = google.drive({version: 'v3', auth: oAuth2Client})
+                } catch(err) {
+                    s.userLog({ ke: e.ke, mid: '$USER' }, { type: 'Google Drive Error', msg: err.toString() })
+                }
             }else if(userDetails.googd_token && !s.group[e.ke].googleDrive){
                 oAuth2Client.setCredentials(userDetails.googd_token)
-                const auth = oAuth2Client
-                const drive = google.drive({version: 'v3', auth});
-                s.group[e.ke].googleDrive = drive
+                s.group[e.ke].googleDrive = google.drive({version: 'v3', auth: oAuth2Client})
             }
         }
     }
@@ -116,7 +102,7 @@ module.exports = (s,config,lang,app,io) => {
         s.group[user.ke].googleDrive = null
         s.group[user.ke].googleDriveOAuth2Client = null
     }
-    var deleteVideoFromGoogleDrive = function(e,video,callback){
+    var deleteVideoFromGoogleDrive = async function(e,video,callback){
         // e = user
         const groupKey = e.ke
         var videoDetails = s.parseJSON(video.details)
@@ -124,16 +110,14 @@ module.exports = (s,config,lang,app,io) => {
             callback()
             return
         }
-        s.group[groupKey].googleDrive.files.delete({
-            fileId: videoDetails.id
-        }, function(err, resp){
-            if (err) {
-                console.log('Error code:', err.code)
-            } else {
-                // console.log('Successfully deleted', file);
-            }
-            callback()
-        })
+        try {
+            await s.group[groupKey].googleDrive.files.delete({
+                fileId: videoDetails.id
+            })
+        } catch(err) {
+            console.log('Error code:', err.code)
+        }
+        callback()
     }
     var uploadVideoToGoogleDrive = async function(e,k){
         //e = video object
@@ -147,75 +131,69 @@ module.exports = (s,config,lang,app,io) => {
             fileStream.on('error', function (err) {
                 console.error(err)
             })
-            var bucketName = s.group[e.ke].init.googd_bucket
-            var saveLocation = s.group[e.ke].init.googd_dir+e.ke+'/'+e.mid+'/'+k.filename
-            s.group[e.ke].googleDrive.files.create({
-                  requestBody: {
-                    name: k.filename,
-                    parents: [await getVideoDirectoryId(e)],
-                    mimeType: 'video/'+ext
-                  },
-                  media: {
-                    mimeType: 'video/'+ext,
-                    body: fileStream
-                  }
-              }).then(function(response){
-                  const data = response.data
-
-                    if(s.group[e.ke].init.googd_log === '1' && data && data.id){
-                        s.knexQuery({
-                            action: "insert",
-                            table: "Cloud Videos",
-                            insert: {
-                                mid: e.mid,
-                                ke: e.ke,
-                                time: k.startTime,
-                                status: 1,
-                                type: 'googd',
-                                details: s.s({
-                                    id: data.id
-                                }),
-                                size: k.filesize,
-                                end: k.endTime,
-                                href: ''
-                            }
-                        })
-                        s.setCloudDiskUsedForGroup(e.ke,{
-                            amount : k.filesizeMB,
-                            storageType : 'googd'
-                        })
-                        s.purgeCloudDiskForGroup(e,'googd')
+            try {
+                const response = await s.group[e.ke].googleDrive.files.create({
+                    requestBody: {
+                        name: k.filename,
+                        parents: [await getVideoDirectoryId(e)],
+                        mimeType: 'video/'+ext
+                    },
+                    media: {
+                        mimeType: 'video/'+ext,
+                        body: fileStream
                     }
-                }).catch((err) => {
-                    if(err){
-                        s.userLog(e,{type:lang['Google Drive Storage Upload Error'],msg:err})
-                    }
-                    console.log(err)
                 })
+                const data = response.data
+                if(s.group[e.ke].init.googd_log === '1' && data && data.id){
+                    s.knexQuery({
+                        action: "insert",
+                        table: "Cloud Videos",
+                        insert: {
+                            mid: e.mid,
+                            ke: e.ke,
+                            time: k.startTime,
+                            status: 1,
+                            type: 'googd',
+                            details: s.s({
+                                id: data.id
+                            }),
+                            size: k.filesize,
+                            end: k.endTime,
+                            href: ''
+                        }
+                    })
+                    s.setCloudDiskUsedForGroup(e.ke,{
+                        amount : k.filesizeMB,
+                        storageType : 'googd'
+                    })
+                    s.purgeCloudDiskForGroup(e,'googd')
+                }
+            } catch(err) {
+                s.userLog(e,{type:lang['Google Drive Storage Upload Error'],msg:err})
+                console.log(err)
+            }
         }
     }
-    var onInsertTimelapseFrame = function(monitorObject,queryInfo,filePath){
+    var onInsertTimelapseFrame = async function(monitorObject,queryInfo,filePath){
         var e = monitorObject
-        if(s.group[e.ke].googd && s.group[e.ke].init.use_googd !== '0' && s.group[e.ke].init.googd_save === '1'){
+        if(s.group[e.ke].googleDrive && s.group[e.ke].init.use_googd !== '0' && s.group[e.ke].init.googd_save === '1'){
             var fileStream = fs.createReadStream(filePath)
             fileStream.on('error', function (err) {
                 console.error(err)
             })
             var saveLocation = s.group[e.ke].init.googd_dir + e.ke + '/' + e.mid + '_timelapse/' + queryInfo.filename
-            s.group[e.ke].googleDrive.files.create({
-                  requestBody: {
-                    name: saveLocation,
-                    mimeType: 'image/jpeg'
-                  },
-                  media: {
-                    mimeType: 'image/jpeg',
-                    body: fileStream
-                  }
-              }).then(function(response){
-                  const data = response.data
-                if(err){
-                    s.userLog(e,{type:lang['Google Drive Storage Upload Error'],msg:err})
-                }
+            try {
+                const response = await s.group[e.ke].googleDrive.files.create({
+                    requestBody: {
+                        name: saveLocation,
+                        mimeType: 'image/jpeg'
+                    },
+                    media: {
+                        mimeType: 'image/jpeg',
+                        body: fileStream
+                    }
+                })
+                const data = response.data
                 if(s.group[e.ke].init.googd_log === '1' && data && data.id){
                     s.knexQuery({
                         action: "insert",
@@ -238,33 +216,35 @@ module.exports = (s,config,lang,app,io) => {
                     },'timelapseFrames')
                     s.purgeCloudDiskForGroup(e,'googd','timelapseFrames')
                 }
-            })
+            } catch(err) {
+                s.userLog(e,{type:lang['Google Drive Storage Upload Error'],msg:err})
+            }
         }
     }
-    var onDeleteTimelapseFrameFromCloud = function(e,frame,callback){
+    var onDeleteTimelapseFrameFromCloud = async function(e,frame,callback){
         // e = user
         var frameDetails = s.parseJSON(frame.details)
         if(frame.type !== 'googd'){
             return
         }
-        s.group[e.ke].googleDrive.files.delete({
-            fileId: frameDetails.id
-        }, function(err, resp){
-            if (err) console.log(err);
-            callback()
-        });
+        try {
+            await s.group[e.ke].googleDrive.files.delete({
+                fileId: frameDetails.id
+            })
+        } catch(err) {
+            console.log(err)
+        }
+        callback()
     }
     var onGetVideoData = async (video) => {
         // e = user
         var videoDetails = s.parseJSON(video.details)
         const fileId = videoDetails.id
-        return new Promise((resolve, reject) => {
-            s.group[video.ke].googleDrive.files
-                .get({fileId, alt: 'media'}, {responseType: 'stream'})
-                .then(res => {
-                    resolve(res.data)
-                }).catch(reject)
-        })
+        const res = await s.group[video.ke].googleDrive.files.get(
+            {fileId, alt: 'media'},
+            {responseType: 'stream'}
+        )
+        return res.data
     }
     //
     app.get([config.webPaths.apiPrefix+':auth/googleDriveOAuthRequest/:ke'], (req,res) => {
