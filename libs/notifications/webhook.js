@@ -100,7 +100,9 @@ module.exports = function(s,config,lang,getSnapshot){
         const userDetails = s.parseJSON(user.details);
         const groupKey = user.ke;
         //telegrambot
-        let webhookEndpoint = s.group[groupKey].init.global_webhook_url;
+        // read from userDetails (passed in), not s.group[ke].init — init is populated AFTER
+        // loadGroupAppExtensions run in loadGroupApps, so init.global_webhook_url is still empty here
+        let webhookEndpoint = userDetails.global_webhook_url || s.group[groupKey].init.global_webhook_url;
         if(!webhookEndpoint){
             allowedSend[groupKey] = false
         }else{
