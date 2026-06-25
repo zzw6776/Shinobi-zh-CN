@@ -434,6 +434,7 @@ module.exports = (s,config,lang) => {
                     const queryGroup = {
                         mid: video.mid,
                         time: video.time,
+                        type: storageType,
                     }
                     if(whereGroup.length > 0)queryGroup.__separator = 'or'
                     whereGroup.push(queryGroup)
@@ -472,6 +473,7 @@ module.exports = (s,config,lang) => {
                 table: "Cloud Timelapse Frames",
                 where: [
                     ['ke','=',groupKey],
+                    ['type','=',storageType],
                 ],
                 orderBy: ['time','asc'],
                 limit: 3
@@ -485,6 +487,7 @@ module.exports = (s,config,lang) => {
                     const queryGroup = {
                         mid: frame.mid,
                         time: frame.time,
+                        type: storageType,
                     }
                     if(whereGroup.length > 0)queryGroup.__separator = 'or'
                     whereGroup.push(queryGroup)
@@ -492,7 +495,7 @@ module.exports = (s,config,lang) => {
                         amount : -(frame.size/1048576),
                         storageType : storageType
                     })
-                    // s.deleteVideoFromCloudExtensionsRunner({ke: groupKey},storageType,frame)
+                    s.onDeleteTimelapseFrameFromCloudExtensionsRunner({ke: groupKey},storageType,frame)
                 })
                 const whereGroupLength = whereGroup.length
                 if(whereGroupLength > 0){
