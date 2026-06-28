@@ -709,7 +709,7 @@ module.exports = function(s,config,lang,app,io){
         s.auth(req.params,async (user) => {
             const groupKey = req.params.ke
             const monitorId = req.params.id
-            if(!s.group[groupKey] || !s.group[groupKey].rawMonitorConfigurations[monitorId]){
+            if(!s.group[groupKey] || !s.group[groupKey].activeMonitors[monitorId]){
                 response.msg = 'Not Ready'
                 s.closeJsonResponse(res,response);
                 return
