@@ -178,6 +178,7 @@ module.exports = (s,config,lang) => {
             delete(activeMonitor.detector_notrigger_timeout)
             clearTimeout(activeMonitor.noViewerCountDisableSubstream)
             clearTimeout(activeMonitor.motion_lock)
+            delete(activeMonitor.motion_lock)
             clearTimeout(activeMonitor.resetFatalErrorCountTimer)
             delete(activeMonitor.onvifConnection)
             delete(activeMonitor.buildingTimelapseVideo)
