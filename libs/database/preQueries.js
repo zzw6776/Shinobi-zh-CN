@@ -29,6 +29,19 @@ module.exports = function(s,config){
             // UNIQUE KEY `mail` (`mail`)
             {name: 'mail', type: 'unique'},
         ]);
+        await createTable('PushTokens',[
+            isMySQL ? {name: 'utf8', type: 'charset'} : null,
+            isMySQL ? {name: 'utf8_general_ci', type: 'collate'} : null,
+            {name: 'ke', length: 50, type: 'string'},
+            {name: 'uid', length: 50, type: 'string'},
+            {name: 'token', length: 500, type: 'string'},
+            {name: 'name', length: 100, type: 'string'},
+            {name: 'time', type: 'timestamp', defaultTo: currentTimestamp()},
+            // UNIQUE KEY `pushtokens_token_unique` (`token`)
+            {name: 'token', type: 'unique'},
+            // KEY `pushtokens_ke_index` (`ke`)
+            {name: ['ke'], type: 'index', length: 'pushtokens_ke_index'},
+        ]);
         await createTable('API',[
             isMySQL ? {name: 'utf8', type: 'charset'} : null,
             isMySQL ? {name: 'utf8_general_ci', type: 'collate'} : null,

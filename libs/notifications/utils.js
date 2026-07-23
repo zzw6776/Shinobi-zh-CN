@@ -19,7 +19,21 @@ module.exports = (s,config,lang) => {
             details,
         }
     }
+    // Link that opens the Shinobi Go mobile app on the triggering monitor,
+    // via the web redirect page (/app/open) so the link is clickable in
+    // Discord, email clients, etc. notificationBaseUrl is resolved at startup
+    // in libs/webServer.js (conf value -> baseURL -> detected machine IP); the
+    // raw scheme link is only a safety net if that somehow never ran.
+    function getAppDeepLink(event){
+        const monitorId = event.mid || event.id;
+        const query = 'ke=' + encodeURIComponent(event.ke) + '&mid=' + encodeURIComponent(monitorId);
+        if(config.notificationBaseUrl){
+            return config.notificationBaseUrl + 'app/open?' + query;
+        }
+        return 'shinobi://monitor?' + query;
+    }
     return {
-        parseMessageOptions
+        parseMessageOptions,
+        getAppDeepLink,
     }
 }

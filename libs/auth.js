@@ -162,6 +162,13 @@ module.exports = function(s,config,lang){
             },1000 * 60 * 5)
         }
     }
+    var isIpAllowed = function(allowedIpConfig,requestIp){
+        return (`${allowedIpConfig}`).split(',').some(function(allowedIp){
+            allowedIp = allowedIp.trim()
+            return allowedIp.indexOf('0.0.0.0') > -1 ||
+                (allowedIp && requestIp && requestIp.indexOf(allowedIp) > -1)
+        })
+    }
     s.auth = function(params,onSuccessComplete,res,req){
         if(req){
             //express (http server) use of auth function
@@ -179,10 +186,8 @@ module.exports = function(s,config,lang){
             var activeSession = s.api[params.auth]
             if(
                 activeSession &&
-                (
-                    activeSession.ip.indexOf('0.0.0.0') > -1 ||
-                    params.ip && (params.ip.indexOf(activeSession.ip) > -1)
-                )
+                activeSession.ke === params.ke &&
+                isIpAllowed(activeSession.ip,params.ip)
             ){
                 onSuccessComplete(user)
             }else{
@@ -193,7 +198,7 @@ module.exports = function(s,config,lang){
             var activeSession = s.group[params.ke].users[params.auth]
             activeSession.permissions = {}
             onSuccessComplete(activeSession)
-        }else if(s.api[params.auth] && s.api[params.auth].details){
+        }else if(s.api[params.auth] && s.api[params.auth].details && s.api[params.auth].ke === params.ke){
             var activeSession = s.api[params.auth]
             onSuccess(activeSession)
             if(activeSession.timeout){

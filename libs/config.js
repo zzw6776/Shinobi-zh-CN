@@ -17,6 +17,8 @@ module.exports = function(s){
         config.productType = 'CE'
     }
     //config defaults
+    if(config.detectorCommandEnabled === undefined){config.detectorCommandEnabled=true}
+    if(config.disableSSRFSelfTargetFilter === undefined){config.disableSSRFSelfTargetFilter=false}
     if(config.monitorStartQueueSize === undefined){config.monitorStartQueueSize=1}
     if(config.monitorStartQueueDelay === undefined){config.monitorStartQueueDelay=0.5}
     if(config.cpuUsageMarker === undefined){config.cpuUsageMarker='%Cpu'}
@@ -63,9 +65,11 @@ module.exports = function(s){
         //child node connection port
         if(config.childNodes.port === undefined)config.childNodes.port = 8288;
         //child node connection key
-        if(config.childNodes.key === undefined)config.childNodes.key = [
-            '3123asdasdf1dtj1hjk23sdfaasd12asdasddfdbtnkkfgvesra3asdsd3123afdsfqw345'
-        ];
+        if(config.childNodes.key === undefined){
+            const generatedKey = require('crypto').randomBytes(32).toString('hex')
+            config.childNodes.key = [generatedKey]
+            if(config.childNodes.enabled)console.warn('\n[SECURITY] childNodes.key not set in conf.json — a random key was generated for this session only.\nTo persist it, add the following to conf.json under "childNodes":\n  "key": ["' + generatedKey + '"]\nChild nodes must be configured with the same key.\n')
+        }
 
     if(!config.timeZones){
         config.timeZones = [

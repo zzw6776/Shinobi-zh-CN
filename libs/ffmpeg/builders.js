@@ -1,13 +1,14 @@
 const fs = require('fs');
 const exec = require('child_process').exec;
 const spawn = require('child_process').spawn;
-const treekill = require('tree-kill');
+const treekill = require('../basic/safeTreeKill.js');
 const {
     arrayContains,
 } = require('../common.js')
 module.exports = (s,config,lang) => {
     const {
         validateDimensions,
+        isMonitorTargetSelfOrMetadata,
     } = require('./utils.js')(s,config,lang)
     const {
         parseJSON,
@@ -17,6 +18,9 @@ module.exports = (s,config,lang) => {
     if(!config.outputsNotCapableOfPresets)config.outputsNotCapableOfPresets = [];
     const hasCudaEnabled = (monitor) => {
         return monitor.details.accelerator === '1' && monitor.details.hwaccel === 'cuvid' && monitor.details.hwaccel_vcodec === ('h264_cuvid' || 'hevc_cuvid' || 'mjpeg_cuvid' || 'mpeg4_cuvid')
+    }
+    const videoCodecUsesX264Style = (videoCodec) => {
+        return videoCodec === 'libx264' || videoCodec === 'libx265'
     }
     const inputTypeIsStreamer = (monitor) => {
         return monitor.type === 'dashcam'|| monitor.type === 'socket'
@@ -38,7 +42,8 @@ module.exports = (s,config,lang) => {
         }
     }
     const buildConnectionFlagsFromConfiguration = (monitor) => {
-        const url = s.buildMonitorUrl(monitor);
+        var url = s.buildMonitorUrl(monitor);
+        if(!config.disableSSRFSelfTargetFilter && isMonitorTargetSelfOrMetadata(url))url = 'invalid://blocked-target'
         switch(monitor.type){
             case'dashcam':
                 return `-i -`
@@ -157,7 +162,8 @@ module.exports = (s,config,lang) => {
         }
         if(
             (input.type === 'h264' || input.type === 'mp4') &&
-            input.fulladdress.indexOf('rtsp://') >- 1 &&
+            (input.fulladdress.indexOf('rtsp://') >- 1 ||
+            input.fulladdress.indexOf('rtsps://') >- 1) &&
             input.rtsp_transport &&
             input.rtsp_transport !== 'no'
         ){
@@ -186,7 +192,8 @@ module.exports = (s,config,lang) => {
 	    }
         }
         //custom - input flags
-        return `${getInputTypeFlags(input.type)} ${inputFlags.join(' ')} -i "${input.fulladdress}"`
+        const fulladdress = (!config.disableSSRFSelfTargetFilter && isMonitorTargetSelfOrMetadata(input.fulladdress)) ? 'invalid://blocked-target' : input.fulladdress
+        return `${getInputTypeFlags(input.type)} ${inputFlags.join(' ')} -i "${fulladdress}"`
     }
     //create sub stream channel
     const createStreamChannel = function(e,number,channel){
@@ -234,7 +241,9 @@ module.exports = (s,config,lang) => {
             streamFlags.push(`-an`)
         }
         if(videoCodec === 'h264_vaapi'){
-            streamFilters.push('format=nv12,hwupload');
+            if(!e.details.hwaccel_format){
+                streamFilters.push('format=nv12,hwupload');
+            }
             if(channel.stream_scale_x && channel.stream_scale_y){
                 streamFilters.push('scale_vaapi=w='+channel.stream_scale_x+':h='+channel.stream_scale_y)
             }
@@ -255,11 +264,11 @@ module.exports = (s,config,lang) => {
             streamFilters.push(channel.stream_vf)
         }
         if(outputIsPresetCapable){
-            const streamPreset = config.outputsNotCapableOfPresets.indexOf(streamType) === -1 && channel.preset_stream ? channel.preset_stream : null
+            const streamPreset = config.outputsNotCapableOfPresets.indexOf(streamType) === -1 && channel.preset_stream && videoCodecUsesX264Style(videoCodec) ? channel.preset_stream : null
             if(streamPreset){
                 streamFlags.push(`-preset ${streamPreset}`)
             }
-            if(!videoCodecisCopy){
+            if(!videoCodecisCopy && videoCodecUsesX264Style(videoCodec)){
                 streamFlags.push(`-q:v ${videoQuality}`)
             }
         }else{
@@ -289,7 +298,7 @@ module.exports = (s,config,lang) => {
                 const hlsTime = !isNaN(parseInt(channel.hls_time)) ? `${parseInt(channel.hls_time)}` : '2'
                 const hlsListSize = !isNaN(parseInt(channel.hls_list_size)) ? `${parseInt(channel.hls_list_size)}` : '2'
                 if(videoCodec !== 'h264_nvmpi' && videoCodec !== 'h264_vaapi' && !videoCodecisCopy){
-                    if(!arrayContains('-tune',streamFlags)){
+                    if(videoCodecUsesX264Style(videoCodec) && !arrayContains('-tune',streamFlags)){
                         streamFlags.push(`-tune zerolatency`)
                     }
                     if(!arrayContains('-g ',streamFlags)){
@@ -318,7 +327,7 @@ module.exports = (s,config,lang) => {
         const inputFlags = []
         const useWallclockTimestamp = e.details.wall_clock_timestamp_ignore !== '1' || config.wallClockTimestampAsDefault && !e.details.wall_clock_timestamp_ignore
         const inputTypeIsH264 = e.type === 'h264'
-        const protocolIsRtsp = e.protocol === 'rtsp'
+        const protocolIsRtsp = (e.protocol === 'rtsp' || e.protocol === 'rtsps')
         const inputTypeCanLoop = e.type === 'mp4' || e.type === 'local'
         const hardwareAccelerationEnabled = e.details.accelerator==='1'
         const rtspTransportIsManual = e.details.rtsp_transport && e.details.rtsp_transport !== 'no'
@@ -338,6 +347,9 @@ module.exports = (s,config,lang) => {
         }
         if(e.details.probesize){
             inputFlags.push(`-probesize ${e.details.probesize}`)
+        }
+        if(e.details.rw_timeout && !isNaN(parseFloat(e.details.rw_timeout)) && !inputTypeCanLoop && !isStreamer){
+            inputFlags.push(`-rw_timeout ${Math.round(parseFloat(e.details.rw_timeout) * 1000000)}`)
         }
         if(e.details.stream_loop === '1' && inputTypeCanLoop){
             inputFlags.push(`-stream_loop -1`)
@@ -400,7 +412,8 @@ module.exports = (s,config,lang) => {
             const outputCanHaveAudio = config.outputsWithAudio.indexOf(streamType) > -1;
             const outputRequiresEncoding = streamType === 'mjpeg' || streamType === 'b64'
             const outputIsPresetCapable = outputCanHaveAudio
-            const streamChannels = s.parseJSON(e.details.stream_channels) || []
+            const parsedStreamChannels = s.parseJSON(e.details.stream_channels)
+            const streamChannels = parsedStreamChannels instanceof Array ? parsedStreamChannels : []
             const { videoWidth, videoHeight } = validateDimensions(e.details.stream_scale_x,e.details.stream_scale_y)
             if(inputMap)streamFlags.push(inputMap)
             if(e.details.cust_stream)streamFlags.push(e.details.cust_stream)
@@ -425,16 +438,13 @@ module.exports = (s,config,lang) => {
                 streamFlags.push(`-an`)
             }
             if(videoCodec === 'h264_vaapi'){
-		if (!e.details.hwaccel_format) {
+                if(!e.details.hwaccel_format){
                     streamFilters.push('format=nv12,hwupload');
-		}
+                }
                 if(e.details.stream_scale_x && e.details.stream_scale_y){
-		    if (!e.details.hwaccel_format) {
-			streamFilters.push(',')
-		    }
                     streamFilters.push('scale_vaapi=w='+e.details.stream_scale_x+':h='+e.details.stream_scale_y)
                 }
-        	}
+            }
             if(isCudaEnabled && (streamType === 'mjpeg' || streamType === 'b64')){
                 streamFilters.push('hwdownload,format=nv12')
             }
@@ -451,11 +461,11 @@ module.exports = (s,config,lang) => {
                 streamFilters.push(e.details.stream_vf)
             }
             if(outputIsPresetCapable){
-                const streamPreset = config.outputsNotCapableOfPresets.indexOf(streamType) === -1 && e.details.preset_stream ? e.details.preset_stream : null
+                const streamPreset = config.outputsNotCapableOfPresets.indexOf(streamType) === -1 && e.details.preset_stream && videoCodecUsesX264Style(videoCodec) ? e.details.preset_stream : null
                 if(streamPreset){
                     streamFlags.push(`-preset ${streamPreset}`)
                 }
-                if(!videoCodecisCopy){
+                if(!videoCodecisCopy && videoCodecUsesX264Style(videoCodec)){
                     streamFlags.push(`-q:v ${videoQuality}`)
                 }
             }else{
@@ -475,7 +485,7 @@ module.exports = (s,config,lang) => {
                     const hlsTime = !isNaN(parseInt(e.details.hls_time)) ? `${parseInt(e.details.hls_time)}` : '2'
                     const hlsListSize = !isNaN(parseInt(e.details.hls_list_size)) ? `${parseInt(e.details.hls_list_size)}` : '2'
                     if(videoCodec !== 'h264_nvmpi' && videoCodec !== 'h264_vaapi' && !videoCodecisCopy){
-                        if(!arrayContains('-tune',streamFlags)){
+                        if(videoCodecUsesX264Style(videoCodec) && !arrayContains('-tune',streamFlags)){
                             streamFlags.push(`-tune zerolatency`)
                         }
                         if(!arrayContains('-g ',streamFlags)){
@@ -579,7 +589,9 @@ module.exports = (s,config,lang) => {
                 customRecordingFlags.push(`-fflags ${ignoreDtsAndGenPts}`)
             }
             if(videoCodec === 'h264_vaapi'){
-                recordingFilters.push('format=nv12,hwupload')
+                if(!e.details.hwaccel_format){
+                    recordingFilters.push('format=nv12,hwupload')
+                }
             }
             switch(e.type){
                 case'h264':case'hls':case'mp4':case'local':
@@ -774,7 +786,7 @@ module.exports = (s,config,lang) => {
                 outputFlags.push(`-vf "${outputFilters.join(',')}"`)
             }
             if(videoCodec !== 'h264_nvmpi' && videoCodec !== 'h264_vaapi' && !videoCodecisCopy){
-                if(!arrayContains('-tune',outputFlags)){
+                if(videoCodecUsesX264Style(videoCodec) && !arrayContains('-tune',outputFlags)){
                     outputFlags.push(`-tune zerolatency`)
                 }
                 if(!arrayContains('-g ',outputFlags)){
@@ -794,10 +806,10 @@ module.exports = (s,config,lang) => {
             const videoFlags = []
             const inputMap = buildInputMap(e,e.details.input_map_choices.record_timelapse)
             const { videoWidth, videoHeight } = validateDimensions(e.details.record_timelapse_scale_x,e.details.record_timelapse_scale_y)
-            const creationFps = (1 / (!isNaN(parseFloat(e.details.record_timelapse_fps)) ? parseFloat(e.details.record_timelapse_fps) : 900)).toFixed(3);
+            const creationInterval = parseFloat(e.details.record_timelapse_fps) > 0 ? parseFloat(e.details.record_timelapse_fps) : 900;
             if(videoWidth && videoHeight)videoFlags.push(`-s ${videoWidth}x${videoHeight}`)
             if(inputMap)videoFlags.push(inputMap)
-            videoFilters.push(`fps=${creationFps}`)
+            videoFilters.push(`fps=1/${creationInterval}`)
             if(e.details.record_timelapse_vf)videoFilters.push(e.details.record_timelapse_vf)
             if(e.details.record_timelapse_watermark === "1" && e.details.record_timelapse_watermark_location){
                 videoFilters.push(buildWatermarkFiltersFromConfiguration('record_timelapse_',e))

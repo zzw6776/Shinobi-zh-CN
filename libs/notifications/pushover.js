@@ -6,6 +6,7 @@ module.exports = function (s, config, lang, getSnapshot) {
     } = require('../events/utils.js')(s,config,lang)
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
 
     if (config.pushover === true) {
@@ -36,6 +37,10 @@ module.exports = function (s, config, lang, getSnapshot) {
                             //	device: 'devicename',
                             priority: 1,
                         };
+                        if (sendBody.url) {
+                            msg.url = sendBody.url;
+                            msg.url_title = sendBody.url_title || 'Open in Shinobi Go';
+                        }
                         if (files.length > 0) {
                             // sadly pushover allows only ONE single attachment
                             msg.file = {
@@ -157,6 +162,8 @@ module.exports = function (s, config, lang, getSnapshot) {
                             {
                                 title: notifyText,
                                 description: lang.EventText1 + ' ' + d.currentTimestamp,
+                                // Link that opens the Shinobi Go mobile app.
+                                url: getAppDeepLink(d),
                             },
                             [
                                 {

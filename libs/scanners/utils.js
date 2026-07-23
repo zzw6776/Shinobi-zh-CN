@@ -180,7 +180,7 @@ module.exports = (s,config,lang) => {
             ip = addressRange.join(',')
         }
         if(ports === ''){
-            ports = '80,8080,8000,7575,8081,9080,8090,8999,8899'
+            ports = '80,8080,8000,7575,8081,9080,8090,8999,8899,2020'
         }
         if(ports.indexOf('-') > -1){
             ports = ports.split('-')
@@ -235,10 +235,18 @@ module.exports = (s,config,lang) => {
                 try{
                     var device = new onvif.OnvifDevice(camera)
                     var info = await device.init()
-                    var date = await device.services.device.getSystemDateAndTime()
+                    var date = null
+                    try{
+                        date = await device.services.device.getSystemDateAndTime()
+                    }catch(err){
+                        s.debugLog(err)
+                    }
+                    if(!device.current_profile || !device.current_profile.token){
+                        throw new Error('ONVIF_NO_PROFILE')
+                    }
                     var stream = await device.services.media.getStreamUri({
                         ProfileToken : device.current_profile.token,
-                        Protocol : 'RTSP'
+                        Protocol : 'RTSP' /* Won't work for RTSPS (SRTP) */
                     })
                     var cameraResponse = {
                         ip: camera.ip,
@@ -277,23 +285,60 @@ module.exports = (s,config,lang) => {
                     }
                     callback(Object.assign(cameraResponse,{f: 'onvif', snapShot: imageSnap}))
                 }catch(err){
+                    const message = (err && err.message) ? err.message : String(err)
                     const searchError = (find) => {
-                        return stringContains(find,err.message,true)
+                        // lowercase the needle too: stringContains lowercases only the
+                        // haystack, so uppercase errno codes (ECONNREFUSED, ETIMEDOUT, …)
+                        // never matched and every one fell through to the default case.
+                        return stringContains(find.toLowerCase(),message,true)
                     }
                     var foundDevice = false
                     var errorMessage = ''
                     switch(true){
+                        case searchError('ECONNREFUSED'):
+                        case searchError('EHOSTUNREACH'):
+                        case searchError('ENETUNREACH'):
+                        case searchError('EHOSTDOWN'):
+                        case searchError('ENOTFOUND'):
+                            foundDevice = false
+                        break;
+                        case searchError('ECONNRESET'):
+                        case searchError('ETIMEDOUT'):
+                        case searchError('ESOCKETTIMEDOUT'):
+                        case searchError('EPIPE'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErrNetwork
+                        break;
+                        case searchError('ONVIF_NO_PROFILE'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErrNoProfile
+                        break;
                         case searchError('400'):
                             foundDevice = true
                             errorMessage = lang.ONVIFErr400
+                        break;
+                        case searchError('401'):
+                        case searchError('403'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErr401
+                        break;
+                        case searchError('404'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErr404
                         break;
                         case searchError('405'):
                             foundDevice = true
                             errorMessage = lang.ONVIFErr405
                         break;
-                        case searchError('404'):
+                        case searchError('500'):
+                        case searchError('502'):
+                        case searchError('503'):
                             foundDevice = true
-                            errorMessage = lang.ONVIFErr404
+                            errorMessage = lang.ONVIFErr50x
+                        break;
+                        default:
+                            foundDevice = true
+                            errorMessage = `${lang.ONVIFErrUnknown} (${message.split('\n')[0].slice(0,120)})`
                         break;
                     }
                     if(foundDevice){

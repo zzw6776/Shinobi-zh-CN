@@ -32,6 +32,20 @@
     }else{
         urlPrefix = `${baseUrl}:${targetPort}`
     }
+    urlPrefix = (urlPrefix + '').replace(/[^A-Za-z0-9:/._~\-]/g, '')
+    var selfPrefix = (!targetPort || targetPort === '' || targetPort == 80 || targetPort == 443) ? baseUrl : `${baseUrl}:${targetPort}`
+    if(urlPrefix){
+        var resolvedOrigin
+        try{ resolvedOrigin = new URL(urlPrefix, baseUrl).origin }catch(e){ resolvedOrigin = null }
+        var allowedOrigins = [new URL(baseUrl).origin]
+        try{ allowedOrigins.push(new URL(selfPrefix).origin) }catch(e){}
+        if(config.baseURL){
+            try{ allowedOrigins.push(new URL(config.baseURL).origin) }catch(e){}
+        }
+        if(!resolvedOrigin || allowedOrigins.indexOf(resolvedOrigin) === -1){
+            urlPrefix = selfPrefix
+        }
+    }
     if(urlPrefix.endsWith('/') === false){
         urlPrefix += '/'
     }

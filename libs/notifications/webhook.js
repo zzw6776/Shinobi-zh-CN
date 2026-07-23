@@ -3,6 +3,7 @@ const FormData = require('form-data');
 module.exports = function(s,config,lang,getSnapshot){
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
     const allowedSend = {}
     function replaceQueryStringValues(webhookEndpoint,data){
@@ -123,7 +124,8 @@ module.exports = function(s,config,lang,getSnapshot){
                     description: lang.EventText1+' '+d.currentTimestamp,
                     ke: d.ke,
                     mid: d.id,
-                    eventDetails: d.details
+                    eventDetails: d.details,
+                    deepLink: getAppDeepLink(d)
                 },[
                     {
                         type: 'photo',
@@ -139,7 +141,8 @@ module.exports = function(s,config,lang,getSnapshot){
                     description: lang.EventText1+' '+d.currentTimestamp,
                     ke: d.ke,
                     mid: d.id,
-                    eventDetails: d.details
+                    eventDetails: d.details,
+                    deepLink: getAppDeepLink(d)
                 },[],d.ke)
             }
         }

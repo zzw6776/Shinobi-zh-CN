@@ -165,7 +165,7 @@ $(document).ready(function(e){
         var quickLinkHtml = ''
         $.each(streamBlockInfo.quickLinks,function(n,button){
             if(button.eval && !eval(button.eval))return;
-            quickLinkHtml += `<a title="${button.label}" class="btn btn-sm mr-1 badge btn-${button.class}"><i class="fa fa-${button.icon}"></i></a>`
+            quickLinkHtml += `<a title="${button.label}" class="badge mr-1 mb-0 cursor-pointer text-${button.class}" ${button.attr || ''}><i class="fa fa-${button.icon}"></i></a>`
         })
         var baseHtml = `<div
             id="${monitorLiveId}"
@@ -433,6 +433,10 @@ $(document).ready(function(e){
                             var y = 0
                             ctx.getContext("2d").drawImage(image,x,y,ctx.width,ctx.height)
                             URL.revokeObjectURL(loadedPlayer.imageUrl)
+                        }
+                        image.onerror = function() {
+                            URL.revokeObjectURL(loadedPlayer.imageUrl)
+                            loadedPlayer.imageLoading = false
                         }
                         ws.on('data',function(imageData){
                             try{
@@ -988,18 +992,20 @@ $(document).ready(function(e){
         resetMonitorCanvas(monitorId,true,monitor.subStreamChannel)
     }
     function isScrolledIntoView(elem){
-        var el = $(elem)
-        var theWindow = $(window)
-        var docViewTop = theWindow.scrollTop();
-        var docViewBottom = docViewTop + theWindow.height();
-
-        var elemTop = el.offset().top;
-        var elemBottom = elemTop + el.height();
-
-        return (
-            elemTop >= docViewTop && elemTop <= docViewBottom ||
-            elemBottom >= docViewTop && elemBottom <= docViewBottom
-        );
+        var node = elem && elem.jquery ? elem[0] : elem;
+        if(!node || !node.getBoundingClientRect)return true;
+        var elemRect = node.getBoundingClientRect();
+        var container = liveGridTab[0];
+        var viewTop, viewBottom;
+        if(container && container.getBoundingClientRect){
+            var containerRect = container.getBoundingClientRect();
+            viewTop = containerRect.top;
+            viewBottom = containerRect.bottom;
+        }else{
+            viewTop = 0;
+            viewBottom = window.innerHeight || document.documentElement.clientHeight;
+        }
+        return elemRect.bottom > viewTop && elemRect.top < viewBottom;
     }
     function pauseAllLiveGridPlayers(unpause){
         $('.monitor_item').each(function(n,el){

@@ -62,10 +62,6 @@ module.exports = function(s,config,lang,io){
 
     const streamConnectionAuthentication = (options,ipAddress) => {
         return new Promise( (resolve,reject) => {
-            var isInternal = false
-            if(ipAddress.indexOf('localhost') > -1 || ipAddress.indexOf('127.0.0.1') > -1){
-                isInternal = true
-            }
             const baseWheres = [
                 ['ke','=',options.ke],
                 ['uid','=',options.uid],
@@ -74,7 +70,7 @@ module.exports = function(s,config,lang,io){
                 action: "select",
                 columns: "ke,uid,auth,mail,details",
                 table: "Users",
-                where: baseWheres.concat(!isInternal ? [['auth','=',options.auth]] : [])
+                where: baseWheres.concat([['auth','=',options.auth]])
             },(err,r) => {
                 if(r&&r[0]){
                     resolve(r)
@@ -83,7 +79,7 @@ module.exports = function(s,config,lang,io){
                         action: "select",
                         columns: "*",
                         table: "API",
-                        where: baseWheres.concat(!isInternal ? [['code','=',options.auth]] : [])
+                        where: baseWheres.concat([['code','=',options.auth]])
                     },(err,r) => {
                         if(r && r[0]){
                             r = r[0]
@@ -117,23 +113,25 @@ module.exports = function(s,config,lang,io){
     }
 
     const validatedAndBindAuthenticationToSocketConnection = (cn,d,removeListenerOnDisconnect) => {
-        if(!d.channel)d.channel = 'MAIN';
+        if(d.channel){
+            cn.channel = parseInt(d.channel)+config.pipeAddition;
+        }else{
+            d.channel = 'MAIN';
+            cn.channel = 'MAIN';
+        }
         cn.ke = d.ke,
         cn.uid = d.uid,
         cn.auth = d.auth;
-        cn.channel = d.channel;
         cn.removeListenerOnDisconnect = removeListenerOnDisconnect;
         cn.socketVideoStream = d.id;
     }
 
     const createStreamEmitter = (d,cn) => {
-        var Emitter,chunkChannel
+        var Emitter
         if(!d.channel){
             Emitter = s.group[d.ke].activeMonitors[d.id].emitter
-            chunkChannel = 'MAIN'
         }else{
             Emitter = s.group[d.ke].activeMonitors[d.id].emitterChannel[parseInt(d.channel)+config.pipeAddition]
-            chunkChannel = parseInt(d.channel)+config.pipeAddition
         }
         if(!Emitter){
             cn.disconnect();return;
@@ -201,7 +199,7 @@ module.exports = function(s,config,lang,io){
                 cn.closeSocketVideoStream = function(){
                     Emitter.removeListener('data', contentWriter);
                 }
-                tx({time:toUTC(),buffer:s.group[d.ke].activeMonitors[d.id].firstStreamChunk[chunkChannel]})
+                tx({time:toUTC(),buffer:s.group[d.ke].activeMonitors[d.id].firstStreamChunk[cn.channel]})
                 Emitter.on('data',contentWriter = function(buffer){
                     tx({time:toUTC(),buffer:buffer})
                 })
@@ -253,7 +251,7 @@ module.exports = function(s,config,lang,io){
                 r = r[0];
                 validatedAndBindAuthenticationToSocketConnection(cn, d);
 
-                mp4frag = s.group[d.ke].activeMonitors[d.id].mp4frag[d.channel];
+                mp4frag = s.group[d.ke].activeMonitors[d.id].mp4frag[cn.channel];
                 if (!mp4frag) {
                     onFail('MP4 fragment not available');
                     return;
@@ -383,6 +381,7 @@ module.exports = function(s,config,lang,io){
                     // cn.checkedPermissions = s.checkPermission(r)
                     s.group[d.ke].users[d.auth] = {
                         cnid: cn.id,
+                        ke: d.ke,
                         uid: r.uid,
                         mail: r.mail,
                         details: r.details,
@@ -399,7 +398,21 @@ module.exports = function(s,config,lang,io){
                         s.group[d.ke].activeMonitors={}
                         if(!s.group[d.ke].activeMonitors){s.group[d.ke].activeMonitors={}}
                     }
-                    tx({f:'users_online',users:s.group[d.ke].users})
+                    // s.group[d.ke].users holds the full server-side session record per user,
+                    // keyed by their auth token - including that token as the key and their
+                    // entire account `details` blob (which can hold cloud/notification
+                    // credentials). Build a sanitized, uid-keyed copy with only what an "online
+                    // users" list needs before sending it over the socket. (security fix)
+                    var sanitizedUsersOnline = {}
+                    Object.keys(s.group[d.ke].users).forEach(function(authKey){
+                        var onlineUser = s.group[d.ke].users[authKey]
+                        sanitizedUsersOnline[onlineUser.uid] = {
+                            uid: onlineUser.uid,
+                            mail: onlineUser.mail,
+                            sub: !!(onlineUser.details && onlineUser.details.sub)
+                        }
+                    })
+                    tx({f:'users_online',users:sanitizedUsersOnline})
                     s.tx({f:'user_status_change',ke:d.ke,uid:cn.uid,status:1,user:s.group[d.ke].users[d.auth]},'GRP_'+d.ke)
                     s.sendDiskUsedAmountToClients(d.ke)
                     s.sendCloudDiskUsedAmountToClients(d.ke)
@@ -559,6 +572,8 @@ module.exports = function(s,config,lang,io){
                             break;
                             case'edit':
                                 d.cnid = cn.id
+                                d.ke = cn.ke
+                                d.uid = cn.uid
                                 s.accountSettingsEdit(d)
                             break;
                         }
@@ -733,6 +748,17 @@ module.exports = function(s,config,lang,io){
                                 }
                               tx({f:'mode_jpeg_on'})
                             break;
+                            case'detector_on':
+                                // Subscribe to detection events only (no viewer
+                                // registration, no stream rooms). Used by mobile
+                                // clients for push/local notifications.
+                                if(!d.ke){d.ke=cn.ke}
+                                cn.join('DETECTOR_'+d.ke+d.id);
+                            break;
+                            case'detector_off':
+                                if(!d.ke){d.ke=cn.ke}
+                                cn.leave('DETECTOR_'+d.ke+d.id);
+                            break;
                             case'watch_on':
                                 if(!d.ke){d.ke=cn.ke}
                                 s.initiateMonitorObject({mid:d.id,ke:d.ke});
@@ -880,6 +906,7 @@ module.exports = function(s,config,lang,io){
                     where: [
                         ['auth','=',d.auth],
                         ['uid','=',d.uid],
+                        ['ke','=',d.ke],
                     ],
                     limit: 1
                 },(err,r) => {
@@ -952,6 +979,9 @@ module.exports = function(s,config,lang,io){
                     }
                 })
             }else{
+                if(!cn.ke || cn.ke !== d.ke){
+                    return
+                }
                 if(s.group[d.ke] && s.group[d.ke].activeMonitors[d.mid]){
                     if(s.group[d.ke].activeMonitors[d.mid].allowStdinWrite === true){
                         switch(d.f){

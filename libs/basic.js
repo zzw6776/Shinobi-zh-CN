@@ -101,6 +101,17 @@ module.exports = function(s,config){
             s.createHash = function(x){return crypto.createHash('sha256').update(x).digest("hex")}
         break;
     }
+    s.defaultSuperPasswordHash = '21232f297a57a5a743894a0e4a801fc3'
+    s.superUserUsesDefaultPassword = function(superUser){
+        return !!superUser && typeof superUser.pass === 'string'
+            && superUser.pass.toLowerCase() === s.defaultSuperPasswordHash
+    }
+    s.warnDefaultSuperPassword = function(){
+        if(s._warnedDefaultSuperPassword)return;
+        s._warnedDefaultSuperPassword = true
+        const message = 'SECURITY: The Superuser (/super) account is using the default password shipped in super.sample.json. Change it in super.json, or delete super.json to disable Superuser, as soon as you have created your Admin account.'
+        if(s.systemLog){ s.systemLog(message) }else{ console.log(message) }
+    }
     //load camera controller vars
     s.nameToTime=function(x){
         x = x.split('.')[0].split('T')
@@ -303,7 +314,8 @@ module.exports = function(s,config){
     }
     s.kilobyteToMegabyte = function(kb,places){
         if(!places)places = 2
-        return (kb/1048576).toFixed(places)
+        const mb = parseFloat((kb/1048576).toFixed(places))
+        return isFinite(mb) ? mb : 0
     }
     Object.defineProperty(Array.prototype, 'chunk', {
         value: function(chunkSize){

@@ -279,6 +279,10 @@ module.exports = (s,config,lang) => {
                            "value": "rtsp"
                         },
                         {
+                           "name": "RTSPS",
+                           "value": "rtsps"
+                        },
+                        {
                            "name": "SRT",
                            "value": "srt"
                         },
@@ -502,6 +506,14 @@ module.exports = (s,config,lang) => {
                    "possible": ""
                 },
                 {
+                   "name": "detail=rw_timeout",
+                   "field": lang["Input Timeout"],
+                   "description": lang["fieldTextInputTimeout"],
+                   "default": "",
+                   "example": "5",
+                   "possible": ""
+                },
+                {
                     hidden: true,
                    "name": "detail=stream_loop",
                    "field": lang['Loop Stream'],
@@ -633,6 +645,23 @@ module.exports = (s,config,lang) => {
                                {
                                   "name": lang["MPEG-4 (Raspberry Pi)"],
                                   "value": "mpeg4_mmal"
+                               }
+                           ]
+                        },
+                        {
+                           "name": lang.Jetson,
+                           "optgroup": [
+                               {
+                                  "name": lang.h264_nvv4l2dec,
+                                  "value": "h264_nvv4l2dec"
+                               },
+                               {
+                                  "name": lang.mpeg2_nvv4l2dec,
+                                  "value": "mpeg2_nvv4l2dec"
+                               },
+                               {
+                                  "name": lang.mpeg4_nvv4l2dec,
+                                  "value": "mpeg4_nvv4l2dec"
                                }
                            ]
                         },
@@ -3295,6 +3324,7 @@ module.exports = (s,config,lang) => {
                 },
                 {
                     hidden: true,
+                    "evaluation": "!!config.detectorCommandEnabled",
                     "name": lang['Command'],
                     "color": "orange",
                     id: "monSectionDetectorCommand",
@@ -3416,6 +3446,7 @@ module.exports = (s,config,lang) => {
                          ]
                      },
                      {
+                        "evaluation": "!!config.detectorCommandEnabled",
                         "name": "detail=detector_notrigger_command_enable",
                         "field": lang['Command on Trigger'],
                         "description": "",
@@ -3426,6 +3457,7 @@ module.exports = (s,config,lang) => {
                         "possible": yesNoPossibility
                      },
                      {
+                        "evaluation": "!!config.detectorCommandEnabled",
                         "name": "detail=detector_notrigger_command",
                         "field": lang['Command'],
                         "description": lang["fieldTextDetectorNotriggerCommand"],
@@ -3435,6 +3467,7 @@ module.exports = (s,config,lang) => {
                         "possible": ""
                      },
                      {
+                        "evaluation": "!!config.detectorCommandEnabled",
                         "name": "detail=detector_notrigger_command_timeout",
                         "field": lang['Allow Next Command'],
                         "description": lang["fieldTextDetectorNotriggerCommandTimeout"],

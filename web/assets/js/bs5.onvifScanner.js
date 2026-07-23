@@ -3,16 +3,12 @@ $(document).ready(function(e){
     var loadedResults = {}
     var loadedResultsByIp = {}
     var onvifScannerWindow = $('#tab-onvifScanner')
-    var onvifScannerProgress = $('#onvifScanner-progress')
-    var onvifScannerProgressBar = onvifScannerProgress.find('.progress-bar')
-    var onvifScannerProgressText = onvifScannerProgress.find('.progress-text')
     var onvifScannerResultPane = onvifScannerWindow.find('.onvif_result')
     var onvifScannerProgress = $('#onvifScanner-progress')
     var onvifScannerProgressBar = onvifScannerProgress.find('.progress-bar')
     var onvifScannerProgressText = onvifScannerProgress.find('.progress-text')
     var onvifScannerErrorResultPane = onvifScannerWindow.find('.onvif_result_error')
     var scanForm = onvifScannerWindow.find('form');
-    var sideMenuList = $(`#side-menu-link-onvifScanner  ul`)
     var foundDevicesCount = 0
     var otherDevicesCount = 0
     var foundDevicesCountEl = $(`#onvif-scanner-found-devices-count`)
@@ -23,20 +19,6 @@ $(document).ready(function(e){
         uriParts[1] = `${username}:${password}@${uriParts[1]}`
         newUri = uriParts.join('://')
         return newUri
-    }
-    function drawFoundCamerasSubMenu(){
-        var allFound = []
-        Object.keys(loadedResults).forEach(function(monitorId){
-            var item = loadedResults[monitorId]
-            allFound.push({
-                attributes: `href="#onvif-result-${monitorId}" scrollToParent="#tab-onvifScanner"`,
-                class: `scrollTo`,
-                color: 'blue',
-                label: item.host + ':' + item.details.onvif_port,
-            })
-        })
-        var html = buildSubMenuItems(allFound)
-        sideMenuList.html(html)
     }
     function setAsLoading(appearance){
         if(appearance){
@@ -87,31 +69,60 @@ $(document).ready(function(e){
             var monitorId = monitorConfigPartial.mid
             loadedResults[monitorId] = monitorConfigPartial;
             loadedResultsByIp[monitorConfigPartial.host] = monitorConfigPartial;
+            loadedResultsByIp[options.ip] = monitorConfigPartial;
+            onvifScannerErrorResultPane.find(`[onvif_error_row="${options.ip}"]`).remove()
+            onvifScannerErrorResultPane.find(`[onvif_error_row="${monitorConfigPartial.host}"]`).remove()
             onvifScannerResultPane.append(`
-                <div class="col-md-4 mb-3" onvif_row="${monitorId}" id="onvif-result-${monitorId}">
-                    <div style="display:block" class="card shadow btn-default copy">
-                        <div class="preview-image card-header" style="background-image:url(${options.snapShot ? 'data:image/png;base64,' + options.snapShot : placeholder.getData(placeholder.plcimg({text: ' ', fsize: 25, bgcolor:'#1f80f9'}))})"></div>
-                        <div class="card-body" style="min-height:190px">
-                            <div>${info}</div>
-                            <div class="url">${streamUrl}</div>
-                        </div>
-                        <div class="card-footer">${options.ip}:${options.port}</div>
+                <div onvif_row="${monitorId}" id="onvif-result-${monitorId}" class="d-flex flex-row">
+                    <div class="py-2 px-1"><div class="scan-item-img" style="background-image:url(${options.snapShot ? 'data:image/png;base64,' + options.snapShot : placeholder.getData(placeholder.plcimg({text: ' ', fsize: 25, bgcolor:'#1f80f9'}))})"></div></div>
+                    <div class="py-2 px-1" style="min-width:170px"><b>${options.ip}:${options.port}</b></div>
+                    <div class="py-2 px-1 flex-grow-1">
+                        <div>${info}</div>
+                        <div class="url">${streamUrl}</div>
+                    </div>
+                    <div class="py-2 px-1 text-right text-nowrap">
+                        <a ${launchWebPage} class="btn btn-sm btn-secondary"><i class="fa fa-external-link"></i></a>
+                        <a class="btn btn-sm btn-success copy"><i class="fa fa-plus"></i> ${lang['Add'] || 'Add'}</a>
                     </div>
                 </div>
             `)
             onvifScannerWindow.find('._notfound').remove()
-            drawFoundCamerasSubMenu()
         }else{
             if(!loadedResultsByIp[options.ip]){
-                onvifScannerErrorResultPane.append(`
-                    <div onvif_error_row="${options.ip}" class="d-flex flex-row">
-                        <div class="py-2 px-1" style="min-width:170px"><b>${options.ip}:${options.port}</b></div>
-                        <div class="py-2 px-1 flex-grow-1">${options.error}</div>
-                        <div class="py-2 px-1 text-right">
-                            <a target="_blank" class="btn btn-sm btn-secondary" href="http://${options.ip}:${options.port}"><i class="fa fa-external-link"></i></a>
+                var errorRow = onvifScannerErrorResultPane.find(`[onvif_error_row="${options.ip}"]`)
+                if(errorRow.length === 0){
+                    var dropdownId = `onvif-error-ports-${options.ip.replace(/\./g,'-')}`
+                    onvifScannerErrorResultPane.append(`
+                        <div onvif_error_row="${options.ip}" class="d-flex flex-row align-items-center">
+                            <div class="py-2 px-1" style="min-width:170px"><b>${options.ip}</b></div>
+                            <div class="py-2 px-1 flex-grow-1">
+                                <ul class="onvif_error_messages small mb-0" style="padding-left:1.1rem"></ul>
+                            </div>
+                            <div class="py-2 px-1 text-right">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="${dropdownId}" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">${lang['Ports'] || 'Ports'}</button>
+                                    <ul class="dropdown-menu dropdown-menu-end onvif_error_ports" aria-labelledby="${dropdownId}"></ul>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                `)
+                    `)
+                    errorRow = onvifScannerErrorResultPane.find(`[onvif_error_row="${options.ip}"]`)
+                }
+                var portsCell = errorRow.find('.onvif_error_ports')
+                if(portsCell.find(`[onvif_error_port="${options.port}"]`).length === 0){
+                    portsCell.append(`
+                        <li><a target="_blank" onvif_error_port="${options.port}" class="dropdown-item" href="http://${options.ip}:${options.port}">${options.port} <i class="fa fa-external-link"></i></a></li>
+                    `)
+                }
+                var messagesList = errorRow.find('.onvif_error_messages')
+                var errorText = `${options.error}`
+                var alreadyListed = false
+                messagesList.find('li').each(function(){
+                    if($(this).text() === errorText)alreadyListed = true
+                })
+                if(!alreadyListed){
+                    messagesList.append(`<li>${errorText}</li>`)
+                }
             }
         }
     }
@@ -196,10 +207,13 @@ $(document).ready(function(e){
                 foundDevicesCountEl.text(foundDevicesCount)
             }
         }else{
-            otherDevicesCount += 1
-            otherDevicesCountEl.text(otherDevicesCount)
+            if(`${d.error}`.indexOf('ECONNREFUSED') > -1){
+                return
+            }
         }
         if(drawTheRow)drawProbeResult(d)
+        otherDevicesCount = onvifScannerErrorResultPane.find('[onvif_error_row]').length
+        otherDevicesCountEl.text(otherDevicesCount)
     }
     scanForm.submit(function(e){
         e.preventDefault();
@@ -282,39 +296,6 @@ $(document).ready(function(e){
                     text: lang['Scan Complete'],
                     type: 'success'
                 });
-            break;
-            case'onvif_scan_resume':
-                showButtons('running')
-            break;
-            case'onvif_scan_pause':
-                showButtons('paused')
-            break;
-            case'onvif_scan_cancel':
-                showButtons('idle')
-            break;
-            case'onvif_scan_progress':
-                onvifScannerProgressBar.css('width',`${d.percent}%`)
-                onvifScannerProgressText.text(`${d.processedItems} / ${d.totalItems}, ${d.percent}%`)
-            break;
-            case'onvif_scan_status':
-                if(d.active){
-                    setAsLoading(true)
-                    showButtons('running')
-                    d.found.forEach((result) => {
-                        drawProbeResult(result)
-                    })
-                }else{
-                    showButtons('idle')
-                }
-            break;
-            case'onvif_scan_started':
-                setAsLoading(true)
-                showButtons('running')
-            break;
-            case'onvif_scan_ended':
-                setAsLoading(false)
-                showButtons('idle')
-                if(d.foundNumber === 0)onvifScannerResultPane.append(`<div class="p-2 text-center ${definitions.Theme.isDark ? 'text-white' : ''} _notfound text-white epic-text">${lang.sorryNothingWasFound}</div>`)
             break;
             case'onvif_scan_resume':
                 showButtons('running')

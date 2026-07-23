@@ -2,7 +2,7 @@ var fs = require('fs');
 module.exports = function(s,config){
     //sql/database connection with knex
     s.databaseOptions = {
-        client: config.databaseType,
+        client: config.databaseType === 'mysql' ? 'mysql2' : config.databaseType,
         connection: config.db,
         pool: {
             min: config.databasePoolMin || 0,

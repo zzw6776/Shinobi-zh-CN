@@ -21,6 +21,31 @@ module.exports = function(s,config,lang,io){
     }else if(config.baseURL !== ''){
         config.baseURL = s.checkCorrectPathEnding(config.baseURL)
     }
+    // Base URL used in notification deep links (libs/notifications/utils.js).
+    // Resolution order: notificationBaseUrl from conf.json, then baseURL, then
+    // the machine's first external IPv4 detected at startup (programmatic
+    // equivalent of `ifconfig` / `ip addr`).
+    if(config.notificationBaseUrl){
+        config.notificationBaseUrl = s.checkCorrectPathEnding(config.notificationBaseUrl)
+    }else if(config.baseURL){
+        config.notificationBaseUrl = config.baseURL
+    }else{
+        var detectedIp = null
+        try{
+            const networkInterfaces = require('os').networkInterfaces()
+            Object.keys(networkInterfaces).forEach(function(interfaceName){
+                (networkInterfaces[interfaceName] || []).forEach(function(net){
+                    // net.family is 'IPv4' on older Node, the number 4 on 18+.
+                    if(!detectedIp && (net.family === 'IPv4' || net.family === 4) && !net.internal){
+                        detectedIp = net.address
+                    }
+                })
+            })
+        }catch(err){
+            console.error('Failed to detect machine IP for notificationBaseUrl',err)
+        }
+        config.notificationBaseUrl = 'http://' + (detectedIp || 'localhost') + ':' + (config.port || 8080) + '/'
+    }
     //Render Configurations - Web Paths
     if(config.webPaths === undefined){config.webPaths={}}
         //main access URI
@@ -91,7 +116,6 @@ module.exports = function(s,config,lang,io){
             'home/configFinder',
             'home/logViewer',
             'home/calendar',
-            'home/eventListWithPics',
             'home/fileBin',
             'home/videosTable',
             'home/studio',

@@ -20,6 +20,10 @@ module.exports = function(s,config,lang){
     } = require("./user/utils.js")(s,config,lang);
     require("./user/logger.js")(s,config,lang)
     const diskUsedEmitterTimeouts = {}
+    const sanitizeDiskUsage = (value) => {
+        const number = parseFloat(value)
+        return (!isFinite(number) || number < 0) ? 0 : number
+    }
     let purgeDiskGroup = (groupKey,callback) => {
         const { usedSpace, sizeLimit, addStorageUse } = s.group[groupKey];
         if(usedSpace >= sizeLimit * 0.8){
@@ -38,30 +42,48 @@ module.exports = function(s,config,lang){
     }, 1);
     if(config.cron.deleteOverMax === true){
         purgeDiskGroup = (groupKey,callback) => {
-            if(s.group[groupKey]){
-                if(s.group[groupKey].sizePurging !== true){
-                    s.group[groupKey].sizePurging = true
-                    s.debugLog(`${groupKey} deleteMainVideos`)
-                    deleteMainVideos(groupKey,() => {
-                        s.debugLog(`${groupKey} deleteTimelapseFrames`)
-                        deleteTimelapseFrames(groupKey,() => {
-                            s.debugLog(`${groupKey} deleteAddStorageTimelapseFrames`)
-                            deleteAddStorageTimelapseFrames(groupKey,() => {
-                                s.debugLog(`${groupKey} deleteFileBinFiles`)
-                                deleteFileBinFiles(groupKey,() => {
-                                    s.debugLog(`${groupKey} deleteAddStorageVideos`)
-                                    deleteAddStorageVideos(groupKey,() => {
-                                        s.group[groupKey].sizePurging = false
-                                        s.sendDiskUsedAmountToClients(groupKey)
-                                        callback();
-                                    })
-                                })
+            const theGroup = s.group[groupKey]
+            if(!theGroup){
+                if(callback)callback()
+                return
+            }
+            if(theGroup.sizePurging === true){
+                s.sendDiskUsedAmountToClients(groupKey)
+                if(callback)callback()
+                return
+            }
+            theGroup.sizePurging = true
+            let finished = false
+            const done = () => {
+                if(finished)return
+                finished = true
+                clearTimeout(theGroup.sizePurgingTimeout)
+                theGroup.sizePurging = false
+                s.sendDiskUsedAmountToClients(groupKey)
+                if(callback)callback()
+            }
+            theGroup.sizePurgingTimeout = setTimeout(() => {
+                s.debugLog(`${groupKey} purge did not complete in time, releasing queue`)
+                done()
+            }, config.cron.purgeTimeout || 1000 * 60 * 15)
+            try{
+                s.debugLog(`${groupKey} deleteMainVideos`)
+                deleteMainVideos(groupKey,() => {
+                    s.debugLog(`${groupKey} deleteTimelapseFrames`)
+                    deleteTimelapseFrames(groupKey,() => {
+                        s.debugLog(`${groupKey} deleteAddStorageTimelapseFrames`)
+                        deleteAddStorageTimelapseFrames(groupKey,() => {
+                            s.debugLog(`${groupKey} deleteFileBinFiles`)
+                            deleteFileBinFiles(groupKey,() => {
+                                s.debugLog(`${groupKey} deleteAddStorageVideos`)
+                                deleteAddStorageVideos(groupKey,done)
                             })
                         })
                     })
-                }else{
-                    s.sendDiskUsedAmountToClients(groupKey)
-                }
+                })
+            }catch(err){
+                s.debugLog(err)
+                done()
             }
         }
     }
@@ -221,29 +243,25 @@ module.exports = function(s,config,lang){
                     emitter.setMaxListeners(4)
                     s.group[e.ke].diskUsedEmitter = emitter
                     emitter.on('setCloud',function(currentChange,storagePoint){
-                        var amount = currentChange.amount
+                        var amount = parseFloat(currentChange.amount)
+                        if(!isFinite(amount))amount = 0
                         var storageType = currentChange.storageType
                         var cloudDisk = s.group[e.ke].cloudDiskUse[storageType]
-                        //validate current values
-                        if(!cloudDisk.usedSpace){
-                            cloudDisk.usedSpace = 0
-                        }else{
-                            cloudDisk.usedSpace = parseFloat(cloudDisk.usedSpace)
-                        }
-                        if(cloudDisk.usedSpace < 0 || isNaN(cloudDisk.usedSpace)){
-                            cloudDisk.usedSpace = 0
-                        }
-                        //change global size value
-                        cloudDisk.usedSpace = cloudDisk.usedSpace + amount
+                        cloudDisk.usedSpace = sanitizeDiskUsage(cloudDisk.usedSpace)
+                        cloudDisk.usedSpaceVideos = sanitizeDiskUsage(cloudDisk.usedSpaceVideos)
+                        cloudDisk.usedSpaceTimelapseFrames = sanitizeDiskUsage(cloudDisk.usedSpaceTimelapseFrames)
+                        cloudDisk.usedSpaceFilebin = sanitizeDiskUsage(cloudDisk.usedSpaceFilebin)
+                        //change global size value (clamp to >= 0 like the local-disk path)
+                        cloudDisk.usedSpace = Math.max(0, cloudDisk.usedSpace + amount)
                         switch(storagePoint){
                             case'timelapseFrames':
-                                cloudDisk.usedSpaceTimelapseFrames += amount
+                                cloudDisk.usedSpaceTimelapseFrames = Math.max(0, cloudDisk.usedSpaceTimelapseFrames + amount)
                             break;
                             case'fileBin':
-                                cloudDisk.usedSpaceFilebin += amount
+                                cloudDisk.usedSpaceFilebin = Math.max(0, cloudDisk.usedSpaceFilebin + amount)
                             break;
                             default:
-                                cloudDisk.usedSpaceVideos += amount
+                                cloudDisk.usedSpaceVideos = Math.max(0, cloudDisk.usedSpaceVideos + amount)
                             break;
                         }
                         s.sendCloudDiskUsedAmountToClients(e.ke)
@@ -352,7 +370,7 @@ module.exports = function(s,config,lang){
                     }
                     ///unchangeable from client side, so reset them in case they did.
                     var form = d.form
-                    var formDetails = s.parseJSON(form.details,{})
+                    var formDetails = s.parseJSON(form.details,{}) || {}
                     if(!dontRunExtensions){
                         s.beforeAccountSaveExtensions.forEach(function(extender){
                             extender({
@@ -432,9 +450,11 @@ module.exports = function(s,config,lang){
                         delete(form.pass)
                     }
                     delete(form.password_again)
-                    Object.keys(form).forEach(function(key){
-                        const value = form[key]
-                        updateQuery[key] = value
+                    const ACCOUNT_EDIT_ALLOWED = ['mail', 'pass']
+                    ACCOUNT_EDIT_ALLOWED.forEach(function(key){
+                        if(form[key] !== undefined){
+                            updateQuery[key] = form[key]
+                        }
                     })
                     updateQuery.details = formDetailsString
                     s.knexQuery({

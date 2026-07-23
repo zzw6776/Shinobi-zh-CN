@@ -9,6 +9,8 @@
   "videosDir": "__DIR__/videos",
   "passwordType": "sha256",
   "detectorMergePamRegionTriggers": true,
+  "detectorCommandEnabled": false,
+  "disableSSRFSelfTargetFilter": false,
   "wallClockTimestampAsDefault": true,
   "useBetterP2P": true,
   "logCpuAndRamDangerZone": false,

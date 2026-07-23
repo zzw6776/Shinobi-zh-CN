@@ -62,7 +62,10 @@ if ! [ -x "$(command -v npm)" ]; then
 fi
 sudo apt install make zip -y
 if ! [ -x "$(command -v ffmpeg)" ]; then
-    if [ "$getubuntuversion" = "16" ] || [ "$getubuntuversion" -le "16" ]; then
+    if bash $DIR/jetson-ffmpeg.sh; then
+        echo "============="
+        echo "Shinobi - Using NVIDIA Jetson FFMPEG"
+    elif [ "$getubuntuversion" = "16" ] || [ "$getubuntuversion" -le "16" ]; then
         echo "============="
         echo "Shinobi - Get FFMPEG 3.x from ppa:jonathonf/ffmpeg-3"
         sudo add-apt-repository ppa:jonathonf/ffmpeg-3 -y

@@ -55,11 +55,6 @@ module.exports = function(s,config,lang,app,io){
                 s.childNodes[webAddress].ramUsed = data.used;
                 s.childNodes[webAddress].ramPercent = data.percent;
             break;
-            case'sql':
-                s.sqlQuery(data.query,data.values,function(err,rows){
-                    client.sendJson({f:'sqlCallback',rows:rows,err:err,callbackId:data.callbackId});
-                });
-            break;
             case'knex':
                 s.knexQuery(data.options,function(err,rows){
                     client.sendJson({f:'sqlCallback',rows:rows,err:err,callbackId:data.callbackId});

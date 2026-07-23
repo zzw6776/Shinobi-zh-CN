@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=node:20-bookworm-slim
+ARG BASE_IMAGE=node:22-bookworm-slim
 FROM ${BASE_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive \
@@ -47,6 +47,7 @@ RUN apt-get install -y \
         make \
         g++ \
         gcc \
+        tini \
         tar
 
 RUN sh /home/Shinobi/Docker/install_ffmpeg.sh
@@ -67,6 +68,9 @@ VOLUME ["/var/lib/mysql"]
 
 EXPOSE 8080 443 21 25
 
-ENTRYPOINT ["/home/Shinobi/Docker/init.sh"]
+# Run under tini as PID 1 so orphaned/reparented child processes (e.g. ffmpeg
+# left behind when a camera thread is force-killed) are reaped instead of
+# piling up as <defunct> zombies over time. (#461)
+ENTRYPOINT ["/usr/bin/tini", "--", "/home/Shinobi/Docker/init.sh"]
 
 CMD [ "pm2-docker", "/home/Shinobi/Docker/pm2.yml" ]
