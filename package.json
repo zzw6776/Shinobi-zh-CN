@@ -22,7 +22,7 @@
     "cors": "^2.8.5",
     "cws": "^2.0.0",
     "digest-fetch": "^1.2.1",
-    "discord.js": "^12.2.0",
+    "discord.js": "^14.26.5",
     "ejs": "^3.1.9",
     "engine.io": "^6.6.2",
     "express": "^4.21.1",
@@ -33,10 +33,10 @@
     "http-proxy": "^1.18.1",
     "jsonfile": "^3.0.1",
     "knex": "^3.1.0",
-    "ldapauth-fork": "^5.0.2",
+    "ldapts": "^9.0.0",
     "marked": "^4.3.0",
     "moment": "^2.29.4",
-    "mqtt": "^4.3.7",
+    "mqtt": "^5.15.2",
     "mysql": "^2.18.1",
     "mysql2": "^3.9.7",
     "node-abort-controller": "^3.0.1",
@@ -44,7 +44,8 @@
     "node-fstab": "^1.0.17",
     "node-shinobi": "^1.0.4",
     "node-ssh": "^12.0.4",
-    "nodemailer": "^8.0.0",
+    "node-telegram-bot-api": "^1.2.0",
+    "nodemailer": "^9.0.3",
     "onvif": "^0.8.0",
     "pam-diff": "^1.1.0",
     "path": "^0.12.7",
@@ -62,7 +63,10 @@
     "socket.io": "^4.8.0",
     "socket.io-client": "^4.8.0",
     "tree-kill": "1.2.2",
-    "unzipper": "0.10.11"
+    "unzipper": "^0.12.5"
+  },
+  "overrides": {
+    "undici": "^6.27.0"
   },
   "bin": "camera.js",
   "scripts": {
@@ -77,7 +81,7 @@
   },
   "pkg": {
     "targets": [
-      "node16"
+      "node22"
     ],
     "scripts": [
       "libs/cameraThread/detector.js",

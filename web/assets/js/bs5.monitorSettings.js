@@ -792,6 +792,10 @@ monitorEditorWindow.on('change','[detail="auto_host"]',function(e){
             isRTSP = true;
             url = url.replace('rtsp://','http://')
         }
+        if(has('rtsps://')){
+            isRTSP = true;
+            url = url.replace('rtsps://','http://')
+        }
         if(has('rtmp://')){
             isRTMP = true;
             url = url.replace('rtmp://','http://')
@@ -821,8 +825,27 @@ monitorEditorWindow.on('change','[detail="auto_host"]',function(e){
         delete(parsedURL)
     }
 })
+var DETECTOR_CMD_SHELL_RE = /[;&|<>$`"'\\()^%]/g
+var DETECTOR_CMD_FIELDS = ['detector_command','detector_notrigger_command']
+function checkDetectorCommandField(val){
+    var found = val.match(DETECTOR_CMD_SHELL_RE) || []
+    if(found.length === 0) return
+    var unique = found.filter(function(c,i,a){ return a.indexOf(c) === i }).join(' ')
+    new PNotify({
+        title: lang.detectorCommandWarnTitle || 'Command Field — Restricted Characters',
+        text: (lang.detectorCommandWarnText || 'Characters not permitted in command fields will be removed on save: {CHARS}').replace('{CHARS}', unique),
+        type: 'warning'
+    })
+}
+monitorEditorWindow.on('change', '[detail="detector_command"],[detail="detector_notrigger_command"]', function(){
+    checkDetectorCommandField($(this).val())
+})
 editorForm.submit(function(e){
     e.preventDefault();
+    DETECTOR_CMD_FIELDS.forEach(function(field){
+        var el = monitorEditorWindow.find('[detail="' + field + '"]')
+        if(el.length) checkDetectorCommandField(el.val())
+    })
     var validation = getMonitorEditFormFields()
     if(!validation.ok){
         var errorsFound = validation.errors

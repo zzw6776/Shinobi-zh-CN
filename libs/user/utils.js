@@ -806,6 +806,7 @@ module.exports = (s,config,lang) => {
                 usedSpace : 0,
                 usedSpaceVideos : 0,
                 usedSpaceTimelapseFrames : 0,
+                usedSpaceFilebin : 0,
                 firstCount : 0
             }
             if(s.cloudDiskUseStartupExtensions[storageType])s.cloudDiskUseStartupExtensions[storageType](user,userDetails)
@@ -822,12 +823,17 @@ module.exports = (s,config,lang) => {
             });
             if(videos && videos[0]){
                 videos.forEach(function(video){
-                    var storageType = video.type || JSON.parse(video.details).type
-                    if(!storageType)storageType = 's3'
-                    var videoSize = video.size / 1048576
-                    user.cloudDiskUse[storageType].usedSpace += videoSize
-                    user.cloudDiskUse[storageType].usedSpaceVideos += videoSize
-                    ++user.cloudDiskUse[storageType].firstCount
+                    try{
+                        var storageType = video.type || JSON.parse(video.details).type
+                        if(!storageType)storageType = 's3'
+                        if(!user.cloudDiskUse[storageType])return
+                        var videoSize = video.size / 1048576
+                        user.cloudDiskUse[storageType].usedSpace += videoSize
+                        user.cloudDiskUse[storageType].usedSpaceVideos += videoSize
+                        ++user.cloudDiskUse[storageType].firstCount
+                    }catch(err){
+                        s.debugLog(err)
+                    }
                 })
                 s.cloudDisksLoaded.forEach(function(storageType){
                     var firstCount = user.cloudDiskUse[storageType].firstCount

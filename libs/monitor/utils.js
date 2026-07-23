@@ -4,7 +4,7 @@ module.exports = (s,config,lang) => {
     const URL = require('url');
     const events = require('events');
     const Mp4Frag = require('shinobi-mp4frag');
-    const treekill = require('tree-kill');
+    const treekill = require('../basic/safeTreeKill.js');
     const exec = require('child_process').exec;
     const spawn = require('child_process').spawn;
     const connectionTester = require('connection-tester')
@@ -202,6 +202,7 @@ module.exports = (s,config,lang) => {
                 activeMonitor.spawn.stdio.forEach(function(stdio){
                   try{
                     stdio.unpipe()
+                    stdio.removeAllListeners('data')
                   }catch(err){
                     console.log(err)
                   }
@@ -292,8 +293,9 @@ module.exports = (s,config,lang) => {
         const username = options.username
         const password = options.password
         const urlParts = streamUrl.split('://')
-        urlParts[0] = 'http'
-        return ['rtsp','://',`${username}:${password}@`,urlParts[1]].join('')
+        const urlProtocol = `${urlParts[0]}`
+        urlParts[0] = 'http' /* This might not work with SRTP (rtsps://) */
+        return [urlProtocol,'://',`${username}:${password}@`,urlParts[1]].join('')
     }
     const monitorConfigurationMigrator = (monitor) => {
         // converts the old style to the new style.
@@ -354,10 +356,10 @@ module.exports = (s,config,lang) => {
             const monitorConfig = copyMonitorConfiguration(groupKey,monitorId)
             const monitorDetails = monitorConfig.details
             const activeMonitor = getActiveMonitor(groupKey,monitorId)
-            const channelNumber = 1 + (monitorDetails.stream_channels || []).length
+            const channelNumber = 1 + (s.parseJSON(monitorDetails.stream_channels) || []).length
             const ffmpegCommand = [`-progress pipe:5`];
             const logLevel = monitorDetails.loglevel ? e.details.loglevel : 'warning'
-            const stdioPipes = createPipeArray({}, 2)
+            const stdioPipes = createPipeArray(monitorConfig, 2)
             const substreamConfig = monitorConfig.details.substream
             substreamConfig.input.type = !substreamConfig.input.fulladdress ? monitorConfig.type : substreamConfig.input.type || monitorConfig.details.rtsp_transport
             substreamConfig.input.fulladdress = substreamConfig.input.fulladdress || s.buildMonitorUrl(monitorConfig)
@@ -513,6 +515,7 @@ module.exports = (s,config,lang) => {
            break;
            case'mjpeg':
                frameToStreamAdded = function (d) {
+                    if(!activeMonitor.emitterChannel[pipeNumber])return;
                     activeMonitor.emitterChannel[pipeNumber].emit('data', d)
                }
            break;
@@ -525,7 +528,9 @@ module.exports = (s,config,lang) => {
                         buffer.push(d)
                     }
                     if((d[d.length-2] === 0xFF && d[d.length-1] === 0xD9)){
-                        activeMonitor.emitterChannel[pipeNumber].emit('data',Buffer.concat(buffer))
+                        if(activeMonitor.emitterChannel[pipeNumber])activeMonitor.emitterChannel[pipeNumber].emit('data',Buffer.concat(buffer))
+                        buffer = null
+                    }else if(buffer.length > (config.maxJpegChunkPieces || 1000)){
                         buffer = null
                     }
                }
@@ -534,6 +539,7 @@ module.exports = (s,config,lang) => {
                frameToStreamAdded = function(d){
                    if(!activeMonitor.firstStreamChunk[pipeNumber])activeMonitor.firstStreamChunk[pipeNumber] = d;
                    frameToStreamAdded = function(d){
+                       if(!activeMonitor.emitterChannel[pipeNumber])return;
                        activeMonitor.emitterChannel[pipeNumber].emit('data',d)
                    }
                    frameToStreamAdded(d)
@@ -541,6 +547,7 @@ module.exports = (s,config,lang) => {
            break;
            case'h264':
                frameToStreamAdded = function(d){
+                   if(!activeMonitor.emitterChannel[pipeNumber])return;
                    activeMonitor.emitterChannel[pipeNumber].emit('data',d)
                }
            break;
@@ -1165,6 +1172,9 @@ module.exports = (s,config,lang) => {
             if(buffer[buffer.length-2] === 0xFF && buffer[buffer.length-1] === 0xD9){
                 activeMonitor.secondaryDetectorOutput.emit('data',Buffer.concat(theArray))
                 activeMonitor.pipe4BufferPieces = []
+            }else if(theArray.length > (config.maxJpegChunkPieces || 1000)){
+                s.debugLog(`Detector JPEG buffer overflow for ${groupKey}-${monitorId}, resetting`)
+                activeMonitor.pipe4BufferPieces = []
             }
         }
     }
@@ -1281,7 +1291,7 @@ module.exports = (s,config,lang) => {
         }
         if(e.details.record_timelapse === '1'){
             var timelapseRecordingDirectory = s.getTimelapseFrameDirectory(e)
-            activeMonitor.spawn.stdio[7].on('data', async function(data){
+            activeMonitor.spawn.stdio[7].on('data', function(data){
                 try{
                     var fileStream = activeMonitor.recordTimelapseWriter
                     if(!fileStream){
@@ -1289,7 +1299,7 @@ module.exports = (s,config,lang) => {
                         var filename = s.formattedTime() + '.jpg'
                         var location = timelapseRecordingDirectory + currentDate + '/'
                         try{
-                            await fsPromises.mkdir(location)
+                            fs.mkdirSync(location, { recursive: true })
                         }catch(err){
                             s.debugLog(err)
                         }
@@ -1561,9 +1571,9 @@ module.exports = (s,config,lang) => {
                     s.userLog(d,{type:lang["Event Webhook Error"],msg:{error:err,data:data}},true)
                 })
             }
-            if(currentConfig.detector_notrigger_command_enable === '1' && !s.group[groupKey].activeMonitors[monitorId].detector_notrigger_command){
+            if(config.detectorCommandEnabled && currentConfig.detector_notrigger_command_enable === '1' && !s.group[groupKey].activeMonitors[monitorId].detector_notrigger_command){
                 s.group[groupKey].activeMonitors[monitorId].detector_notrigger_command = s.createTimeout('detector_notrigger_command',s.group[groupKey].activeMonitors[monitorId],currentConfig.detector_notrigger_command_timeout,10)
-                var detector_notrigger_command = addEventDetailsToString(e,currentConfig.detector_notrigger_command)
+                var detector_notrigger_command = addEventDetailsToString(e,currentConfig.detector_notrigger_command,null,{shellSafe: true})
                 if(detector_notrigger_command === '')return
                 exec(detector_notrigger_command,{detached: true},function(err){
                     if(err)s.debugLog(err)
@@ -2068,7 +2078,7 @@ module.exports = (s,config,lang) => {
                                     try{
                                         const monitorConfig = s.group[v.ke].rawMonitorConfigurations[v.mid]
                                         const monitorDetails = monitorConfig.details
-                                        const subStreamChannelNumber = 1 + (monitorDetails.stream_channels || []).length
+                                        const subStreamChannelNumber = 1 + (s.parseJSON(monitorDetails.stream_channels) || []).length
                                         const subStreamType = monitorConfig.details.substream.output.stream_type
                                         streamURL = getStreamUrl(subStreamType,subStreamChannelNumber)
                                     }catch(err){

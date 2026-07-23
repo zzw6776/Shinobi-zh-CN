@@ -1,5 +1,6 @@
 var express = require('express');
 var fs = require('fs');
+var path = require('path');
 var bodyParser = require('body-parser');
 var os = require('os');
 var moment = require('moment');
@@ -155,6 +156,97 @@ module.exports = function(s,config,lang,app,io){
     */
     app.get(config.webPaths.home, function (req,res){
         s.renderPage(req,res,config.renderPaths.index,{lang,config: s.getConfigWithBranding(req.hostname),screen:'dashboard'})
+    });
+    /**
+    * Page : Mobile App Redirect
+    * Bounces to a shinobi:// deep link that opens the Shinobi Go mobile app.
+    * Custom URL schemes are not clickable in Discord, email clients, etc., so
+    * notifications link here instead. No auth: the page only echoes back the
+    * (sanitized) ke/mid already present in the URL.
+    */
+    app.get(s.checkCorrectPathEnding(config.webPaths.home)+'app/open', function (req,res){
+        const clean = (val) => String(val || '').replace(/[^a-zA-Z0-9_-]/g,'').substring(0,64)
+        const ke = clean(req.query.ke)
+        const mid = clean(req.query.mid || req.query.id)
+        const appLink = 'shinobi://monitor?ke=' + ke + '&mid=' + mid
+        res.setHeader('Content-Type','text/html')
+        res.end(`<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opening Shinobi Go...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0A1F44;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box}
+a.btn{display:inline-block;margin-top:24px;padding:14px 28px;background:#42A5F5;color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
+p{color:#9fb3d1;font-size:14px;max-width:420px}
+</style>
+</head>
+<body>
+<h2>Opening Shinobi Go&hellip;</h2>
+<p>If the app does not open automatically, tap the button below. Requires the Shinobi Go app to be installed.</p>
+<a class="btn" href="${appLink}">Open Shinobi Go</a>
+<script>location.href = ${JSON.stringify(appLink)};</script>
+</body>
+</html>`)
+    });
+    /**
+    * API : Is FCM push configured on this server. The mobile app probes this
+    * to default a server's notification mode to FCM vs local.
+    */
+    app.get(config.webPaths.apiPrefix+':auth/fcmStatus/:ke', function (req,res){
+        res.setHeader('Content-Type', 'application/json');
+        s.auth(req.params, function(user){
+            s.closeJsonResponse(res,{ok: true, enabled: s.isFcmEnabled === true})
+        },res,req)
+    });
+    /**
+    * API : Register / Unregister a mobile device FCM push token.
+    * Body: { token, deviceName (optional), action: 'add' (default) | 'delete' }
+    * Tokens live in the dedicated `PushTokens` table (see
+    * libs/database/preQueries.js) and are read by libs/notifications/fcm.js
+    * when a detection event fires.
+    */
+    app.post(config.webPaths.apiPrefix+':auth/fcmToken/:ke', function (req,res){
+        res.setHeader('Content-Type', 'application/json');
+        s.auth(req.params, function(user){
+            const groupKey = req.params.ke
+            const pushToken = String(req.body.token || '').trim()
+            const doDelete = req.body.action === 'delete'
+            if(!pushToken || pushToken.length > 500){
+                s.closeJsonResponse(res,{ok: false, msg: 'Invalid token'})
+                return
+            }
+            // `token` is UNIQUE, so drop any existing row for it first — this
+            // also handles the device switching accounts/servers cleanly.
+            s.knexQuery({
+                action: "delete",
+                table: "PushTokens",
+                where: [
+                    ['token','=',pushToken],
+                ]
+            },() => {
+                if(doDelete){
+                    s.closeJsonResponse(res,{ok: true})
+                    return
+                }
+                s.knexQuery({
+                    action: "insert",
+                    table: "PushTokens",
+                    insert: {
+                        ke: groupKey,
+                        uid: user.uid,
+                        token: pushToken,
+                        name: String(req.body.deviceName || '').substring(0,100),
+                    }
+                },(err) => {
+                    if(err){
+                        s.closeJsonResponse(res,{ok: false, msg: 'Could not save token'})
+                        return
+                    }
+                    s.closeJsonResponse(res,{ok: true})
+                })
+            })
+        },res,req)
     });
     /**
     * Page : Superuser Login Screen
@@ -1196,7 +1288,7 @@ module.exports = function(s,config,lang,app,io){
                     if(req.query.reset==='1'||(s.group[r.ke]&&s.group[r.ke].rawMonitorConfigurations[r.mid].mode!==req.params.f)||req.query.fps&&(!s.group[r.ke].activeMonitors[r.mid].currentState||!s.group[r.ke].activeMonitors[r.mid].currentState.trigger_on)){
                         if(req.query.reset!=='1'||!s.group[r.ke].activeMonitors[r.mid].trigger_timer){
                             if(!s.group[r.ke].activeMonitors[r.mid].currentState)s.group[r.ke].activeMonitors[r.mid].currentState={}
-                            s.group[r.ke].activeMonitors[r.mid].currentState.mode=r.mode.toString()
+                            s.group[r.ke].activeMonitors[r.mid].currentState.mode=r.mode?r.mode.toString():'stop'
                             if(!s.group[r.ke].activeMonitors[r.mid].currentState.trigger_on){
                                s.group[r.ke].activeMonitors[r.mid].currentState.trigger_on=true
                             }else{
@@ -1394,7 +1486,15 @@ module.exports = function(s,config,lang,app,io){
             }
             const sendVideo = (videoRow) => {
                 cacheVideoRow(videoRow)
-                const filePath = s.getVideoDirectory(videoRow) + req.params.file
+                const baseDir = path.resolve(s.getVideoDirectory(videoRow))
+                const filePath = path.resolve(baseDir, req.params.file)
+                if(
+                    req.params.file.indexOf('\0') !== -1 ||
+                    (filePath !== baseDir && !filePath.startsWith(baseDir + path.sep))
+                ){
+                    s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
+                    return
+                }
                 fs.stat(filePath,function(err,stats){
                     if (!err){
                         if(req.query.json === 'true'){
@@ -1578,6 +1678,23 @@ module.exports = function(s,config,lang,app,io){
     app.get(config.webPaths.apiPrefix+':auth/control/:ke/:id/:direction', function (req,res){
         res.setHeader('Content-Type', 'application/json');
         s.auth(req.params,function(user){
+            const monitorId = req.params.id
+            const {
+                monitorPermissions,
+                monitorRestrictions,
+            } = s.getMonitorsPermitted(user.details,monitorId)
+            const {
+                isRestricted,
+                isRestrictedApiKey,
+                apiKeyPermissions,
+            } = s.checkPermission(user);
+            if(
+                isRestrictedApiKey && apiKeyPermissions.control_monitors_disallowed ||
+                isRestricted && !monitorPermissions[`${monitorId}_control`]
+            ){
+                s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
+                return
+            }
             if(req.params.direction === 'setHome'){
                 setPresetForCurrentPosition({
                     id: req.params.id,
@@ -1836,10 +1953,17 @@ module.exports = function(s,config,lang,app,io){
                 return
             }
             const response = { ok: false }
+            const addMergeResultToResponse = (mergeResult) => {
+                response.ok = !!mergeResult;
+                if(mergeResult){
+                    response.filename = mergeResult.filename;
+                    response.href = `/${req.params.auth}/fileBin/${mergeResult.ke}/${mergeResult.mid}/${mergeResult.filename}`;
+                }
+            }
             const selectedVideos = s.getPostData(req,'videos');
             if(selectedVideos && selectedVideos.length > 1){
-                const mergedFilePath = await mergeVideosAndBin(selectedVideos);
-                response.ok = !!mergedFilePath;
+                const mergeResult = await mergeVideosAndBin(selectedVideos);
+                addMergeResultToResponse(mergeResult);
                 s.closeJsonResponse(res, response);
             }else{
                 s.sqlQueryBetweenTimesWithPermissions({
@@ -1861,9 +1985,11 @@ module.exports = function(s,config,lang,app,io){
                     monitorRestrictions: monitorRestrictions,
                     preliminaryValidationFailed: false
                 }, async ({ videos }) => {
-                    if(videos){
-                        const mergedFilePath = await mergeVideosAndBin(videos);
-                        response.ok = !!mergedFilePath;
+                    if(videos && videos.length > 1){
+                        const mergeResult = await mergeVideosAndBin(videos);
+                        addMergeResultToResponse(mergeResult);
+                    }else{
+                        response.msg = lang['Not enough videos found in that time range to merge'];
                     }
                     s.closeJsonResponse(res, response);
                 })
@@ -2001,7 +2127,7 @@ module.exports = function(s,config,lang,app,io){
                 if(form){
                     endData.ok = true
                     s.accountSettingsEdit({
-                        ke: req.params.ke,
+                        ke: user.ke,
                         uid: user.uid,
                         form: form,
                         cnid: user.cnid

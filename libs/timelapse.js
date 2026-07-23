@@ -1,4 +1,5 @@
 const fs = require('fs')
+const path = require('path')
 const moment = require('moment')
 const express = require('express')
 const exec = require('child_process').exec;
@@ -599,7 +600,16 @@ module.exports = function(s,config,lang,app,io){
                 if(selectedDate.indexOf('-') === -1){
                     selectedDate = req.params.filename.split('T')[0]
                 }
-                fileLocation = `${fileLocation}${frame.ke}/${frame.mid}_timelapse/${selectedDate}/${req.params.filename}`
+                const baseDir = path.resolve(`${fileLocation}${frame.ke}/${frame.mid}_timelapse/`)
+                fileLocation = path.resolve(baseDir,selectedDate,req.params.filename)
+                if(
+                    selectedDate.indexOf('\0') !== -1 ||
+                    req.params.filename.indexOf('\0') !== -1 ||
+                    (fileLocation !== baseDir && !fileLocation.startsWith(baseDir + path.sep))
+                ){
+                    s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
+                    return
+                }
                 if(actionParameter === 'delete'){
                     deleteTimelapseFrame({
                         ke: frame.ke,
@@ -671,6 +681,7 @@ module.exports = function(s,config,lang,app,io){
     s.onOtherWebSocketMessages((d,connection) => {
         switch(d.f){
             case'timelapseVideoBuild':
+                d.ke = connection.ke
                 if(d.frames.length === 0){
                     response.msg = lang.notEnoughFramesText1
                     s.tx({

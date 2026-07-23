@@ -112,10 +112,16 @@ module.exports = function(s,config,lang){
     s.buildMonitorUrl = function(e,noPath){
         var authd = ''
         var url
+        const encodeCredential = (value) => {
+            if(value === undefined || value === null || value === '')return ''
+            var raw = value
+            try{ raw = decodeURIComponent(value) }catch(err){ raw = value }
+            return encodeURIComponent(raw)
+        }
         if(e.details.muser&&e.details.muser!==''&&e.host.indexOf('@')===-1) {
             e.username = e.details.muser
             e.password = e.details.mpass
-            authd = e.details.muser+':'+e.details.mpass+'@'
+            authd = encodeCredential(e.details.muser)+':'+encodeCredential(e.details.mpass)+'@'
         }
         if(e.port==80&&e.details.port_force!=='1'){e.porty=''}else{e.porty=':'+e.port}
         url = e.protocol+'://'+authd+e.host+e.porty
@@ -258,6 +264,7 @@ module.exports = function(s,config,lang){
                                                 case'h264':
                                                     switch(monitor.protocol){
                                                         case'rtsp':
+                                                        case'rtsps':
                                                             if(
                                                                 monitor.details.rtsp_transport
                                                                 && monitor.details.rtsp_transport !== ''
@@ -581,6 +588,15 @@ module.exports = function(s,config,lang){
             return endData
         }
         cleanStringsInObject(form)
+        const details = form.details
+        if(details && typeof details === 'object'){
+            const COMMAND_FIELDS = ['detector_command','detector_notrigger_command']
+            COMMAND_FIELDS.forEach((field) => {
+                if(typeof details[field] === 'string'){
+                    details[field] = details[field].replace(/[\x00-\x1f\x7f;&|<>$`"'\\()^%]/g,'')
+                }
+            })
+        }
         form.mid = `${form.mid}`.replace(/[^\w\s]/gi,'').replace(/ /g,'')
         const selectResponse = await s.knexQueryPromise({
             action: "select",
@@ -791,13 +807,10 @@ module.exports = function(s,config,lang){
         }
         s.findPreset([groupKey,'monitorStates',stateName],function(notFound,preset){
             if(notFound === false){
-                var sqlQuery = 'SELECT * FROM Monitors WHERE ke=? AND '
                 var monitorQuery = []
                 var monitorPresets = {}
                 preset.details.monitors.forEach(function(monitor){
-                    const whereConditions = {}
                     if(monitorQuery.length === 0){
-                        whereConditions.ke = groupKey
                         monitorQuery.push(['ke','=',groupKey])
                     }else{
                         monitorQuery.push(['or','ke','=',groupKey])
@@ -810,17 +823,26 @@ module.exports = function(s,config,lang){
                     columns: "*",
                     table: "Monitors",
                     where: monitorQuery
-                },function(err,monitors){
+                },async function(err,monitors){
                     if(monitors && monitors[0]){
-                        monitors.forEach(function(monitor){
-                            s.checkDetails(monitor)
-                            s.checkDetails(monitorPresets[monitor.mid])
-                            var monitorPreset = monitorPresets[monitor.mid]
-                            monitorPreset.details = Object.assign(monitor.details,monitorPreset.details)
-                            monitor = s.cleanMonitorObjectForDatabase(Object.assign(monitor,monitorPreset))
-                            monitor.details = JSON.stringify(monitor.details)
-                            s.addOrEditMonitor(Object.assign({},monitor),null,user)
-                        })
+                        for(const monitorRow of monitors){
+                            const monitorPreset = monitorPresets[monitorRow.mid]
+                            if(!monitorPreset)continue;
+                            s.checkDetails(monitorRow)
+                            s.checkDetails(monitorPreset)
+                            if(monitorPreset.details && monitorPreset.details.mode){
+                                if(!monitorPreset.mode)monitorPreset.mode = monitorPreset.details.mode
+                                delete monitorPreset.details.mode
+                            }
+                            monitorPreset.details = Object.assign(monitorRow.details,monitorPreset.details)
+                            const mergedMonitor = s.cleanMonitorObjectForDatabase(Object.assign(monitorRow,monitorPreset))
+                            mergedMonitor.details = JSON.stringify(mergedMonitor.details)
+                            try{
+                                await s.addOrEditMonitor(Object.assign({},mergedMonitor),null,user)
+                            }catch(applyErr){
+                                s.debugLog(applyErr)
+                            }
+                        }
                         endData.ok = true
                         s.tx({f:'change_group_state',ke:groupKey,name:stateName},'GRP_'+groupKey)
                         callback(endData)
@@ -931,11 +953,13 @@ module.exports = function(s,config,lang){
             // monitor_edit : Can Edit Monitor (Delete as well)
             // video_view : Can View Videos and Events
             // video_delete : Can Delete Videos and Events
+            // control : Can Control Monitor (PTZ)
             [
                 'monitors',
                 'monitor_edit',
                 'video_view',
                 'video_delete',
+                'control',
             ].forEach((key) => {
                 monitors[`${mid}_${key}`] = userDetails[key] && userDetails[key].indexOf(mid) > -1 || false;
             });

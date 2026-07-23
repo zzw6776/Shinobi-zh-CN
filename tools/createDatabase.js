@@ -13,7 +13,7 @@ async function createDatabase(){
     try{
         const conn = {
             knex: {
-                client: config.databaseType || 'mysql2',
+                client: config.databaseType === 'mysql' ? 'mysql2' : (config.databaseType || 'mysql2'),
                 connection: {
                     host: config.db.host || '127.0.0.1',
                     user: config.db.user || 'majesticflame',

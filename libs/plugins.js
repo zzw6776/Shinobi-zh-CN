@@ -327,17 +327,23 @@ module.exports = function(s,config,lang,app,io){
             currentPluginFrameProcessingCount[pluginName] = count
         })
     }
+    const hasValidPluginKey = function(d){
+        const expectedKey = config.pluginKeys[d.plug]
+        return expectedKey !== undefined && expectedKey !== null && expectedKey !== ''
+            && d.pluginKey !== undefined && d.pluginKey !== null && d.pluginKey !== ''
+            && expectedKey === d.pluginKey
+    }
     var onWebSocketConnection = function(cn){
         cn.on('ocv',function(d){
             if(!cn.pluginEngine && d.f === 'init'){
-                if(config.pluginKeys[d.plug] === d.pluginKey){
+                if(hasValidPluginKey(d)){
                     s.pluginInitiatorSuccess("client",d,cn)
                     if(config.detectorPluginsCluster)addCpuUsageHandler(cn,d.plug)
                 }else{
                     s.pluginInitiatorFail("client",d,cn)
                 }
             }else{
-                if(config.pluginKeys[d.plug] === d.pluginKey){
+                if(hasValidPluginKey(d)){
                     s.pluginEventController(d)
                     if(config.detectorPluginsCluster)addCpuUsageHandler(cn,d.plug)
                 }else{

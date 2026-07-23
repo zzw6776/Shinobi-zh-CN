@@ -3,7 +3,7 @@ const express = require('express')
 const unzipper = require('unzipper')
 const spawn = require('child_process').spawn
 const exec = require('child_process').execSync
-const treekill = require('tree-kill');
+const treekill = require('../basic/safeTreeKill.js');
 const marked = require('marked').parse;
 const {
   Worker

@@ -194,7 +194,7 @@ function beginProcessing(){
             table: "Videos",
             where: whereQuery
         })
-        const videoRows = selectResponse.rows
+        const videoRows = selectResponse.rows || []
         let affectedRows = 0
         if(videoRows.length > 0){
             let clearSize = 0;
@@ -245,7 +245,7 @@ function beginProcessing(){
                     ['ke','=',v.ke],
                 ]
             })
-            const monitorRows = monitorsResponse.rows
+            const monitorRows = monitorsResponse.rows || []
             var i;
             for (i = 0; i < monitorRows.length; i++) {
                 const monitor = monitorRows[i]
@@ -319,7 +319,7 @@ function beginProcessing(){
                 table: "Timelapse Frames",
                 where: whereQuery
             })
-            const videoRows = selectResponse.rows
+            const videoRows = selectResponse.rows || []
             let affectedRows = 0
             if(videoRows.length > 0){
                 const foldersDeletedFrom = [];
@@ -609,7 +609,7 @@ function beginProcessing(){
             if(err){
                 errorLog(err)
             }
-            if(rows.length > 0){
+            if(rows && rows.length > 0){
                 var i;
                 for (i = 0; i < rows.length; i++) {
                     await processUser(rows[i])

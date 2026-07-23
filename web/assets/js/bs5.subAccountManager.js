@@ -153,6 +153,10 @@ $(document).ready(function(){
             name: 'video_delete',
             label: lang['Can Delete Videos and Events'],
         },
+        {
+            name: 'control',
+            label: lang['Can Control Monitor'],
+        },
     ];
     var drawSelectableForPermissionForm = async function(account){
         var details = account ? safeJsonParse(account.details) : {}
@@ -230,6 +234,7 @@ $(document).ready(function(){
             'monitor_edit': [],
             'video_view': [],
             'video_delete': [],
+            'control': [],
         });
         // base privileges
         permissionsSection.find('[detail]').each(function(n,v){

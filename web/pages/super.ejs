@@ -254,6 +254,14 @@ $.ccio.ws.on('connect',function(d){
 $.ccio.ws.on('f',function(d){
     switch(d.f){
         case'init_success':
+            if($user.usingDefaultPassword){
+                new PNotify({
+                    title: lang['superDefaultPasswordTitle'],
+                    text: lang['superDefaultPasswordText'],
+                    type: 'error',
+                    hide: false
+                });
+            }
             drawUserList()
             drawSystemLogs()
             drawSystemInfo()

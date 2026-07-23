@@ -649,7 +649,7 @@ module.exports = (s,config,lang) => {
         monitorId,
         filePaths,
         outputFilePath,
-        videoCodec = 'libx265',
+        videoCodec = 'copy',
         audioCodec = 'aac',
         onStdout = (data) => {s.systemLog(`${data}`)},
         onStderr = (data) => {s.systemLog(`${data}`)},
@@ -667,16 +667,22 @@ module.exports = (s,config,lang) => {
         try {
             await fsP.writeFile(tempFileListPath, fileList);
             let ffmpegArgs;
-            // if (allSameExtension) {
-            //     ffmpegArgs = [
-            //         '-f', 'concat',
-            //         '-safe', '0',
-            //         '-i', tempFileListPath,
-            //         '-c', 'copy',
-            //         '-y',
-            //         outputFilePath
-            //     ];
-            // } else {
+            if (allSameExtension) {
+                // All inputs share the same container/codec: copy the video stream
+                // (fast, lossless) instead of re-encoding. Audio is normalised to
+                // keep it valid in the mp4 output.
+                ffmpegArgs = [
+                    '-loglevel', 'warning',
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', tempFileListPath,
+                    '-c:v', 'copy',
+                    '-c:a', audioCodec,
+                    '-strict', '-2',
+                    '-y',
+                    outputFilePath
+                ];
+            } else {
                 ffmpegArgs = [
                     '-loglevel', 'warning',
                     '-f', 'concat',
@@ -689,7 +695,7 @@ module.exports = (s,config,lang) => {
                     '-y',
                     outputFilePath
                 ];
-            // }
+            }
             s.debugLog(fileList)
             s.debugLog(ffmpegArgs)
 
@@ -721,22 +727,27 @@ module.exports = (s,config,lang) => {
         const groupKey = firstVideo.ke;
         const monitorId = firstVideo.mid;
         const logTarget = { ke: groupKey, mid: '$USER' };
+        const filePaths = videos.reverse().map(video => {
+            const monitorConfig = s.group[video.ke].rawMonitorConfigurations[video.mid];
+            const filePath = path.join(s.getVideoDirectory(video), `${s.formattedTime(video.time)}.mp4`);
+            return filePath
+        });
+        const filename = `${s.formattedTime(firstVideo.time)}-${s.formattedTime(lastVideo.time)}-${filePaths.length}.mp4`
+        const fileBinFolder = s.getFileBinDirectory(firstVideo);
+        const outputFilePath = path.join(fileBinFolder, filename);
+        const mergeResult = {
+            filePath: outputFilePath,
+            filename,
+            ke: groupKey,
+            mid: monitorId,
+        };
         try{
             try{
                 await fsP.stat(outputFilePath)
-                return outputFilePath
+                return mergeResult
             }catch(err){
 
             }
-            const filePaths = videos.reverse().map(video => {
-                const monitorConfig = s.group[video.ke].rawMonitorConfigurations[video.mid];
-                const filePath = path.join(s.getVideoDirectory(video), `${s.formattedTime(video.time)}.mp4`);
-                return filePath
-            });
-            const filename = `${s.formattedTime(firstVideo.time)}-${s.formattedTime(lastVideo.time)}-${filePaths.length}.mp4`
-            const fileBinFolder = s.getFileBinDirectory(firstVideo);
-            const outputFilePath = path.join(fileBinFolder, filename);
-
             s.userLog(logTarget,{
                 type: 'mergeVideos ffmpeg START',
                 msg: {
@@ -776,7 +787,7 @@ module.exports = (s,config,lang) => {
             }
             await s.insertFileBinEntry(fileBinInsertQuery);
             s.notifyFileBinUploaded(fileBinInsertQuery);
-            return outputFilePath
+            return mergeResult
         }catch(err){
             console.log('mergeVideos process ERROR', err)
             s.userLog(logTarget,{

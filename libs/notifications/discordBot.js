@@ -7,6 +7,7 @@ module.exports = function(s,config,lang,getSnapshot){
     } = require('../events/utils.js')(s,config,lang)
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
     //discord bot
     if(config.discordBot === true){
@@ -31,25 +32,52 @@ module.exports = function(s,config,lang,getSnapshot){
                     timestamp: new Date(),
                     footer: messageFooter
                 },data)
-                const discordChannel = bot.channels.cache.get(s.group[groupKey].init.discordbot_channel)
-                if(discordChannel && discordChannel.send){
-                    discordChannel.send({
-                        embed: sendBody,
-                        files: files
-                    }).catch(err => {
-                        if(err){
-                            s.userLog({ke:groupKey,mid:'$USER'},{type:lang.DiscordErrorText,msg:err})
-                            restartDiscordBot(groupKey, 1)
-                        }
-                    })
+                if(sendBody.timestamp){
+                    const parsedTimestamp = new Date(sendBody.timestamp)
+                    sendBody.timestamp = isNaN(parsedTimestamp.getTime()) ? new Date().toISOString() : parsedTimestamp.toISOString()
+                }
+                const recipientId = s.group[groupKey].init.discordbot_channel
+                // Default to 'channel' when unset/empty so accounts saved before this option
+                // existed keep working. Only an explicit 'user' switches to Direct Message mode.
+                const recipientType = s.group[groupKey].init.discordbot_channel_type === 'user' ? 'user' : 'channel'
+                const messagePayload = {
+                    embeds: [sendBody],
+                    files: files
+                }
+                const onSendError = (err) => {
+                    if(err){
+                        s.userLog({ke:groupKey,mid:'$USER'},{type:lang.DiscordErrorText,msg:err})
+                        restartDiscordBot(groupKey, 1)
+                    }
+                }
+                const onBadRecipient = (msg) => {
+                    s.userLog({ke:groupKey,mid:'$USER'},{type:lang.DiscordErrorText,msg:msg})
+                }
+                if(recipientType === 'user'){
+                    // Direct Message : the Recipient ID is a Discord user id. Open (or reuse) a
+                    // DM channel and send there so a user-directed notification completes instead
+                    // of failing the channel lookup.
+                    bot.users.fetch(recipientId)
+                        .then((discordUser) => discordUser.createDM())
+                        .then((dmChannel) => dmChannel.send(messagePayload).catch(onSendError))
+                        .catch(() => onBadRecipient('Check the User ID'))
                 }else{
-                    s.userLog({
-                        ke: groupKey,
-                        mid: '$USER'
-                    },{
-                        type: lang.DiscordErrorText,
-                        msg: 'Check the Channel ID'
-                    });
+                    // Channel : prefer the cache, but fall back to a fetch so a channel that has
+                    // not been cached yet still resolves before we give up.
+                    const cachedChannel = bot.channels.cache.get(recipientId)
+                    if(cachedChannel && cachedChannel.send){
+                        cachedChannel.send(messagePayload).catch(onSendError)
+                    }else{
+                        bot.channels.fetch(recipientId)
+                            .then((fetchedChannel) => {
+                                if(fetchedChannel && fetchedChannel.send){
+                                    fetchedChannel.send(messagePayload).catch(onSendError)
+                                }else{
+                                    onBadRecipient('Check the Channel ID')
+                                }
+                            })
+                            .catch(() => onBadRecipient('Check the Channel ID'))
+                    }
                 }
             }
             const onEventTriggerBeforeFilterForDiscord = function(d,filter){
@@ -63,17 +91,24 @@ module.exports = function(s,config,lang,getSnapshot){
                 if(s.group[d.ke].discordBot && isEnabled && !s.group[d.ke].activeMonitors[d.id].detector_discordbot){
                     const monitorName = s.group[d.ke].rawMonitorConfigurations[d.id].name
                     const notifyText = getObjectTagNotifyText(d)
+                    // Discord embed `url` makes the title clickable but only
+                    // accepts http(s), so skip the raw scheme fallback.
+                    const deepLink = getAppDeepLink(d)
+                    const embedUrl = deepLink.startsWith('http') ? deepLink : undefined
                     var detector_discordbot_timeout
                     if(!monitorConfig.details.detector_discordbot_timeout||monitorConfig.details.detector_discordbot_timeout===''){
                         detector_discordbot_timeout = 1000 * 60 * 10;
                     }else{
                         detector_discordbot_timeout = parseFloat(monitorConfig.details.detector_discordbot_timeout) * 1000 * 60;
                     }
-                    s.group[d.ke].activeMonitors[d.id].detector_discordbot = setTimeout(function(){
-                        clearTimeout(s.group[d.ke].activeMonitors[d.id].detector_discordbot);
-                        s.group[d.ke].activeMonitors[d.id].detector_discordbot = null
-                    },detector_discordbot_timeout)
                     await getSnapshot(d,monitorConfig)
+                    const willSendVideo = monitorConfig.details.detector_discordbot_send_video === '1'
+                    if(d.screenshotBuffer || willSendVideo){
+                        s.group[d.ke].activeMonitors[d.id].detector_discordbot = setTimeout(function(){
+                            clearTimeout(s.group[d.ke].activeMonitors[d.id].detector_discordbot);
+                            s.group[d.ke].activeMonitors[d.id].detector_discordbot = null
+                        },detector_discordbot_timeout)
+                    }
                     if(d.screenshotBuffer){
                         sendMessage({
                             author: {
@@ -81,6 +116,7 @@ module.exports = function(s,config,lang,getSnapshot){
                               icon_url: config.iconURL
                             },
                             title: notifyText,
+                            url: embedUrl,
                             description: notifyText+' '+d.currentTimestamp,
                             fields: [],
                             timestamp: d.currentTime,
@@ -92,7 +128,7 @@ module.exports = function(s,config,lang,getSnapshot){
                             }
                         ],d.ke)
                     }
-                    if(monitorConfig.details.detector_discordbot_send_video === '1'){
+                    if(willSendVideo){
                         let videoPath = null
                         let videoName = null
                         const eventBasedRecording = await getEventBasedRecordingUponCompletion({
@@ -114,6 +150,7 @@ module.exports = function(s,config,lang,getSnapshot){
                                   icon_url: config.iconURL
                                 },
                                 title: `${notifyText}`,
+                                url: embedUrl,
                                 description: notifyText,
                                 fields: [],
                                 timestamp: d.currentTime,
@@ -166,7 +203,9 @@ module.exports = function(s,config,lang,getSnapshot){
                     allowedSend[groupKey] = true
                     s.debugLog(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`)
                     s.debugLog(`Discord Connecting ${userDetails.discordbot_token}`)
-                    const discordBot = new Discord.Client();
+                    const discordBot = new Discord.Client({
+                        intents: [Discord.GatewayIntentBits.Guilds]
+                    });
                     discordBot.on('ready', () => {
                         const botTag = discordBot.user.tag;
                         s.debugLog(`Discord Bot Ready : ${groupKey} : ${botTag}`)
@@ -401,6 +440,25 @@ module.exports = function(s,config,lang,getSnapshot){
                       "example": "",
                       "possible": ""
                   },
+                   {
+                       hidden: true,
+                      "name": "detail=discordbot_channel_type",
+                      "field": lang["Recipient Type"] || "Recipient Type",
+                      "form-group-class":"u_discord_bot_input u_discord_bot_1",
+                      "description": lang["discordbotRecipientTypeText"] || "Channel = post to a server text channel (the Recipient ID is a Channel ID). User = send a Direct Message (the Recipient ID is a User ID).",
+                      "default": "channel",
+                      "fieldType": "select",
+                      "possible": [
+                          {
+                             "name": lang["Channel"] || "Channel",
+                             "value": "channel"
+                          },
+                          {
+                             "name": lang["User (Direct Message)"] || "User (Direct Message)",
+                             "value": "user"
+                          }
+                      ]
+                   },
                    {
                        hidden: true,
                       "name": "detail=discordbot_channel",

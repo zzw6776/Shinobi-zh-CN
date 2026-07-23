@@ -174,6 +174,10 @@ function initiateLiveGridPlayer(monitor){
                     ctx.getContext("2d").drawImage(image,x,y,ctx.width,ctx.height)
                     URL.revokeObjectURL(loadedPlayer.imageUrl)
                 }
+                image.onerror = function() {
+                    URL.revokeObjectURL(loadedPlayer.imageUrl)
+                    loadedPlayer.imageLoading = false
+                }
                 ws.on('data',function(imageData){
                     try{
                         if(loadedPlayer.imageLoading === true)return console.log('drop');

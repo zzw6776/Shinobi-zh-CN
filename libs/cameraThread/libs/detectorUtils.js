@@ -173,6 +173,10 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
     }
     function filterTheNoiseFromMultipleRegions(acceptedTriggers){
         return new Promise((resolve,reject) => {
+            if(acceptedTriggers.length === 0){
+                resolve(false)
+                return
+            }
             let filteredCount = 0
             let filteredCountSuccess = 0
             acceptedTriggers.forEach(function(trigger,n){
@@ -196,6 +200,7 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
         )
     }
     function buildTriggerEvent(data){
+        if(!data || !isFinite(data.percent))return;
         const detectorObject = buildDetectorObject(data)
         sendDetectedData(detectorObject)
     }

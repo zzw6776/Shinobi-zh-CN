@@ -105,6 +105,8 @@ module.exports = function(s,config,lang){
             if(authResponse.ok){
                 response.ok = true
                 response.user = authResponse.user
+                response.user.usingDefaultPassword = s.superUserUsesDefaultPassword(authResponse.user)
+                if(response.user.usingDefaultPassword)s.warnDefaultSuperPassword()
                 const sessionKey = s.gid(30)
                 response.user.sessionKey = sessionKey
                 s.superUsersApi[sessionKey] = {

@@ -325,6 +325,12 @@ $(document).ready(function () {
         "default": false,
         "title": lang["Enable Face Manager"],
         "description": lang["enableFaceManagerDes"]
+      },
+      "disableSSRFSelfTargetFilter": {
+        "type": "boolean",
+        "default": false,
+        "title": lang["Disable SSRF Self-Target Filter"],
+        "description": lang["disableSSRFSelfTargetFilterDes"]
       }
     }
   };

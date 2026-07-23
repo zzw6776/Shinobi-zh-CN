@@ -80,32 +80,38 @@ module.exports = (s,config,lang) => {
         }
         return eventsCounted
     }
-    const addEventDetailsToString = (eventData,string,addOps) => {
+    const removeShellMetacharacters = (value) => {
+        if(value === undefined || value === null)return value;
+        return (value + '').replace(/[\x00-\x1f\x7f;&|<>$`"'\\()^%]/g,'');
+    }
+    const addEventDetailsToString = (eventData,string,addOps,options) => {
         //d = event data
         if(!addOps)addOps = {}
+        if(!options)options = {}
+        const clean = options.shellSafe ? removeShellMetacharacters : (v) => v;
         var newString = string + ''
         var d = Object.assign(eventData,addOps)
         var detailString = s.stringJSON(d.details)
         var firstMatrix = d.details.matrices ? d.details.matrices[0] : null;
         var tag = firstMatrix ? firstMatrix.tag : '';
         newString = newString
-            .replace(/{{TIME}}/g,d.currentTimestamp)
-            .replace(/{{REGION_NAME}}/g,d.details.name)
-            .replace(/{{SNAP_PATH}}/g,s.dir.streams+d.ke+'/'+d.id+'/s.jpg')
-            .replace(/{{MONITOR_ID}}/g,d.id)
-            .replace(/{{MONITOR_NAME}}/g,s.group[d.ke].rawMonitorConfigurations[d.id].name)
-            .replace(/{{GROUP_KEY}}/g,d.ke)
-            .replace(/{{DETAILS}}/g,detailString);
+            .replace(/{{TIME}}/g,clean(d.currentTimestamp))
+            .replace(/{{REGION_NAME}}/g,clean(d.details.name))
+            .replace(/{{SNAP_PATH}}/g,clean(s.dir.streams+d.ke+'/'+d.id+'/s.jpg'))
+            .replace(/{{MONITOR_ID}}/g,clean(d.id))
+            .replace(/{{MONITOR_NAME}}/g,clean(s.group[d.ke].rawMonitorConfigurations[d.id].name))
+            .replace(/{{GROUP_KEY}}/g,clean(d.ke))
+            .replace(/{{DETAILS}}/g,clean(detailString));
         if(firstMatrix && tag){
-            newString = newString.replace(/{{TAG}}/g,tag)
+            newString = newString.replace(/{{TAG}}/g,clean(tag))
         }
         if(d.details.confidence || firstMatrix){
             newString = newString
-            .replace(/{{CONFIDENCE}}/g,d.details.confidence || firstMatrix.confidence)
+            .replace(/{{CONFIDENCE}}/g,clean(d.details.confidence || firstMatrix.confidence))
         }
         if(d.details.reason && newString.includes("REASON")) {
             newString = newString
-            .replace(/{{REASON}}/g, d.details.reason)
+            .replace(/{{REASON}}/g, clean(d.details.reason))
         }
         return newString
     }
@@ -155,6 +161,37 @@ module.exports = (s,config,lang) => {
     }
     const hasMatrices = (eventDetails) => {
         return (eventDetails.matrices && eventDetails.matrices.length > 0) && eventDetails.reason !== 'motion'
+    }
+    const evaluateBooleanTokens = (tokens) => {
+        let pos = 0
+        const peek = () => tokens[pos]
+        const advance = () => tokens[pos++]
+        const parseFactor = () => {
+            const token = peek()
+            if(token === '('){
+                advance()
+                const value = parseExpr()
+                if(peek() === ')')advance()
+                return value
+            }
+            advance()
+            return token === 'true'
+        }
+        const parseTerm = () => {
+            let value = parseFactor()
+            while(peek() === '&&'){ advance(); value = parseFactor() && value }
+            return value
+        }
+        function parseExpr(){
+            let value = parseTerm()
+            while(peek() === '||'){ advance(); value = parseTerm() || value }
+            return value
+        }
+        try{
+            return parseExpr() === true
+        }catch(err){
+            return false
+        }
     }
     const safeCompare = (a, op, b) => {
         switch(op){
@@ -287,12 +324,14 @@ module.exports = (s,config,lang) => {
                     s.userLog(d,{type:lang["Event Filter Error"],msg:lang.eventFilterErrorBrackets})
                 }
                 conditionArray.forEach(function(condition,number){
-                    validationString.push(`${allowBrackets && condition.openBracket ? '(' : ''}${condition.ok}${allowBrackets && condition.closeBracket ? ')' : ''}`);
+                    if(allowBrackets && condition.openBracket)validationString.push('(')
+                    validationString.push(condition.ok ? 'true' : 'false')
+                    if(allowBrackets && condition.closeBracket)validationString.push(')')
                     if(conditionArray.length-1 !== number){
-                        validationString.push(condition.next)
+                        validationString.push(condition.next === '||' ? '||' : '&&')
                     }
                 })
-                if(eval(validationString.join(' '))){
+                if(evaluateBooleanTokens(validationString)){
                     if(haltState === '0' || !haltState){
                         delete(haltState)
                         Object.keys(dFilter.actions).forEach(function(key){
@@ -485,13 +524,15 @@ module.exports = (s,config,lang) => {
         }
 
         if(
-            filter.command || (
-                monitorDetails.detector_command_enable === '1' &&
-                !s.group[d.ke].activeMonitors[monitorId].detector_command
+            config.detectorCommandEnabled && (
+                filter.command || (
+                    monitorDetails.detector_command_enable === '1' &&
+                    !s.group[d.ke].activeMonitors[monitorId].detector_command
+                )
             )
         ){
             s.group[d.ke].activeMonitors[monitorId].detector_command = s.createTimeout('detector_command',s.group[d.ke].activeMonitors[monitorId],monitorDetails.detector_command_timeout,10)
-            var detector_command = addEventDetailsToString(d,monitorDetails.detector_command)
+            var detector_command = addEventDetailsToString(d,monitorDetails.detector_command,null,{shellSafe: true})
             if(detector_command === '')return
             exec(detector_command,{detached: true},function(err){
                 if(err){
@@ -503,10 +544,7 @@ module.exports = (s,config,lang) => {
 
         moveAssociatedMonitorPtzTargets(groupKey, monitorId)
 
-        for (var i = 0; i < s.onEventTriggerExtensions.length; i++) {
-            const extender = s.onEventTriggerExtensions[i]
-            await extender(d,filter,eventTime)
-        }
+        await s.runExtensionsForArrayAwaited('onEventTrigger', undefined, [d,filter,eventTime])
     }
     const saveEventBaseRecordingClip = async function({
         groupKey,
@@ -681,7 +719,7 @@ module.exports = (s,config,lang) => {
                 if(config.noEventBasedRecordingMaps)outputMap = '';
                 const secondsBefore = parseInt(monitorDetails.detector_buffer_seconds_before) || 5
                 let LiveStartIndex = parseInt(secondsBefore / 2 + 1)
-                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : autoAudio ? '' : `-c:a aac`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
+                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : autoAudio ? '' : `-c:a ${audioCodec}`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
                 s.debugLog(ffmpegCommand)
                 activeMonitor.eventBasedRecording[fileTime].process = spawn(
                     config.ffmpegDir,
@@ -776,7 +814,9 @@ module.exports = (s,config,lang) => {
                 s.deleteListOfVideos(d.videos)
             break;
             case'execute':
-                exec(d.execute,{detached: true})
+                exec(d.execute,{detached: true},function(err){
+                    if(err)s.debugLog(err)
+                })
             break;
         }
         s.onEventTriggerBeforeFilterExtensions.forEach(function(extender){
