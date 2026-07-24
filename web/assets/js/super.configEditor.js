@@ -43,6 +43,57 @@ $(document).ready(function () {
         "type": "boolean",
         "default": false
       },
+      "debugLogVerbose": {
+        "title": lang["debugLogVerbose"],
+        "type": "boolean",
+        "description": lang["debugLogVerboseDes"],
+        "default": false
+      },
+      "debugLogMonitors": {
+        "title": lang["debugLogMonitors"],
+        "type": "boolean",
+        "description": lang["debugLogMonitorsDes"],
+        "default": false
+      },
+      "debugLogMonitorsVerbose": {
+        "title": lang["debugLogMonitorsVerbose"],
+        "type": "boolean",
+        "description": lang["debugLogMonitorsVerboseDes"],
+        "default": false
+      },
+      "debugLogZwave": {
+        "title": lang["debugLogZwave"],
+        "type": "boolean",
+        "default": false
+      },
+      "debugHeap": {
+        "title": lang["debugHeap"],
+        "type": "boolean",
+        "description": lang["debugHeapDes"],
+        "default": false
+      },
+      "debugMp4Frag": {
+        "title": lang["debugMp4Frag"],
+        "type": "boolean",
+        "default": false
+      },
+      "logCronInfo": {
+        "title": lang["logCronInfo"],
+        "type": "boolean",
+        "default": false
+      },
+      "systemLog": {
+        "title": lang["systemLog"],
+        "type": "boolean",
+        "description": lang["systemLogDes"],
+        "default": true
+      },
+      "databaseLogs": {
+        "title": lang["databaseLogs"],
+        "type": "boolean",
+        "description": lang["databaseLogsDes"],
+        "default": false
+      },
       "subscriptionId": {
         "title": lang["Fill in subscription ID"],
         "type": "string",
@@ -62,6 +113,97 @@ $(document).ready(function () {
           "md5"
         ],
         "default": "sha256"
+      },
+      "ip": {
+        "title": lang["ip"],
+        "type": "string",
+        "description": lang["ipDes"],
+        "default": "localhost"
+      },
+      "baseURL": {
+        "title": lang["baseURL"],
+        "type": "string",
+        "description": lang["baseURLDes"]
+      },
+      "notificationBaseUrl": {
+        "title": lang["notificationBaseUrl"],
+        "type": "string",
+        "description": lang["notificationBaseUrlDes"]
+      },
+      "ssl": {
+        "type": "object",
+        "format": "table",
+        "title": lang["ssl"],
+        "description": lang["sslDes"],
+        "properties": {
+          "key": {
+            "title": lang["sslKey"],
+            "type": "string"
+          },
+          "cert": {
+            "title": lang["sslCert"],
+            "type": "string"
+          },
+          "port": {
+            "title": lang["Port"],
+            "type": "integer",
+            "default": 443
+          },
+          "autoRedirect": {
+            "title": lang["sslAutoRedirect"],
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "socketIoPingTimeout": {
+        "title": lang["socketIoPingTimeout"],
+        "type": "integer",
+        "default": 130000
+      },
+      "socketIoPingInterval": {
+        "title": lang["socketIoPingInterval"],
+        "type": "integer",
+        "default": 60000
+      },
+      "socketIoMaxHttpBufferSize": {
+        "title": lang["socketIoMaxHttpBufferSize"],
+        "type": "integer",
+        "default": 1000000
+      },
+      "useUWebsocketJs": {
+        "title": lang["useUWebsocketJs"],
+        "type": "boolean",
+        "default": true
+      },
+      "databaseType": {
+        "title": lang["databaseType"],
+        "type": "string",
+        "enum": [
+          "mysql",
+          "mysql2",
+          "pg",
+          "postgres",
+          "postgresql",
+          "pgnative",
+          "mssql",
+          "oracledb",
+          "redshift",
+          "cockroachdb",
+          "better-sqlite3",
+          "sqlite"
+        ],
+        "default": "mysql"
+      },
+      "databasePoolMin": {
+        "title": lang["databasePoolMin"],
+        "type": "integer",
+        "default": 0
+      },
+      "databasePoolMax": {
+        "title": lang["databasePoolMax"],
+        "type": "integer",
+        "default": 10
       },
       "addStorage": {
         "type": "array",
@@ -203,11 +345,29 @@ $(document).ready(function () {
           "key": {
             "type": "string",
           },
+          "enabled": {
+            "title": lang["cronEnabled"],
+            "type": "boolean",
+            "description": lang["cronEnabledDes"],
+            "default": true
+          },
+          "interval": {
+            "title": lang["cronInterval"],
+            "type": "number",
+            "description": lang["cronIntervalDes"],
+            "default": 1
+          },
           "deleteOld": {
             "title": lang["deleteOld"],
             "type": "boolean",
             "description": lang["deleteOldDes"],
             "default": true
+          },
+          "deleteOrphans": {
+            "title": lang["deleteOrphans"],
+            "type": "boolean",
+            "description": lang["deleteOrphansDes"],
+            "default": false
           },
           "deleteNoVideo": {
             "title": lang["deleteNoVideo"],
@@ -215,58 +375,54 @@ $(document).ready(function () {
             "description": lang["deleteNoVideoDes"],
             "default": true
           },
+          "deleteNoVideoRecursion": {
+            "title": lang["deleteNoVideoRecursion"],
+            "type": "boolean",
+            "description": lang["deleteNoVideoRecursionDes"],
+            "default": false
+          },
           "deleteOverMax": {
             "title": lang["deleteOverMax"],
             "type": "boolean",
             "description": lang["deleteOverMaxDes"],
             "default": true
           },
-        }
-      },
-      "mail": {
-        "type": "object",
-        "format": "table",
-        "title": lang["Email Options"],
-        "properties": {
-          "service": {
-            "title": lang["service"],
-            "type": "string",
+          "deleteOverMaxOffset": {
+            "title": lang["deleteOverMaxOffset"],
+            "type": "number",
+            "description": lang["deleteOverMaxOffsetDes"],
+            "default": 0.9
           },
-          "host": {
-            "title": lang["Host"],
-            "type": "string",
-          },
-          "auth": {
-            "title": lang["auth"],
-            "type": "object",
-            "properties": {
-              "user": {
-                "title": lang["User"],
-                "type": "string",
-              },
-              "pass": {
-                "title": lang["Password"],
-                "type": "string",
-              },
-            },
-          },
-          "secure": {
-            "title": lang["secure"],
+          "deleteLogs": {
+            "title": lang["deleteLogs"],
             "type": "boolean",
-            "default": false
+            "description": lang["deleteLogsDes"],
+            "default": true
           },
-          "ignoreTLS": {
-            "title": lang["ignoreTLS"],
+          "deleteEvents": {
+            "title": lang["deleteEvents"],
             "type": "boolean",
+            "description": lang["deleteEventsDes"],
+            "default": true
           },
-          "requireTLS": {
-            "title": lang["requireTLS"],
+          "deleteFileBins": {
+            "title": lang["deleteFileBins"],
             "type": "boolean",
+            "description": lang["deleteFileBinsDes"],
+            "default": true
           },
-          "port": {
-            "title": lang["Port"],
+          "deleteTimelpaseFrames": {
+            "title": lang["deleteTimelpaseFrames"],
+            "type": "boolean",
+            "description": lang["deleteTimelpaseFramesDes"],
+            "default": true
+          },
+          "purgeTimeout": {
+            "title": lang["purgeTimeout"],
             "type": "integer",
-          }
+            "description": lang["purgeTimeoutDes"],
+            "default": 900000
+          },
         }
       },
       "detectorMergePamRegionTriggers": {
@@ -331,6 +487,676 @@ $(document).ready(function () {
         "default": false,
         "title": lang["Disable SSRF Self-Target Filter"],
         "description": lang["disableSSRFSelfTargetFilterDes"]
+      },
+      "useBetterP2P": {
+        "title": lang["useBetterP2P"],
+        "type": "boolean",
+        "default": true
+      },
+      "p2pEnabled": {
+        "title": lang["p2pEnabled"],
+        "type": "boolean",
+        "default": false
+      },
+      "p2pApiKey": {
+        "title": lang["p2pApiKey"],
+        "type": "string"
+      },
+      "p2pHostSelected": {
+        "title": lang["p2pHostSelected"],
+        "type": "string"
+      },
+      "p2pHostMultiSelected": {
+        "type": "array",
+        "format": "table",
+        "title": lang["p2pHostMultiSelected"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "p2pServerList": {
+        "type": "array",
+        "format": "table",
+        "title": lang["p2pServerList"],
+        "description": lang["p2pServerListDes"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "p2pShellAccess": {
+        "title": lang["p2pShellAccess"],
+        "type": "boolean",
+        "description": lang["p2pShellAccessDes"],
+        "default": false
+      },
+      "p2pAllowNetworkAccess": {
+        "title": lang["p2pAllowNetworkAccess"],
+        "type": "boolean",
+        "default": false
+      },
+      "p2pRestrictedTo": {
+        "title": lang["p2pRestrictedTo"],
+        "type": "string"
+      },
+      "ftpServerPort": {
+        "title": lang["ftpServerPort"],
+        "type": "integer",
+        "default": 21
+      },
+      "ftpServerUrl": {
+        "title": lang["ftpServerUrl"],
+        "type": "string",
+        "description": lang["ftpServerUrlDes"]
+      },
+      "ftpServerPasvUrl": {
+        "title": lang["ftpServerPasvUrl"],
+        "type": "string"
+      },
+      "ftpServerPasvMinPort": {
+        "title": lang["ftpServerPasvMinPort"],
+        "type": "integer",
+        "default": 10050
+      },
+      "ftpServerPasvMaxPort": {
+        "title": lang["ftpServerPasvMaxPort"],
+        "type": "integer",
+        "default": 10100
+      },
+      "smtpServer": {
+        "title": lang["smtpServer"],
+        "type": "boolean",
+        "description": lang["smtpServerDes"],
+        "default": false
+      },
+      "smtpServerPort": {
+        "title": lang["smtpServerPort"],
+        "type": "integer",
+        "description": lang["smtpServerPortDes"]
+      },
+      "smtpServerHideStartTls": {
+        "title": lang["smtpServerHideStartTls"],
+        "type": "boolean",
+        "default": false
+      },
+      "smtpServerLog": {
+        "title": lang["smtpServerLog"],
+        "type": "boolean",
+        "default": false
+      },
+      "smtpServerOptions": {
+        "type": "object",
+        "format": "table",
+        "title": lang["smtpServerOptions"],
+        "description": lang["smtpServerOptionsDes"],
+        "properties": {}
+      },
+      "smtpServerSsl": {
+        "type": "object",
+        "format": "table",
+        "title": lang["smtpServerSsl"],
+        "properties": {
+          "enabled": {
+            "title": lang["Enabled"],
+            "type": "boolean",
+            "default": false
+          },
+          "key": {
+            "title": lang["sslKey"],
+            "type": "string"
+          },
+          "cert": {
+            "title": lang["sslCert"],
+            "type": "string"
+          }
+        }
+      },
+      "videoDropInServer": {
+        "title": lang["videoDropInServer"],
+        "type": "boolean",
+        "description": lang["videoDropInServerDes"],
+        "default": false
+      },
+      "videoDropInServerPort": {
+        "title": lang["videoDropInServerPort"],
+        "type": "integer",
+        "default": 420
+      },
+      "videoDropInServerUrl": {
+        "title": lang["videoDropInServerUrl"],
+        "type": "string"
+      },
+      "dropInEventForceSaveEvent": {
+        "title": lang["dropInEventForceSaveEvent"],
+        "type": "boolean",
+        "description": lang["dropInEventForceSaveEventDes"],
+        "default": true
+      },
+      "dropInEventDeleteFileAfterTrigger": {
+        "title": lang["dropInEventDeleteFileAfterTrigger"],
+        "type": "boolean",
+        "default": true
+      },
+      "dropInEventsDir": {
+        "title": lang["dropInEventsDir"],
+        "type": "string"
+      },
+      "mqttClient": {
+        "title": lang["mqttClient"],
+        "type": "boolean",
+        "description": lang["mqttClientDes"],
+        "default": false
+      },
+      "mqttEventForceSaveEvent": {
+        "title": lang["mqttEventForceSaveEvent"],
+        "type": "boolean",
+        "default": true
+      },
+      "rtmpServer": {
+        "title": lang["rtmpServer"],
+        "type": "boolean",
+        "description": lang["rtmpServerDes"],
+        "default": false
+      },
+      "rtmp": {
+        "type": "object",
+        "format": "table",
+        "title": lang["rtmp"],
+        "properties": {
+          "port": {
+            "title": lang["Port"],
+            "type": "integer",
+            "default": 1935
+          },
+          "chunk_size": {
+            "title": lang["rtmpChunkSize"],
+            "type": "integer",
+            "default": 60000
+          },
+          "gop_cache": {
+            "title": lang["rtmpGopCache"],
+            "type": "boolean",
+            "default": true
+          },
+          "ping": {
+            "title": lang["rtmpPing"],
+            "type": "integer",
+            "default": 60
+          },
+          "ping_timeout": {
+            "title": lang["rtmpPingTimeout"],
+            "type": "integer",
+            "default": 30
+          }
+        }
+      },
+      "auth": {
+        "type": "object",
+        "format": "table",
+        "title": lang["rtmpAuth"],
+        "description": lang["rtmpAuthDes"],
+        "properties": {
+          "play": {
+            "title": lang["rtmpAuthPlay"],
+            "type": "boolean",
+            "default": false
+          },
+          "publish": {
+            "title": lang["rtmpAuthPublish"],
+            "type": "boolean",
+            "default": false
+          },
+          "secret": {
+            "title": lang["rtmpAuthSecret"],
+            "type": "string"
+          }
+        }
+      },
+      "mgmtServers": {
+        "type": "object",
+        "format": "table",
+        "title": lang["mgmtServers"],
+        "properties": {}
+      },
+      "enableMgmtConnect": {
+        "title": lang["enableMgmtConnect"],
+        "type": "boolean",
+        "default": false
+      },
+      "peerConnectKey": {
+        "title": lang["peerConnectKey"],
+        "type": "string"
+      },
+      "pairPort": {
+        "title": lang["pairPort"],
+        "type": "integer"
+      },
+      "noCentralSsh": {
+        "title": lang["noCentralSsh"],
+        "type": "boolean",
+        "default": false
+      },
+      "saveLogsInCentral": {
+        "title": lang["saveLogsInCentral"],
+        "type": "boolean",
+        "default": false
+      },
+      "autoRestartManagementConnectionInterval": {
+        "title": lang["autoRestartManagementConnectionInterval"],
+        "type": "integer",
+        "description": lang["autoRestartManagementConnectionIntervalDes"]
+      },
+      "failoverConnectionKeys": {
+        "type": "array",
+        "format": "table",
+        "title": lang["failoverConnectionKeys"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "failoverServers": {
+        "type": "array",
+        "format": "table",
+        "title": lang["failoverServers"],
+        "items": {
+          "type": "string"
+        }
+      },
+      "childNodes": {
+        "type": "object",
+        "format": "table",
+        "title": lang["childNodes"],
+        "description": lang["childNodesDes"],
+        "properties": {
+          "enabled": {
+            "title": lang["Enabled"],
+            "type": "boolean",
+            "default": false
+          },
+          "mode": {
+            "title": lang["Mode"],
+            "type": "string",
+            "enum": [
+              "master",
+              "child"
+            ],
+            "default": "master"
+          },
+          "host": {
+            "title": lang["childNodesHost"],
+            "type": "string",
+            "description": lang["childNodesHostDes"]
+          },
+          "ip": {
+            "title": lang["childNodesIp"],
+            "type": "string"
+          },
+          "port": {
+            "title": lang["Port"],
+            "type": "integer",
+            "default": 8288
+          },
+          "key": {
+            "title": lang["Key"],
+            "type": "string"
+          },
+          "masterDoWorkToo": {
+            "title": lang["childNodesMasterDoWorkToo"],
+            "type": "boolean",
+            "default": false
+          },
+          "maxCpuPercent": {
+            "title": lang["childNodesMaxCpuPercent"],
+            "type": "integer",
+            "default": 75
+          },
+          "maxRamPercent": {
+            "title": lang["childNodesMaxRamPercent"],
+            "type": "integer",
+            "default": 75
+          }
+        }
+      },
+      "cloudUploaders": {
+        "type": "object",
+        "format": "table",
+        "title": lang["cloudUploaders"],
+        "description": lang["cloudUploadersDes"],
+        "properties": {}
+      },
+      "allowGoogleSignOn": {
+        "title": lang["allowGoogleSignOn"],
+        "type": "boolean",
+        "default": false
+      },
+      "appIdGoogleSignIn": {
+        "title": lang["appIdGoogleSignIn"],
+        "type": "string"
+      },
+      "allowLdapSignOn": {
+        "title": lang["allowLdapSignOn"],
+        "type": "boolean",
+        "default": false
+      },
+      "allowBindingAltLoginsFromLoginPage": {
+        "title": lang["allowBindingAltLoginsFromLoginPage"],
+        "type": "boolean",
+        "default": false
+      },
+      "allowSpammingViaEmail": {
+        "title": lang["allowSpammingViaEmail"],
+        "type": "boolean",
+        "description": lang["allowSpammingViaEmailDes"],
+        "default": false
+      },
+      "showLoginTypeSelector": {
+        "title": lang["showLoginTypeSelector"],
+        "type": "boolean",
+        "default": true
+      },
+      "superUserLoginDisabled": {
+        "title": lang["superUserLoginDisabled"],
+        "type": "boolean",
+        "description": lang["superUserLoginDisabledDes"],
+        "default": false
+      },
+      "passwordSalt": {
+        "title": lang["passwordSalt"],
+        "type": "string",
+        "description": lang["passwordSaltDes"]
+      },
+      "staticUsers": {
+        "type": "array",
+        "format": "table",
+        "title": lang["staticUsers"],
+        "description": lang["staticUsersDes"],
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "title": lang["staticUser"],
+          "properties": {
+            "mail": {
+              "title": lang["Email"],
+              "type": "string"
+            },
+            "pass": {
+              "title": lang["Password"],
+              "type": "string"
+            }
+          }
+        }
+      },
+      "telegramBot": {
+        "title": lang["telegramBot"],
+        "type": "boolean",
+        "default": false
+      },
+      "matrixBot": {
+        "title": lang["matrixBot"],
+        "type": "boolean",
+        "default": false
+      },
+      "pushover": {
+        "title": lang["pushover"],
+        "type": "boolean",
+        "default": false
+      },
+      "fcm": {
+        "title": lang["fcm"],
+        "type": "boolean",
+        "description": lang["fcmDes"],
+        "default": true
+      },
+      "detectorCommandEnabled": {
+        "title": lang["detectorCommandEnabled"],
+        "type": "boolean",
+        "default": true
+      },
+      "detectorPluginsCluster": {
+        "title": lang["detectorPluginsCluster"],
+        "type": "boolean",
+        "description": lang["detectorPluginsClusterDes"],
+        "default": false
+      },
+      "clusterBasedOnGpu": {
+        "title": lang["clusterBasedOnGpu"],
+        "type": "boolean",
+        "default": false
+      },
+      "clusterUseBasicFrameCount": {
+        "title": lang["clusterUseBasicFrameCount"],
+        "type": "boolean",
+        "default": true
+      },
+      "sendDetectionDataWithoutTrigger": {
+        "title": lang["sendDetectionDataWithoutTrigger"],
+        "type": "boolean",
+        "default": false
+      },
+      "noEventTriggerForOnvifEvent": {
+        "title": lang["noEventTriggerForOnvifEvent"],
+        "type": "boolean",
+        "default": false
+      },
+      "noEventBasedRecordingMaps": {
+        "title": lang["noEventBasedRecordingMaps"],
+        "type": "boolean",
+        "default": false
+      },
+      "noDefaultRecordingSegmentFormatOptions": {
+        "title": lang["noDefaultRecordingSegmentFormatOptions"],
+        "type": "boolean",
+        "default": false
+      },
+      "peopleTags": {
+        "type": "array",
+        "format": "table",
+        "title": lang["peopleTags"],
+        "description": lang["peopleTagsDes"],
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "person",
+          "Person",
+          "Man",
+          "Woman",
+          "Boy",
+          "Girl"
+        ]
+      },
+      "insertOrphans": {
+        "title": lang["insertOrphans"],
+        "type": "boolean",
+        "default": true
+      },
+      "orphanedVideoCheckMax": {
+        "title": lang["orphanedVideoCheckMax"],
+        "type": "integer",
+        "default": 2
+      },
+      "orphanedMountScanTimeout": {
+        "title": lang["orphanedMountScanTimeout"],
+        "type": "integer"
+      },
+      "orphanedMountedVideoCheckMax": {
+        "title": lang["orphanedMountedVideoCheckMax"],
+        "type": "integer"
+      },
+      "autoDropCache": {
+        "title": lang["autoDropCache"],
+        "type": "boolean",
+        "description": lang["autoDropCacheDes"],
+        "default": false
+      },
+      "deleteCorruptFiles": {
+        "title": lang["deleteCorruptFiles"],
+        "type": "boolean",
+        "default": true
+      },
+      "deleteFileBinsOverMax": {
+        "title": lang["deleteFileBinsOverMax"],
+        "type": "boolean",
+        "default": true
+      },
+      "hideCloudSaveUrls": {
+        "title": lang["hideCloudSaveUrls"],
+        "type": "boolean",
+        "default": true
+      },
+      "dropTimeLapseFrames": {
+        "title": lang["dropTimeLapseFrames"],
+        "type": "boolean",
+        "default": false
+      },
+      "disableAutoCompressVideos": {
+        "title": lang["disableAutoCompressVideos"],
+        "type": "boolean",
+        "default": false
+      },
+      "autoBuildTimelapseVideosDaily": {
+        "title": lang["autoBuildTimelapseVideosDaily"],
+        "type": "boolean",
+        "default": false
+      },
+      "monitorStartQueueDisabled": {
+        "title": lang["monitorStartQueueDisabled"],
+        "type": "boolean",
+        "default": false
+      },
+      "probeMonitorOnStart": {
+        "title": lang["probeMonitorOnStart"],
+        "type": "boolean",
+        "default": true
+      },
+      "restart": {
+        "type": "object",
+        "format": "table",
+        "title": lang["restart"],
+        "properties": {
+          "onVideoNotExist": {
+            "title": lang["restartOnVideoNotExist"],
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "liveJpegApiEnabled": {
+        "title": lang["liveJpegApiEnabled"],
+        "type": "boolean",
+        "default": true
+      },
+      "maxJpegChunkPieces": {
+        "title": lang["maxJpegChunkPieces"],
+        "type": "integer"
+      },
+      "binDir": {
+        "title": lang["binDir"],
+        "type": "string"
+      },
+      "ffmpegDir": {
+        "title": lang["ffmpegDir"],
+        "type": "string",
+        "description": lang["ffmpegDirDes"]
+      },
+      "ffmpegBinary": {
+        "title": lang["ffmpegBinary"],
+        "type": "string"
+      },
+      "ffbinariesVersion": {
+        "title": lang["ffbinariesVersion"],
+        "type": "string"
+      },
+      "monitorDaemonPath": {
+        "title": lang["monitorDaemonPath"],
+        "type": "string"
+      },
+      "monitorDetectorDaemonPath": {
+        "title": lang["monitorDetectorDaemonPath"],
+        "type": "string"
+      },
+      "iconURL": {
+        "title": lang["iconURL"],
+        "type": "string"
+      },
+      "applicationName": {
+        "title": lang["applicationName"],
+        "type": "string"
+      },
+      "brandingConfig": {
+        "type": "object",
+        "format": "table",
+        "title": lang["brandingConfig"],
+        "description": lang["brandingConfigDes"],
+        "properties": {}
+      },
+      "timezone": {
+        "title": lang["timezone"],
+        "type": "string"
+      },
+      "useUTC": {
+        "title": lang["useUTC"],
+        "type": "boolean",
+        "default": false
+      },
+      "pipeAddition": {
+        "title": lang["pipeAddition"],
+        "type": "integer",
+        "default": 10
+      },
+      "safeMode": {
+        "title": lang["safeMode"],
+        "type": "boolean",
+        "default": false
+      },
+      "shinobiHubEndpoint": {
+        "title": lang["shinobiHubEndpoint"],
+        "type": "string",
+        "default": "https://hub.shinobi.video/"
+      },
+      "shinobiHubAutoBackup": {
+        "title": lang["shinobiHubAutoBackup"],
+        "type": "boolean",
+        "default": false
+      },
+      "shinobiHubApiKey": {
+        "title": lang["shinobiHubApiKey"],
+        "type": "string"
+      },
+      "easyRemotePort": {
+        "title": lang["easyRemotePort"],
+        "type": "integer"
+      },
+      "alarmManagement": {
+        "title": lang["alarmManagement"],
+        "type": "boolean",
+        "default": false
+      },
+      "webDavUpload": {
+        "title": lang["webDavUpload"],
+        "type": "boolean",
+        "default": false
+      },
+      "cpuUsageMarker": {
+        "title": lang["cpuUsageMarker"],
+        "type": "string",
+        "default": "%Cpu"
+      },
+      "customCpuCommand": {
+        "title": lang["customCpuCommand"],
+        "type": "string"
+      },
+      "doCronAsWorker": {
+        "title": lang["doCronAsWorker"],
+        "type": "boolean",
+        "default": true
+      },
+      "pushRelayApiKey": {
+        "title": lang["pushRelayApiKey"],
+        "type": "string"
+      },
+      "pushRelayUrl": {
+        "title": lang["pushRelayUrl"],
+        "type": "string"
       }
     }
   };
