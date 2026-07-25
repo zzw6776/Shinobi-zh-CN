@@ -54,8 +54,11 @@ RUN sh /home/Shinobi/Docker/install_ffmpeg.sh
 RUN sh /home/Shinobi/Docker/install_mariadb.sh
 RUN sh /home/Shinobi/Docker/install_nodejs.sh
 
-RUN chmod 777 /home/Shinobi
-RUN chmod -R 777 /home/Shinobi/plugins
+# security: was chmod 777 / chmod -R 777 (world-writable) — the container runs everything as
+# root already, so nothing needs the world-write bit; 777 only added risk (any locally-running
+# process, or an RCE bug elsewhere, could rewrite Shinobi's own source / plugin files)
+RUN chmod 755 /home/Shinobi
+RUN chmod -R 755 /home/Shinobi/plugins
 RUN chmod -f +x /home/Shinobi/Docker/init.sh
 
 RUN sed -i -e 's/\r//g' /home/Shinobi/Docker/init.sh
