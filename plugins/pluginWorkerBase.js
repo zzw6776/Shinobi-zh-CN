@@ -203,8 +203,12 @@ module.exports = function(__dirname, config){
                 var monitorKey = `${groupKey}${monitorId}`
                 if(!s.monitors[monitorKey])s.monitors[monitorKey] = Object.assign({}, monitorConfig);
                 var isObjectDetectionSeparate = monitorDetails.detector_use_detect_object === '1'
-                var width = parseFloat(isObjectDetectionSeparate  && monitorDetails.detector_scale_x_object ? monitorDetails.detector_scale_x_object : monitorDetails.detector_scale_x)
-                var height = parseFloat(isObjectDetectionSeparate  && monitorDetails.detector_scale_y_object ? monitorDetails.detector_scale_y_object : monitorDetails.detector_scale_y)
+                // Blank object-detection scale fields must fall back to
+                // 1280x720 (what libs/ffmpeg/builders.js actually encodes
+                // that stream at), not the unrelated base motion-detector
+                // scale (monitorDetails.detector_scale_x/y).
+                var width = parseFloat(isObjectDetectionSeparate ? (monitorDetails.detector_scale_x_object || 1280) : monitorDetails.detector_scale_x)
+                var height = parseFloat(isObjectDetectionSeparate ? (monitorDetails.detector_scale_y_object || 720) : monitorDetails.detector_scale_y)
                 s.monitorInfo.set(monitorKey,{
                     separate: isObjectDetectionSeparate,
                     isObjectDetectionSeparate,
@@ -292,14 +296,13 @@ module.exports = function(__dirname, config){
     s.getImageDimensions = (d) => {
         var height
         var width
-        if(
-            d.mon.detector_scale_y_object &&
-            d.mon.detector_scale_y_object !== '' &&
-            d.mon.detector_scale_x_object &&
-            d.mon.detector_scale_x_object !== ''
-        ){
-            height = d.mon.detector_scale_y_object
-            width = d.mon.detector_scale_x_object
+        // Same fix as the monitorUpdate case above - blank object-detection
+        // scale fields must fall back to 1280x720 (what the stream is
+        // actually encoded at), not the unrelated base motion-detector scale.
+        var separate = d.mon.detector_use_detect_object === '1'
+        if(separate){
+            height = d.mon.detector_scale_y_object || 720
+            width = d.mon.detector_scale_x_object || 1280
         }else{
             height = d.mon.detector_scale_y
             width = d.mon.detector_scale_x
