@@ -93,7 +93,12 @@ module.exports = (s,config,lang,app,io,helpers) => {
     // Runs `docker <args>`, streaming stdout/stderr to the superuser's socket over
     // the same 'plugin-info' channel the (non-Docker) installer already uses, so
     // the frontend can reuse its existing output panel with no new wiring.
-    const runDockerStreamed = (packageName,args) => {
+    // isFinalStep controls whether '#END_PROCESS' is sent on a *successful* exit.
+    // Deploy runs this as two sequential steps (pull, then run) sharing one output
+    // panel/progress flag on the frontend - only the last step on the happy path
+    // should tell the frontend "the whole action is done, go refresh the card".
+    // A failing step always signals end (there's no next step coming).
+    const runDockerStreamed = (packageName,args,isFinalStep = true) => {
         return new Promise((resolve) => {
             const sendData = (data,channel) => {
                 // reuses the same 'install-stdout'/'install-stderr' process names the
@@ -121,7 +126,9 @@ module.exports = (s,config,lang,app,io,helpers) => {
                 sendData(err.message || String(err),'stderr')
             })
             proc.on('exit',(code) => {
-                sendData('#END_PROCESS','stdout')
+                if(isFinalStep || code !== 0){
+                    sendData('#END_PROCESS','stdout')
+                }
                 resolve({ ok: code === 0, code })
             })
         })
@@ -159,7 +166,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
             // stale exited container and a currently-running one being redeployed
             // with a different variant/host/etc)
             await new Promise((resolve) => execFile('docker',['rm','-f',name],{timeout:15000},() => resolve()))
-            const pullResult = await runDockerStreamed(packageName,['pull',image])
+            const pullResult = await runDockerStreamed(packageName,['pull',image],false)
             if(!pullResult.ok){
                 return
             }
