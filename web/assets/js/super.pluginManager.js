@@ -1,6 +1,9 @@
 $(document).ready(function(){
     var loadedModules = {}
     var downloadablePlugins = {}
+    var dockerAvailable = false
+    var detectedHostIp = ''
+    var dockerActionInProgress = {}
     var theEnclosure = $('#superPluginManager')
     var listElement = $('#pluginManagerList')
     var downloadListElement = $('#pluginManagerDownloadble tbody')
@@ -76,6 +79,35 @@ $(document).ready(function(){
         })
     }
     var loadedBlocks = {}
+    function dockerStatusBadge(status){
+        var badgeClass = status === 'running' ? 'badge-success' : (status === 'exited' ? 'badge-warning' : 'badge-secondary')
+        return `<span class="badge ${badgeClass}">${status}</span>`
+    }
+    function buildDockerSectionHtml(module){
+        var docker = module.docker || {}
+        var variants = docker.variants || []
+        if(!dockerAvailable || variants.length === 0)return ''
+        var container = docker.container || { status: 'absent' }
+        var isRunning = container.status === 'running'
+        var isAbsent = container.status === 'absent'
+        var variantOptions = variants.map((v) => `<option value="${v}">${v}</option>`).join('')
+        return `
+            <div class="docker-plugin-install mt-2 mb-2 p-2">
+                <div class="mb-1"><b><i class="fa fa-cube"></i> ${lang['Docker'] || 'Docker'}</b> ${dockerStatusBadge(container.status)} ${container.image ? `<small>${container.image}</small>` : ''}</div>
+                ${isAbsent ? `
+                    <div class="form-inline">
+                        <select class="form-control form-control-sm d-inline-block w-auto mr-1" docker-field="variant">${variantOptions}</select>
+                        <input type="text" class="form-control form-control-sm d-inline-block w-auto mr-1" docker-field="host" placeholder="${lang['Host'] || 'Host'}" value="${detectedHostIp}">
+                        <a class="btn btn-sm btn-primary" plugin-manager-action="docker-deploy">${lang['Pull & Run (Docker)'] || 'Pull & Run (Docker)'}</a>
+                    </div>
+                ` : `
+                    <a class="btn btn-sm btn-default" plugin-manager-action="docker-logs">${lang['View Logs'] || 'View Logs'}</a>
+                    ${isRunning ? `<a class="btn btn-sm btn-warning" plugin-manager-action="docker-stop">${lang['Stop'] || 'Stop'}</a>` : `<a class="btn btn-sm btn-success" plugin-manager-action="docker-start">${lang['Start'] || 'Start'}</a>`}
+                    <a class="btn btn-sm btn-danger" plugin-manager-action="docker-remove">${lang['Remove Container'] || 'Remove Container'}</a>
+                `}
+                <div class="docker-logs-view d-none mt-2"><pre class="text-white mb-0"></pre></div>
+            </div>`
+    }
     var drawModuleBlock = function(module){
         var humanName = module.properties.name ? module.properties.name : module.name
         var additionalCommands = module.properties.addCmd ? Object.values(module.properties.addCmd) : [];
@@ -83,6 +115,9 @@ $(document).ready(function(){
             var existingElement = listElement.find(`[package-name="${module.name}"]`)
             existingElement.find('.title').text(humanName)
             existingElement.find('[plugin-manager-action="status"]').text(!module.config.enabled ? lang.Enable : lang.Disable)
+            existingElement.find('.docker-section').html(buildDockerSectionHtml(module))
+            loadedModules[module.name] = module;
+            loadedBlocks[module.name] = Object.assign(loadedBlocks[module.name] || {},module)
         }else{
             var addCmdButtons = additionalCommands.length > 0 ? `<div class="dropdown d-inline-block command-buttons">
               <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="dmb-${module.name}" data-bs-toggle="dropdown" aria-expanded="false">
@@ -111,6 +146,9 @@ $(document).ready(function(){
                                 <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
                                 <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
                                 <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
+                            </div>
+                            <div class="docker-section">${buildDockerSectionHtml(module)}</div>
+                            <div class="mb-2">
                                 <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
                                     <div class="input-group">
                                       <input name="cmd" type="text" class="form-control form-control-sm" placeholder="Type and Press Enter to Send Command">
@@ -395,6 +433,72 @@ $(document).ready(function(){
                     })
                 })
             break;
+            case'docker-deploy':
+                var variant = card.find('[docker-field="variant"]').val()
+                var hostField = card.find('[docker-field="host"]').val()
+                $.confirm.create({
+                    title: lang['Pull & Run (Docker)'] || 'Pull & Run (Docker)',
+                    body: lang.superPluginDownloadText || 'This will pull the Docker image and run it, replacing any existing container for this plugin.',
+                    clickOptions: {
+                        class: 'btn-success',
+                        title: lang.Run,
+                    },
+                    clickCallback: function(){
+                        loadedBlocks[packageName].stdout.empty()
+                        loadedBlocks[packageName].stderr.empty()
+                        dockerActionInProgress[packageName] = true
+                        $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/deploy',{
+                            packageName: packageName,
+                            variant: variant,
+                            host: hostField,
+                        },function(data){
+                            console.log(data)
+                        })
+                    }
+                })
+            break;
+            case'docker-stop':
+                $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/stop',{
+                    packageName: packageName,
+                },function(data){
+                    refreshModuleList()
+                })
+            break;
+            case'docker-start':
+                $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/start',{
+                    packageName: packageName,
+                },function(data){
+                    refreshModuleList()
+                })
+            break;
+            case'docker-remove':
+                $.confirm.create({
+                    title: lang['Remove Container'] || 'Remove Container',
+                    body: lang['confirmRemoveDockerContainer'] || 'Do you want to remove this plugin\'s Docker container?',
+                    clickOptions: {
+                        class: 'btn-danger',
+                        title: lang.Delete,
+                    },
+                    clickCallback: function(){
+                        $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/remove',{
+                            packageName: packageName,
+                        },function(data){
+                            refreshModuleList()
+                        })
+                    }
+                })
+            break;
+            case'docker-logs':
+                var logsView = card.find('.docker-logs-view')
+                var isHidden = logsView.hasClass('d-none')
+                if(isHidden){
+                    $.get(superApiPrefix + $user.sessionKey + '/plugins/docker/logs?packageName=' + packageName,function(data){
+                        logsView.removeClass('d-none').find('pre').text(data.logs || '')
+                    })
+                }else{
+                    logsView.addClass('d-none').find('pre').empty()
+                }
+            break;
         }
     })
     theEnclosure.on('click','[dl-plugin] .download',function(e){
@@ -448,15 +552,17 @@ $(document).ready(function(){
             return 0;
         });
     }
-    setTimeout(function(){
+    function refreshModuleList(){
         getModules(function(data){
+            dockerAvailable = !!data.dockerAvailable
+            detectedHostIp = data.detectedHostIp || ''
             loadedModules = data.modules
-            console.log(loadedModules)
             $.each(getObjectAlphabetically(data.modules,'created'),function(n,module){
                 drawModuleBlock(module)
             })
         })
-    },2000)
+    }
+    setTimeout(refreshModuleList,2000)
     $.ccio.ws.on('f',function(data){
         switch(data.f){
             case'plugin-info':
@@ -467,16 +573,21 @@ $(document).ready(function(){
                         if(data.data.indexOf('(y)es or (N)o') > -1 || data.data.indexOf('(Y)es or (n)o') > -1){
                             toggleUsabilityOfYesAndNoButtons(name,true)
                         }else if(data.data === '#END_PROCESS'){
-                            var card = $(`[package-name="${name}"]`)
-                            toggleCardButtons(card,[
-                                { action: 'install', show: true },
-                                { el: '.command-line', show: false },
-                                { el: '.command-buttons', show: true },
-                                { action: 'editConfig', show: true },
-                                { action: 'cancelInstall', show: false },
-                                { action: 'delete', show: true },
-                                { action: 'status', show: true },
-                            ])
+                            if(dockerActionInProgress[name]){
+                                delete dockerActionInProgress[name]
+                                refreshModuleList()
+                            }else{
+                                var card = $(`[package-name="${name}"]`)
+                                toggleCardButtons(card,[
+                                    { action: 'install', show: true },
+                                    { el: '.command-line', show: false },
+                                    { el: '.command-buttons', show: true },
+                                    { action: 'editConfig', show: true },
+                                    { action: 'cancelInstall', show: false },
+                                    { action: 'delete', show: true },
+                                    { action: 'status', show: true },
+                                ])
+                            }
                         }
                     break;
                     case'install-stderr':

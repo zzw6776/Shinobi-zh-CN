@@ -362,14 +362,40 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         }
         return readmeData
     }
+    const {
+        isDockerAvailable,
+        getDockerInfoForModule,
+        detectHostIp,
+    } = require('./docker.js')(s,config,lang,app,io,{
+        getModulePath,
+        getModuleProperties,
+        getModuleConfiguration,
+    })
     /**
     * API : Superuser : Custom Auto Load Package Download.
     */
     app.get(config.webPaths.superApiPrefix+':auth/plugins/list', async (req,res) => {
         s.superAuth(req.params, async (resp) => {
+            const modules = getModules()
+            const dockerAvailable = await isDockerAvailable()
+            if(dockerAvailable){
+                // note: getModule() returns undefined for non-directory entries in the
+                // plugins/ folder (e.g. pluginBase.js, .gitignore) - must skip those or
+                // this throws inside the map and the response never gets sent (the
+                // request just hangs, since nothing downstream ever catches it)
+                await Promise.all(Object.values(modules).filter(Boolean).map(async (shinobiModule) => {
+                    try{
+                        shinobiModule.docker = await getDockerInfoForModule(shinobiModule.name)
+                    }catch(err){
+                        s.debugLog('Failed to get Docker info for plugin',shinobiModule.name,err)
+                    }
+                }))
+            }
             s.closeJsonResponse(res,{
                 ok: true,
-                modules: getModules()
+                modules: modules,
+                dockerAvailable: dockerAvailable,
+                detectedHostIp: dockerAvailable ? detectHostIp() : null,
             })
         },res,req)
     })
