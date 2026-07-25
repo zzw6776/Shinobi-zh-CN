@@ -33,3 +33,23 @@
     overflow: auto;
     white-space: pre-wrap;
 }
+.connected-plugin-row {
+    border-bottom: 1px solid #333;
+}
+.connected-plugin-row:last-child {
+    border-bottom: none;
+}
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+.status-dot-connected {
+    background-color: #2fa523;
+    box-shadow: 0 0 4px #2fa523;
+}
+.status-dot-disconnected {
+    background-color: #888;
+}

@@ -2340,5 +2340,7 @@
    "Pull & Run (Docker)": "Pull & Run (Docker)",
    "View Logs": "View Logs",
    "Remove Container": "Remove Container",
-   "confirmRemoveDockerContainer": "Do you want to remove this plugin's Docker container?"
+   "confirmRemoveDockerContainer": "Do you want to remove this plugin's Docker container?",
+   "Connected Plugins": "Connected Plugins",
+   "No Plugins Connected": "No Plugins Connected"
 }

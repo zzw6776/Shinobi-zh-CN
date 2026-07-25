@@ -396,6 +396,7 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
                 modules: modules,
                 dockerAvailable: dockerAvailable,
                 detectedHostIp: dockerAvailable ? detectHostIp() : null,
+                connectedPlugins: s.connectedDetectorPlugins,
             })
         },res,req)
     })

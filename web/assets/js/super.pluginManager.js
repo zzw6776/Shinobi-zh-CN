@@ -4,6 +4,8 @@ $(document).ready(function(){
     var dockerAvailable = false
     var detectedHostIp = ''
     var dockerActionInProgress = {}
+    var connectedPluginsStatus = {}
+    var connectedPluginsListElement = $('#connectedPluginsList')
     var theEnclosure = $('#superPluginManager')
     var listElement = $('#pluginManagerList')
     var downloadListElement = $('#pluginManagerDownloadble tbody')
@@ -79,6 +81,23 @@ $(document).ready(function(){
         })
     }
     var loadedBlocks = {}
+    function renderConnectedPlugins(){
+        var plugNames = Object.keys(connectedPluginsStatus)
+        if(plugNames.length === 0){
+            connectedPluginsListElement.html(`<div class="text-muted">${lang['No Plugins Connected']}</div>`)
+            return
+        }
+        var html = plugNames.sort().map(function(plug){
+            var info = connectedPluginsStatus[plug]
+            var isConnected = info.status === 'connected'
+            return `
+                <div class="connected-plugin-row d-flex justify-content-between align-items-center py-1" connected-plugin="${plug}">
+                    <div><span class="status-dot ${isConnected ? 'status-dot-connected' : 'status-dot-disconnected'}"></span> <b>${plug}</b> ${info.connectionType ? `<small class="text-muted">${info.connectionType}</small>` : ''}</div>
+                    <span class="badge ${isConnected ? 'badge-success' : 'badge-secondary'}">${isConnected ? lang.Connected : lang.Disconnected}</span>
+                </div>`
+        }).join('')
+        connectedPluginsListElement.html(html)
+    }
     function dockerStatusBadge(status){
         var badgeClass = status === 'running' ? 'badge-success' : (status === 'exited' ? 'badge-warning' : 'badge-secondary')
         return `<span class="badge ${badgeClass}">${status}</span>`
@@ -560,8 +579,14 @@ $(document).ready(function(){
             $.each(getObjectAlphabetically(data.modules,'created'),function(n,module){
                 drawModuleBlock(module)
             })
+            connectedPluginsStatus = {}
+            $.each(data.connectedPlugins || {},function(plug,info){
+                connectedPluginsStatus[plug] = Object.assign({},info,{status:'connected'})
+            })
+            renderConnectedPlugins()
         })
     }
+    renderConnectedPlugins()
     setTimeout(refreshModuleList,2000)
     $.ccio.ws.on('f',function(data){
         switch(data.f){
@@ -592,6 +617,10 @@ $(document).ready(function(){
                     break;
                     case'install-stderr':
                         appendLoggerData(data.data,loadedBlocks[name].stderr)
+                    break;
+                    case'connection-status':
+                        connectedPluginsStatus[name] = Object.assign({},data.plugin,{status:data.status})
+                        renderConnectedPlugins()
                     break;
                 }
             break;

@@ -58,6 +58,7 @@ module.exports = function(s,config,lang,app,io){
         s.connectedDetectorPlugins[d.plug] = newDetector
         s.resetDetectorPluginArray()
         s.runExtensionsForArray('onPluginConnected', null, [d.plug, newDetector])
+        s.tx({f:'plugin-info',process:'connection-status',module:d.plug,status:'connected',plugin:newDetector},'$')
     }
     s.removeDetectorPlugin = function(name){
         const theDetector = Object.assign({}, s.connectedDetectorPlugins[name])
@@ -67,6 +68,7 @@ module.exports = function(s,config,lang,app,io){
         delete(s.connectedDetectorPlugins[name])
         s.resetDetectorPluginArray(name)
         s.runExtensionsForArray('onPluginDisconnected', null, [name, theDetector])
+        s.tx({f:'plugin-info',process:'connection-status',module:name,status:'disconnected',plugin:theDetector},'$')
     }
     s.resetDetectorPluginArray = function(){
         let pluginArray = []
