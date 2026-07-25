@@ -329,9 +329,19 @@ module.exports = function(s,config,lang,app,io){
     }
     const hasValidPluginKey = function(d){
         const expectedKey = config.pluginKeys[d.plug]
-        return expectedKey !== undefined && expectedKey !== null && expectedKey !== ''
-            && d.pluginKey !== undefined && d.pluginKey !== null && d.pluginKey !== ''
-            && expectedKey === d.pluginKey
+        const hasExpectedKey = expectedKey !== undefined && expectedKey !== null && expectedKey !== ''
+        const hasSentKey = d.pluginKey !== undefined && d.pluginKey !== null && d.pluginKey !== ''
+        const isValid = hasExpectedKey && hasSentKey && expectedKey === d.pluginKey
+        if(!isValid){
+            if(!hasExpectedKey){
+                s.systemLog(`Plugin "${d.plug}" tried to connect, but there is no pluginKeys."${d.plug}" configured in conf.json.`)
+            }else if(!hasSentKey){
+                s.systemLog(`Plugin "${d.plug}" tried to connect without sending a pluginKey.`)
+            }else{
+                s.systemLog(`Plugin "${d.plug}" tried to connect with a pluginKey that does not match conf.json's pluginKeys."${d.plug}".`)
+            }
+        }
+        return isValid
     }
     var onWebSocketConnection = function(cn){
         cn.on('ocv',function(d){
