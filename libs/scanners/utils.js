@@ -6,6 +6,9 @@ const {
     getBuffer,
 } = require('../common.js')
 module.exports = (s,config,lang) => {
+    // security: caps the expanded range size — without this, an attacker-supplied range like
+    // 1.0.0.0-1.255.255.255 pushes ~16.7M strings into memory synchronously (OOM DoS, see #582)
+    const IP_RANGE_MAX_SIZE = 4096
     const ipRange = (start_ip, end_ip) => {
       var startLong = toLong(start_ip);
       var endLong = toLong(end_ip);
@@ -14,12 +17,26 @@ module.exports = (s,config,lang) => {
         startLong = endLong
         endLong = tmp;
       }
+      if(endLong - startLong + 1 > IP_RANGE_MAX_SIZE){
+        endLong = startLong + IP_RANGE_MAX_SIZE - 1
+      }
       var rangeArray = [];
       var i;
       for (i = startLong; i <= endLong; i++) {
         rangeArray.push(fromLong(i));
       }
       return rangeArray;
+    }
+    // security: blocks loopback and link-local (incl. 169.254.169.254 cloud metadata) scan targets
+    // (see #582). RFC1918 private ranges are intentionally NOT blocked here — scanning the local
+    // LAN for cameras is this feature's whole purpose.
+    const isScanTargetBlocked = (ipEntry) => {
+        const p = ipEntry.split('.').map(Number)
+        if(p.length !== 4 || p.some((n) => Number.isNaN(n)))return true
+        if(p[0] === 127)return true // 127.0.0.0/8 loopback
+        if(p[0] === 169 && p[1] === 254)return true // 169.254.0.0/16 link-local / metadata
+        if(p[0] === 0)return true // 0.0.0.0/8
+        return false
     }
     const portRange = (lowEnd,highEnd) => {
         var list = [];
@@ -211,7 +228,7 @@ module.exports = (s,config,lang) => {
             }
         })
         var hitList = []
-        ipList.forEach((ipEntry,n) => {
+        ipList.filter((ipEntry) => !isScanTargetBlocked(ipEntry)).forEach((ipEntry,n) => {
             ports.forEach((portEntry,nn) => {
                 hitList.push({
                     xaddr : 'http://' + ipEntry + ':' + portEntry + '/onvif/device_service',
