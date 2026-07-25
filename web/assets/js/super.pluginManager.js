@@ -6,6 +6,7 @@ $(document).ready(function(){
     var dockerActionInProgress = {}
     var connectedPluginsStatus = {}
     var connectedPluginsListElement = $('#connectedPluginsList')
+    var connectedPluginsCardElement = $('#connectedPluginsCard')
     var theEnclosure = $('#superPluginManager')
     var listElement = $('#pluginManagerList')
     var downloadListElement = $('#pluginManagerDownloadble tbody')
@@ -111,7 +112,7 @@ $(document).ready(function(){
         var isAbsent = container.status === 'absent'
         var variantOptions = variants.map((v) => `<option value="${v}">${v}</option>`).join('')
         return `
-            <div class="docker-plugin-install mt-2 mb-2 p-2">
+            <div class="docker-plugin-install mt-2 mb-0 p-2">
                 <div class="mb-1"><b><i class="fa fa-cube"></i> ${lang['Docker'] || 'Docker'}</b> ${dockerStatusBadge(container.status)} ${container.image ? `<small>${container.image}</small>` : ''}</div>
                 ${isAbsent ? `
                     <div class="form-inline">
@@ -149,7 +150,7 @@ $(document).ready(function(){
               </ul>
             </div>` : ''
             listElement.prepend(`
-                    <div class="card bg-dark text-white mb-3" package-name="${module.name}">
+                    <div class="card bg-dark text-white border-info" package-name="${module.name}">
                         <div class="card-body pb-3">
                             <div><h4 class="title my-0">${humanName}</h4></div>
                             <div clas="mb-2"><small>${module.name}</small></div>
@@ -167,14 +168,12 @@ $(document).ready(function(){
                                 <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
                             </div>
                             <div class="docker-section">${buildDockerSectionHtml(module)}</div>
-                            <div class="mb-2">
-                                <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
-                                    <div class="input-group">
-                                      <input name="cmd" type="text" class="form-control form-control-sm" placeholder="Type and Press Enter to Send Command">
-                                      <button type="submit" class="btn btn-sm btn-primary m-0">${lang.Run}</button>
-                                    </div>
-                                </form>
-                            </div>
+                            <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
+                                <div class="input-group">
+                                  <input name="cmd" type="text" class="form-control form-control-sm" placeholder="Type and Press Enter to Send Command">
+                                  <button type="submit" class="btn btn-sm btn-primary m-0">${lang.Run}</button>
+                                </div>
+                            </form>
                             <div class="install-output row">
                                 <div class="col-md-6 pr-2 mb-2"><pre class="install-output-stdout text-white mb-0"></pre></div>
                                 <div class="col-md-6 pl-2 mb-2"><pre class="install-output-stderr text-white mb-0"></pre></div>
@@ -544,6 +543,16 @@ $(document).ready(function(){
                 }
             }
         })
+    })
+    $('#tablist a[data-bs-toggle="tab"]').on('shown.bs.tab',function(e){
+        var target = $(e.target).attr('data-bs-target')
+        if(target === '#pluginManagerDownloadbleList'){
+            connectedPluginsCardElement.hide()
+            pluginDownloadForm.show()
+        }else if(target === '#pluginManagerList'){
+            pluginDownloadForm.hide()
+            connectedPluginsCardElement.show()
+        }
     })
     $('#pluginQuickSelectExec').click(function(){
         var currentVal = quickSelect.val()

@@ -53,3 +53,7 @@
 .status-dot-disconnected {
     background-color: #888;
 }
+
+#pluginManagerList [package-name]:not(:last-child){
+    margin-bottom: 1rem !important;
+}
