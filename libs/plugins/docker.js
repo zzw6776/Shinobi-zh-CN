@@ -14,6 +14,13 @@ const ACCELERATION_DOCKER_FLAGS = {
 // a shell command (that class of bug is exactly what this session has been fixing
 // elsewhere in the codebase).
 const isSafeToken = (value) => typeof value === 'string' && /^[A-Za-z0-9_.-]+$/.test(value)
+// Plugins downloaded through the Plugin Manager get their local folder renamed
+// to `dl_<name>` (see moveModuleToNameInProperties in superUser.js) - that's a
+// purely local download-marker prefix, never part of the plugin's actual
+// published registry image name, so it needs stripping before it's used to
+// build a `registry.gitlab.com/.../<name>` path.
+const DL_PREFIX = /^dl_/
+const stripDlPrefix = (packageName) => packageName.replace(DL_PREFIX,'')
 module.exports = (s,config,lang,app,io,helpers) => {
     const {
         getModulePath,
@@ -156,7 +163,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
             // conf.sample.json, not package.json - getModuleConfiguration reads the right one
             const moduleConfig = getModuleConfiguration(packageName)
             const plug = moduleConfig.plug || packageName
-            const image = registryImage(packageName,variant)
+            let image = registryImage(packageName,variant)
             const name = containerName(packageName)
             const host = hostOverride || detectHostIp()
             const key = ensurePluginKey(plug)
@@ -166,7 +173,18 @@ module.exports = (s,config,lang,app,io,helpers) => {
             // stale exited container and a currently-running one being redeployed
             // with a different variant/host/etc)
             await new Promise((resolve) => execFile('docker',['rm','-f',name],{timeout:15000},() => resolve()))
-            const pullResult = await runDockerStreamed(packageName,['pull',image],false)
+            let pullResult = await runDockerStreamed(packageName,['pull',image],false)
+            if(!pullResult.ok && DL_PREFIX.test(packageName)){
+                // first attempt used the local `dl_`-prefixed folder name verbatim -
+                // retry against the real (unprefixed) published image name before
+                // giving up.
+                const fallbackImage = registryImage(stripDlPrefix(packageName),variant)
+                const fallbackPull = await runDockerStreamed(packageName,['pull',fallbackImage],false)
+                if(fallbackPull.ok){
+                    image = fallbackImage
+                    pullResult = fallbackPull
+                }
+            }
             if(!pullResult.ok){
                 return
             }
