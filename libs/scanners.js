@@ -11,12 +11,13 @@ const isProbeUrlSafe = (rawUrl) => {
     if(mapped) host = mapped[1]
     if(net.isIPv4(host)){
         const p = host.split('.').map(Number)
+        // Cameras overwhelmingly live on private LAN ranges (10/8, 172.16/12,
+        // 192.168/16) - that's the whole point of this probe endpoint for a
+        // self-hosted NVR, so those are intentionally NOT blocked here. Only
+        // block targets that could expose the server's own internal
+        // services or cloud metadata, never a legitimate camera's address.
         if(p[0] === 0) return false                          // 0.0.0.0/8  "this host"
-        if(p[0] === 10) return false                         // 10.0.0.0/8  private
-        if(p[0] === 172 && p[1] >= 16 && p[1] <= 31) return false // 172.16.0.0/12 private
-        if(p[0] === 192 && p[1] === 168) return false        // 192.168.0.0/16 private
         if(p[0] === 169 && p[1] === 254) return false        // 169.254.0.0/16 link-local / metadata
-        if(p[0] === 100 && p[1] >= 64 && p[1] <= 127) return false // 100.64.0.0/10 CGNAT
     }
     if(net.isIPv6(host)){
         const lower = host.toLowerCase()
