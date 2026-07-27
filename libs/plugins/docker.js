@@ -85,6 +85,34 @@ module.exports = (s,config,lang,app,io,helpers) => {
         }
         return 'localhost'
     }
+    // Some plugins (e.g. face-recognition-onnx) share on-disk data with the
+    // Face Manager customAutoLoad panel and need it installed/kept current on
+    // the HOST regardless of whether the plugin itself runs natively or in a
+    // container - a container has no access to Shinobi's own installation
+    // directory unless we explicitly wire it up here. Opt-in via a
+    // `"needsFaceManager": true` field in the plugin's package.json.
+    const FACE_MANAGER_SUBDIR = 'faceManagerCustomAutoLoadLibrary'
+    const setUpFaceManagerIfNeeded = (packageName) => {
+        const properties = getModuleProperties(packageName)
+        if(properties.needsFaceManager !== true)return null
+        const facesFolder = process.cwd() + '/faces'
+        const unknownFacesFolder = process.cwd() + '/unknownFaces'
+        try{
+            fs.mkdirSync(facesFolder,{recursive:true})
+            fs.mkdirSync(unknownFacesFolder,{recursive:true})
+            modifyConfiguration({facesFolder,unknownFacesFolder},true)
+            const bundledFaceManager = getModulePath(packageName) + FACE_MANAGER_SUBDIR
+            if(fs.existsSync(bundledFaceManager)){
+                const installedFaceManager = process.cwd() + '/libs/customAutoLoad/' + FACE_MANAGER_SUBDIR
+                fs.mkdirSync(process.cwd() + '/libs/customAutoLoad',{recursive:true})
+                fs.rmSync(installedFaceManager,{recursive:true,force:true})
+                fs.cpSync(bundledFaceManager,installedFaceManager,{recursive:true})
+            }
+        }catch(err){
+            s.debugLog(`setUpFaceManagerIfNeeded(${packageName}) failed`,err)
+        }
+        return {facesFolder,unknownFacesFolder}
+    }
     const ensurePluginKey = (plug) => {
         if(!config.pluginKeys)config.pluginKeys = {}
         if(!config.pluginKeys[plug]){
@@ -188,11 +216,22 @@ module.exports = (s,config,lang,app,io,helpers) => {
             if(!pullResult.ok){
                 return
             }
+            // Host-side setup that has to happen regardless of Docker vs native
+            // (e.g. installing/updating the Face Manager panel, which lives in
+            // Shinobi's own installation directory, not the container) - see
+            // setUpFaceManagerIfNeeded above.
+            const faceManagerPaths = setUpFaceManagerIfNeeded(packageName)
             const runArgs = [
                 'run','-d',
                 '--name', name,
                 '--restart', 'unless-stopped',
                 ...(ACCELERATION_DOCKER_FLAGS[variant] || []),
+                ...(faceManagerPaths ? [
+                    '-e', `FACES_FOLDER=${faceManagerPaths.facesFolder}`,
+                    '-e', `UNKNOWN_FACES_FOLDER=${faceManagerPaths.unknownFacesFolder}`,
+                    '-v', `${faceManagerPaths.facesFolder}:${faceManagerPaths.facesFolder}`,
+                    '-v', `${faceManagerPaths.unknownFacesFolder}:${faceManagerPaths.unknownFacesFolder}`,
+                ] : []),
                 '-e', `HOST=${host}`,
                 '-e', `PORT=${config.port}`,
                 '-e', `PLUGIN_KEY=${key}`,
