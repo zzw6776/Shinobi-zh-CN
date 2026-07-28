@@ -1095,6 +1095,7 @@
    "eventsTablePageIndicator": "Page {page} of {totalPages}",
    "Previous": "Previous",
    "Next": "Next",
+   "Quick Range": "Quick Range",
    "Popout Monitor on Event": "Popout Monitor on Event",
    "aac": "aac",
    "ac3": "ac3",

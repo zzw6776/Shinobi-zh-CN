@@ -2288,6 +2288,25 @@ module.exports = function(s,config,lang){
                             },
                         ],
                      },
+                     {
+                        "fieldType": "div",
+                        "class": "dropdown d-inline-block",
+                        "form-group-class-pre-layer": "mb-0",
+                        "divContent": `<button type="button" class="btn btn-default dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fa fa-clock-o"></i> ${lang['Quick Range']}
+                        </button>
+                        <ul class="dropdown-menu ${Theme.isDark ? 'dropdown-menu-dark bg-dark' : ''} shadow-lg">
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-hours="1">${lang.Last} 1 ${lang.hours}</a></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-hours="3">${lang.Last} 3 ${lang.hours}</a></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-hours="6">${lang.Last} 6 ${lang.hours}</a></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-hours="9">${lang.Last} 9 ${lang.hours}</a></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-hours="12">${lang.Last} 12 ${lang.hours}</a></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-hours="24">${lang.Last} 24 ${lang.hours}</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-days="7">${lang.Last} 7 ${lang.Days}</a></li>
+                            <li><a class="dropdown-item eventsTable_quick_daterange" href="#" data-days="30">${lang.Last} 30 ${lang.Days}</a></li>
+                        </ul>`
+                     },
                 ]
             },
             "theGrid": {

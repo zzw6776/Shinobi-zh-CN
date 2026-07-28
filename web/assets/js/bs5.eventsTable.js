@@ -293,6 +293,19 @@ $(document).ready(function(e){
         drawEventsTableViewElements(eventsTableCurrentPage + 1)
         return false;
     })
+    .on('click','.eventsTable_quick_daterange',function(e){
+        e.preventDefault()
+        var el = $(this)
+        var hours = el.attr('data-hours')
+        var days = el.attr('data-days')
+        var amount = hours ? parseInt(hours) : parseInt(days)
+        var unit = hours ? 'hours' : 'days'
+        var picker = dateSelector.data('daterangepicker')
+        picker.setStartDate(moment().subtract(amount,unit))
+        picker.setEndDate(moment())
+        drawEventsTableViewElements()
+        return false;
+    })
 
     $('body')
     .on('click','.open-eventsTable',function(e){
