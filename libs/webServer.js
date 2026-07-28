@@ -118,6 +118,7 @@ module.exports = function(s,config,lang,io){
             'home/calendar',
             'home/fileBin',
             'home/videosTable',
+            'home/eventsTable',
             'home/studio',
             'home/monitorMap',
             'home/timeline',

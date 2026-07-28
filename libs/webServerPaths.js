@@ -24,6 +24,7 @@ module.exports = function(s,config,lang,app,io){
     } = require('./control/ptz.js')(s,config,lang,app,io)
     const {
         triggerEvent,
+        getEventsBasedOnTag,
     } = require('./events/utils.js')(s,config,lang)
     const {
         basicAuth,
@@ -1163,27 +1164,62 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
                     }
                     s.closeJsonResponse(res,response)
                 })
-            }else{
-                s.sqlQueryBetweenTimesWithPermissions({
-                    table: 'Events',
-                    user: user,
+            }else if(req.query.search){
+                getEventsBasedOnTag({
                     groupKey: req.params.ke,
                     monitorId: req.params.id,
                     startTime: req.query.start,
                     endTime: req.query.end,
-                    startTimeOperator: req.query.startOperator,
-                    endTimeOperator: req.query.endOperator,
-                    noLimit: req.query.noLimit,
-                    limit: req.query.limit,
-                    archived: req.query.archived,
-                    endIsStartTo: true,
-                    parseRowDetails: true,
-                    noFormat: true,
-                    noCount: true,
-                    rowName: 'events',
-                    preliminaryValidationFailed: false
-                },(response) => {
-                    res.end(s.prettyPrint(response))
+                    searchQuery: req.query.search,
+                    andOnly: req.query.andOnly === '1',
+                    monitorRestrictions: monitorRestrictions,
+                    limit: req.query.noLimit === '1' ? '0' : req.query.limit,
+                }).then((response) => {
+                    res.end(s.prettyPrint({ ok: response.ok, events: response.rows || [], total: response.total }))
+                })
+            }else{
+                // sqlQueryBetweenTimesWithPermissions's own noCount:false total-count path
+                // groups its count query by `time` and reads response field names that its
+                // own getDatabaseRows() doesn't actually return - it's unused by every other
+                // caller in this file (all pass noCount:true), so lean on the same plain
+                // count query the onlyCount branch above already uses correctly instead.
+                s.knexQuery({
+                    action: "count",
+                    columns: "mid",
+                    table: "Events",
+                    where: [
+                        ['ke','=',groupKey],
+                        ['time','>=',req.query.start],
+                        ['time','<=',req.query.end],
+                        monitorRestrictions
+                    ]
+                },(countErr,countRows) => {
+                    const total = countErr ? 0 : countRows[0]['count(`mid`)']
+                    s.sqlQueryBetweenTimesWithPermissions({
+                        table: 'Events',
+                        user: user,
+                        groupKey: req.params.ke,
+                        monitorId: req.params.id,
+                        startTime: req.query.start,
+                        endTime: req.query.end,
+                        startTimeOperator: req.query.startOperator,
+                        endTimeOperator: req.query.endOperator,
+                        noLimit: req.query.noLimit,
+                        limit: req.query.limit,
+                        archived: req.query.archived,
+                        endIsStartTo: true,
+                        parseRowDetails: true,
+                        noCount: true,
+                        rowName: 'events',
+                        preliminaryValidationFailed: false
+                    },(response) => {
+                        // noFormat deliberately omitted here (unlike the pre-pagination
+                        // version of this route) so response is a proper {events:[...]}
+                        // object rather than the raw row array - Object.assign()-ing a
+                        // total/ok onto a raw array corrupts it into a {"0":...,"1":...}
+                        // object, since array indices are just enumerable properties.
+                        res.end(s.prettyPrint(Object.assign({ ok: true, total },response)))
+                    })
                 })
             }
         })

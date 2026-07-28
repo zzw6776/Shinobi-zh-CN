@@ -1490,6 +1490,11 @@ module.exports = function(s,config,lang){
                           ]
                       },
                       {
+                          icon: 'bell-o',
+                          label: `${lang['Events']}`,
+                          pageOpen: 'eventsTableView',
+                      },
+                      {
                           icon: 'calendar',
                           label: `${lang['Calendar']}`,
                           pageOpen: 'calendarView',
@@ -2221,6 +2226,114 @@ module.exports = function(s,config,lang){
                        "attribute": `data-classes="table table-striped"`,
                        "id": "videosTable_draw_area",
                        "divContent": ""
+                   }
+               ]
+           },
+         }
+      },
+      "Events Table": {
+          "section": "Events Table",
+          "blocks": {
+              "Search Settings": {
+                 "name": lang["Search Settings"],
+                 "color": "green",
+                 "section-pre-class": "col-md-12",
+                 "box-wrapper-class": "d-flex flex-row flex-wrap align-items-end",
+                 "info": [
+                     {
+                         "field": lang["Monitor"],
+                         "fieldType": "select",
+                         "class": "monitors_list",
+                         "form-group-class": "col me-3 mb-0",
+                         "possible": []
+                     },
+                     {
+                         "class": "date_selector",
+                         "field": lang.Date,
+                         "form-group-class": "col me-3 mb-0",
+                     },
+                     {
+                        "id": "eventsTable_tag_search",
+                        "field": lang["Search Object Tags"],
+                        "example": "person",
+                        "form-group-class": "me-3 mb-0",
+                     },
+                     {
+                         id: 'eventsTable_tag_search_andonly',
+                         field: lang['Search Type'],
+                         default: '0',
+                         "fieldType": "select",
+                         "form-group-class": "me-3 mb-0",
+                         possible:[
+                             {
+                                 "name": lang.OR,
+                                 "value": "0",
+                                 selected: true,
+                             },
+                             {
+                                 "name": lang.AND,
+                                 "value": "1"
+                             },
+                        ]
+                     },
+                     {
+                        "fieldType": "btn-group",
+                        "form-group-class-pre-layer": "mb-0",
+                        "btns": [
+                            {
+                                "fieldType": "btn",
+                                "class": `btn-success fill refresh-data`,
+                                "icon": `search`,
+                                "btnContent": `${lang['Search']}`,
+                            },
+                        ],
+                     },
+                ]
+            },
+            "theGrid": {
+                noHeader: true,
+               "section-pre-class": "col-md-12",
+               "info": [
+                   {
+                       "fieldType": "div",
+                       "id": "eventsTable_results_count",
+                       "class": "small text-muted mb-2",
+                       "divContent": ""
+                   },
+                   {
+                       "fieldType": "div",
+                       "id": "eventsTable_draw_area_notice",
+                       "divContent": `<div class="text-center">
+                            <i class="fa fa-5x mb-3 fa-hand-pointer-o fa-rotate-270"></i>
+                        </div>
+                        <h3 class="text-center">
+                            <div>${lang['Ready to Search']}</div>
+                        </h3>`
+                   },
+                   {
+                       "fieldType": "div",
+                       "id": "eventsTable_draw_area_empty",
+                       "class": "d-none",
+                       "divContent": `<div class="text-center">
+                            <i class="fa fa-5x mb-3 fa-search"></i>
+                        </div>
+                        <h3 class="text-center">
+                            <div>${lang['sorryNothingWasFound']}</div>
+                        </h3>`
+                   },
+                   {
+                       "fieldType": "div",
+                       "id": "eventsTable_draw_area",
+                       "class": "events-grid",
+                       "divContent": ""
+                   },
+                   {
+                       "fieldType": "div",
+                       "id": "eventsTable_pagination",
+                       "class": "d-none",
+                       "divContent": `<button type="button" id="eventsTable_prev_page" class="btn btn-sm btn-default"><i class="fa fa-chevron-left"></i> ${lang['Previous']}</button>
+                           <span id="eventsTable_page_indicator" class="small text-muted"></span>
+                           <button type="button" id="eventsTable_next_page" class="btn btn-sm btn-default">${lang['Next']} <i class="fa fa-chevron-right"></i></button>`
                    }
                ]
            },

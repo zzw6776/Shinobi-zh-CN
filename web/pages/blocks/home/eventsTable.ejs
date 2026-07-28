@@ -1,0 +1,12 @@
+<main class="page-tab pt-3" id="tab-eventsTableView">
+    <link rel="stylesheet" href="<%-window.libURL%>assets/css/bs5.eventsTable.css">
+    <div class="row <%- define.Theme.isDark ? `dark` : '' %>">
+        <%  Object.keys(define['Events Table'].blocks).forEach(function(blockKey) { -%>
+          <%- include('drawBlock', {
+                theBlock: define['Events Table'].blocks[blockKey]
+              }) %>
+        <%  }) -%>
+    </div>
+    <div style="margin-bottom: 50px;"></div>
+    <script src="<%-window.libURL%>assets/js/bs5.eventsTable.js"></script>
+</main>

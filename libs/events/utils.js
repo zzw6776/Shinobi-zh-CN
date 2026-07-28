@@ -1049,7 +1049,65 @@ module.exports = (s,config,lang) => {
         }
         return response
     }
+    // Tag search for Events. Unlike Videos (which has a denormalized `objects`
+    // text column - see getVideosBasedOnTagFoundInMatrixOfAssociatedEvent in
+    // libs/video/utils.js), Events only stores its matrices/tag data inside the
+    // JSON `details` blob, so this matches with a substring LIKE against that
+    // column directly. Same simple substring-match philosophy as the video
+    // search (not a strict JSON field match), so it also matches on the
+    // detection reason/plugin name, not just literal tag values.
+    async function getEventsBasedOnTag({
+        groupKey,
+        monitorId,
+        startTime,
+        endTime,
+        searchQuery,
+        monitorRestrictions,
+        andOnly,
+        limit,
+    }){
+        const theSearches = searchQuery.split(',').map((query) => ['details','LIKE',`%${query.trim()}%`]);
+        if(!andOnly){
+            theSearches.forEach((item,n) => {
+                if(n !== 0)theSearches[n] = ['or', ...item];
+            });
+        }
+        const whereQuery = [
+            ['ke','=',groupKey],
+        ];
+        if(monitorId)whereQuery.push(['mid','=',monitorId]);
+        if(startTime)whereQuery.push(['time','>=',startTime]);
+        if(endTime)whereQuery.push(['time','<=',endTime]);
+        if(monitorRestrictions && monitorRestrictions.length > 0)whereQuery.push(monitorRestrictions);
+        whereQuery.push([...theSearches]);
+        // '0' (or omitted with noLimit intent) means unbounded - knexQuery's own
+        // limit handling already skips .limit() for '0'/falsy, so pass it through
+        // as-is rather than coercing to a number here. A comma ("offset,limit",
+        // MySQL-style - the same convention knexQuery itself parses) must also
+        // survive untouched rather than being parseInt()'d down to just the offset.
+        const limitValue = limit === '0' ? '0' : (limit ? (`${limit}`.indexOf(',') !== -1 ? `${limit}` : parseInt(limit)) : 300);
+        const [response,countResponse] = await Promise.all([
+            s.knexQueryPromise({
+                action: "select",
+                columns: "*",
+                table: "Events",
+                orderBy: ['time','desc'],
+                limit: limitValue,
+                where: whereQuery,
+            }),
+            s.knexQueryPromise({
+                action: "count",
+                columns: "mid",
+                table: "Events",
+                where: whereQuery,
+            }),
+        ]);
+        (response.rows || []).forEach((row) => { row.details = s.parseJSON(row.details,{}) })
+        response.total = (countResponse.rows && countResponse.rows[0] && countResponse.rows[0]['count(`mid`)']) || 0
+        return response
+    }
     return {
+        getEventsBasedOnTag,
         getAssociatedMonitorPtzTargets,
         moveAssociatedMonitorPtzTargets,
         getObjectTagNotifyText,

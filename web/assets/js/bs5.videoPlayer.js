@@ -3,7 +3,7 @@ $(document).ready(function(){
     window.getVideoPlayerTabId = function(video){
         return `videoPlayer-${video.mid}-${moment(video.time).format('YYYY-MM-DD-HH-mm-ss')}`
     }
-    window.createVideoPlayerTab = function(video){
+    window.createVideoPlayerTab = function(video,timeInward){
         var newTabId = getVideoPlayerTabId(video)
         var humanStartTime = formattedTime(video.time,true)
         var humanEndTime = formattedTime(video.end,true)
@@ -87,8 +87,23 @@ $(document).ready(function(){
         </main>`
         var tabCreateResponse = createNewTab(newTabId,tabLabel,baseHtml,{},null,'videoPlayer')
         console.log(tabCreateResponse)
+        var videoElement = tabCreateResponse.theTab.find('.tab-videoPlayer-video-element')[0]
+        if(timeInward){
+            var seekToTimeInward = function(){
+                videoElement.currentTime = timeInward
+            }
+            //readyState >= HAVE_METADATA means duration/seekable range are already known.
+            //On a freshly-created tab this is usually still loading (falls through to the
+            //loadedmetadata listener); on an already-open tab (e.g. a different event card
+            //that maps to the same underlying video) it's already true, so this seeks the
+            //existing player immediately instead of silently doing nothing.
+            if(videoElement.readyState >= 1){
+                seekToTimeInward()
+            }else{
+                videoElement.addEventListener('loadedmetadata',seekToTimeInward,{once:true})
+            }
+        }
         if(!tabCreateResponse.existAlready){
-            var videoElement = tabCreateResponse.theTab.find('.tab-videoPlayer-video-element')[0]
             var videoObjectContainer = tabCreateResponse.theTab.find('.tab-videoPlayer-event-objects')
             var videoHeight = videoObjectContainer.height()
             var videoWidth = videoObjectContainer.width()
