@@ -725,7 +725,7 @@ module.exports = (s,config,lang) => {
     }
     const buildEventRecordingOutput = (e) => {
         const outputFlags = []
-        if(e.details.detector === '1' && e.details.detector_trigger === '1' && e.details.detector_record_method === 'sip'){
+        if((e.details.onvif_events === '1' || e.details.detector === '1') && e.details.detector_trigger === '1' && e.details.detector_record_method === 'sip'){
             const isCudaEnabled = hasCudaEnabled(e)
             const outputFilters = []
             var videoCodec = e.details.detector_buffer_vcodec

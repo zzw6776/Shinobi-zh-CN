@@ -2541,7 +2541,6 @@ module.exports = (s,config,lang) => {
                    "selector": "h_rec_mtd",
                    "default": "sip",
                    "example": "",
-                   "form-group-class": "h_det_input h_det_1",
                    "fieldType": "select",
                    "possible": [
                         {
@@ -2561,7 +2560,6 @@ module.exports = (s,config,lang) => {
                    "description": "This will order the camera to record if it is set to \"Watch-Only\" when an Event is detected.",
                    "default": "0",
                    "example": "",
-                   "form-group-class": "h_det_input h_det_1",
                    "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
                    "fieldType": "select",
                    "possible": yesNoPossibility
@@ -2575,24 +2573,20 @@ module.exports = (s,config,lang) => {
                    "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_sip",
                 },
                 {
-                    hidden: true,
                    "name": "detail=detector_timeout",
                    "field": lang["Recording Timeout"],
                    "description": "The length of time \"Trigger Record\" will run for. This is read in minutes.",
                    "default": "10",
                    "example": "",
-                   "form-group-class": "h_det_input h_det_1",
                    "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
                    "possible": ""
                 },
                 {
-                    hidden: true,
                    "name": "detail=watchdog_reset",
                    "field": lang["Timeout Reset on Next Event"],
                    "description": lang["fieldTextWatchdogReset"],
                    "default": "1",
                    "fieldType": "select",
-                   "form-group-class": "h_det_input h_det_1",
                    "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
                    "possible": yesNoPossibility
                 },
@@ -2611,7 +2605,6 @@ module.exports = (s,config,lang) => {
                     hidden: true,
                    "name": "detail=det_trigger_tags",
                    "field": lang['Trigger Monitors with Tags'],
-                   "form-group-class": "h_det_input h_det_1",
                 },
                 {
                     isAdvanced: true,

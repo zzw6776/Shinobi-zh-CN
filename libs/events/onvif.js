@@ -21,7 +21,65 @@ module.exports = function (s, config, lang) {
     const PULL_MESSAGES_ACTION = 'http://www.onvif.org/ver10/events/wsdl/PullPointSubscription/PullMessagesRequest';
     const UNSUBSCRIBE_ACTION = 'http://docs.oasis-open.org/wsn/bw-2/SubscriptionManager/UnsubscribeRequest';
 
-    function handleEvent(event, monitorConfig, onvifEventLog, callback = () => {}) {
+    // Best-effort snapshot fetch via shinobi-onvif's own device.fetchSnapshot() (uses the
+    // media profile's GetSnapshotUri, populated during device.init()). Returns a raw JPEG
+    // Buffer - the same shape runEventExecutions()/saveImageFromEvent() already expect from
+    // d.frame (it writes the buffer straight to disk via fs.writeFile, no decoding), matching
+    // what s.getRawSnapshotFromMonitor() hands back as `screenShot` for the motion-frame path.
+    async function fetchOnvifSnapshotFrame(device, monitorConfig) {
+        if (!device) return null;
+
+        // --- Attempt 1: fetchSnapshot() ---
+        if (typeof device.fetchSnapshot === 'function') {
+            try {
+                const snap = await device.fetchSnapshot();
+                if (snap && snap.body) {
+                    // Ensure it returns a Buffer if it's not one already
+                    return Buffer.isBuffer(snap.body) ? snap.body : Buffer.from(snap.body, 'binary');
+                }
+            } catch (err) {
+                s.debugLog(`ONVIF fetchSnapshot failed for ${monitorConfig.name}, trying URI fallback...`, err);
+            }
+        }
+
+        // --- Attempt 2: getSnapshotUri() + Fetch Buffer ---
+        if (typeof device.getSnapshotUri === 'function') {
+            try {
+                const uri = device.getSnapshotUri();
+                if (uri) {
+                    const buffer = await fetchUriAsBuffer(uri);
+                    if (buffer) return buffer;
+                }
+            } catch (err) {
+                s.debugLog(`ONVIF getSnapshotUri fallback failed for ${monitorConfig.name}`, err);
+            }
+        }
+
+        return null;
+    }
+
+    // Helper function to download an image from a URL as a Buffer
+    function fetchUriAsBuffer(urlStr) {
+        return new Promise((resolve) => {
+            try {
+                const client = urlStr.startsWith('https') ? https : http;
+                client.get(urlStr, (res) => {
+                    if (res.statusCode < 200 || res.statusCode >= 300) {
+                        return resolve(null);
+                    }
+
+                    const chunks = [];
+                    res.on('data', (chunk) => chunks.push(chunk));
+                    res.on('end', () => resolve(Buffer.concat(chunks)));
+                    res.on('error', () => resolve(null));
+                }).on('error', () => resolve(null));
+            } catch (e) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function handleEvent(event, monitorConfig, onvifEventLog, callback = () => {}, device) {
         try{
             const monitorId = monitorConfig.mid;
             const groupKey = monitorConfig.ke;
@@ -60,10 +118,13 @@ module.exports = function (s, config, lang) {
                 return
             }
             onvifEventLog(`ONVIF Event Detected!`, `topic ${topicInternalName}`)
+            const frame = await fetchOnvifSnapshotFrame(device, monitorConfig);
             callback({
                 f: 'trigger',
                 id: monitorId,
                 ke: groupKey,
+                frame: frame,
+                saveFrame: true,
                 details: {
                     plug: 'onvifEvent',
                     name: 'onvifEvent',
@@ -200,7 +261,9 @@ module.exports = function (s, config, lang) {
                         msgs = Array.isArray(msgs) ? msgs : [msgs];
                         for (const notif of msgs) {
                             if (sub.stopped) break;
-                            handleEvent(adaptNotification(notif), monitorConfig, onvifEventLog, triggerCallback);
+                            // awaited so a batch's snapshot fetches run one at a time instead
+                            // of firing several concurrent HTTP requests at the camera
+                            await handleEvent(adaptNotification(notif), monitorConfig, onvifEventLog, triggerCallback, device);
                         }
                     }
                     // Pace the loop: some cameras return immediately instead of honoring the

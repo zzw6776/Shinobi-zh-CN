@@ -458,14 +458,19 @@ module.exports = (s,config,lang) => {
                 matrices: eventDetails.matrices || [],
             },d.frame)
         }else if(
-            !motionFrameSaveTimeouts[timeoutId] &&
-            reason === 'motion' &&
-            monitorDetails.detector_motion_save_frame === '1' &&
+            d.saveFrame ||
             (
-              monitorDetails.detector_use_detect_object !== '1' ||
-              (monitorDetails.detector_use_detect_object === '1' && monitorDetails.detector_use_motion !== '1')
+                !motionFrameSaveTimeouts[timeoutId] && (
+                    reason === 'motion' &&
+                    monitorDetails.detector_motion_save_frame === '1' &&
+                    (
+                      monitorDetails.detector_use_detect_object !== '1' ||
+                      (monitorDetails.detector_use_detect_object === '1' && monitorDetails.detector_use_motion !== '1')
+                    )
+                )
             )
         ){
+            clearTimeout(motionFrameSaveTimeouts[timeoutId])
             motionFrameSaveTimeouts[timeoutId] = setTimeout(() => {
                 delete(motionFrameSaveTimeouts[timeoutId])
             },60000);
@@ -657,7 +662,7 @@ module.exports = (s,config,lang) => {
         const monitorConfig = s.group[groupKey].rawMonitorConfigurations[monitorId]
         const monitorDetails = monitorConfig.details
         const overlappingRecordings = monitorDetails.detector_record_overlap === '1'
-        if(monitorDetails.detector !== '1'){
+        if(monitorDetails.detector !== '1' && monitorDetails.onvif_events !== '1'){
             return
         }
         if(!overlappingRecordings && activeMonitor.eventBasedRecordingLastFileTime)fileTime = activeMonitor.eventBasedRecordingLastFileTime;
