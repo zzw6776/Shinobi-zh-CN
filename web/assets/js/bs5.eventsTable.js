@@ -7,7 +7,7 @@ var eventsTable_eventTagIcons = {
     bike: 'bicycle',
     dog: 'paw',
     cat: 'paw',
-    motion: 'arrows-alt',
+    motion: 'grav',
 }
 function eventsTable_getEventTags(theEvent){
     var details = theEvent.details || {}
@@ -63,13 +63,8 @@ function eventsTable_getTimelapseFrames(monitorId,startDate,endDate){
 //Find the timelapse frame closest in time (same monitor) to an event - used for the thumbnail.
 function eventsTable_findClosestFrame(theEvent,frames){
     var eventTime = new Date(theEvent.time).getTime()
-    var sameMonitorFrames = frames.filter(function(frame){ return frame.mid === theEvent.mid })
-    if(sameMonitorFrames.length === 0)return null
-    return sameMonitorFrames.reduce(function(prev,curr){
-        var prevDiff = Math.abs(eventTime - new Date(prev.time).getTime())
-        var currDiff = Math.abs(eventTime - new Date(curr.time).getTime())
-        return currDiff < prevDiff ? curr : prev
-    })
+    var sameMonitorFrames = frames.find(function(frame){ return frame.mid === theEvent.mid && frame.time === theEvent.time })
+    return sameMonitorFrames
 }
 //Find the recorded video that covers an event's time (same monitor) - used to open the player.
 function eventsTable_findCoveringVideo(theEvent,videos){
@@ -147,7 +142,7 @@ $(document).ready(function(e){
             <div class="event-card-thumb-block">
                 <div class="event-card-icon-badge" title="${escapeHtmlEventsTable(tags.join(', '))}"><i class="fa fa-${icon}"></i></div>
                 ${!hasVideo ? `<div class="event-card-no-video-badge" title="${lang['eventsTableNoVideoTitle'] || 'No recording covers this event'}"><i class="fa fa-video-camera"></i> ${lang['No Video'] || 'No Video'}</div>` : ''}
-                ${thumbSrc ? `<img class="event-card-thumb" data-src="${thumbSrc}">` : `<div class="event-card-thumb event-card-thumb-empty"><i class="fa fa-image"></i></div>`}
+                ${thumbSrc ? `<img class="event-card-thumb" data-src="${thumbSrc}">` : `<div class="event-card-thumb event-card-thumb-empty"><i class="fa fa-${icon}"></i></div>`}
                 <div class="event-card-bottom-overlay">
                     <div class="event-card-camera">${escapeHtmlEventsTable(monitorName)}</div>
                     <div class="event-card-time">

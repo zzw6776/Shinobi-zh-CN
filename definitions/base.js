@@ -2278,7 +2278,7 @@ module.exports = function(s,config,lang){
                      },
                      {
                         "fieldType": "btn-group",
-                        "form-group-class-pre-layer": "mb-0",
+                        "form-group-class-pre-layer": "me-3 mb-0",
                         "btns": [
                             {
                                 "fieldType": "btn",
@@ -2323,7 +2323,7 @@ module.exports = function(s,config,lang){
                        "fieldType": "div",
                        "id": "eventsTable_draw_area_notice",
                        "divContent": `<div class="text-center">
-                            <i class="fa fa-5x mb-3 fa-hand-pointer-o fa-rotate-270"></i>
+                            <i class="fa fa-5x mb-3 fa-hand-pointer-o"></i>
                         </div>
                         <h3 class="text-center">
                             <div>${lang['Ready to Search']}</div>
