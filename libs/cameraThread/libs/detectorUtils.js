@@ -328,7 +328,12 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
             const theTriggerTimerInfo = triggerTimer[triggerLabel]
             if(--theTriggerTimerInfo.count == 0){
                 clearTimeout(theTriggerTimerInfo.timeout)
-                theTriggerTimerInfo = undefined
+                // Reset the counter itself, not the local const pointing at it -
+                // assigning to `theTriggerTimerInfo` threw "Assignment to constant
+                // variable" every time the countdown completed. getRegionsWithThresholdMet
+                // swallowed that throw and returned [], so with Trigger Threshold > 1 no
+                // trigger was ever accepted.
+                triggerTimer[triggerLabel] = undefined
                 return true
             }else{
                 if(theTriggerTimerInfo.timeout !== null){
