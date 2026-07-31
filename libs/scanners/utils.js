@@ -274,13 +274,18 @@ module.exports = (s,config,lang) => {
                     }
                     try{
                         const camPtzConfigs = (await device.services.ptz.getConfigurations()).data.GetConfigurationsResponse
-                        if(
-                            camPtzConfigs.PTZConfiguration &&
-                            (
-                                camPtzConfigs.PTZConfiguration.PanTiltLimits ||
-                                camPtzConfigs.PTZConfiguration.ZoomLimits
-                            )
-                        ){
+                        // GetConfigurations returns one <PTZConfiguration> per configuration.
+                        // shinobi-onvif parses SOAP with xml2js `explicitArray:false`, so that
+                        // is an object for a single config but an ARRAY as soon as a camera
+                        // reports two or more - common on multi-profile PTZ cameras (e.g.
+                        // Dahua). Reading .PanTiltLimits straight off an array gives undefined,
+                        // so those cameras were never flagged PTZ and the Control button never
+                        // appeared. Limits are also optional per the ONVIF spec, so the presence
+                        // of a PTZ configuration is the dependable signal - `device.services.ptz`
+                        // being absent already throws into the catch below for non-PTZ cameras.
+                        const rawPtzConfig = camPtzConfigs ? camPtzConfigs.PTZConfiguration : null
+                        const ptzConfigList = !rawPtzConfig ? [] : (rawPtzConfig instanceof Array ? rawPtzConfig : [rawPtzConfig])
+                        if(ptzConfigList.length > 0){
                             cameraResponse.isPTZ = true
                         }
                     }catch(err){
