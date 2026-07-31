@@ -81,7 +81,17 @@ module.exports = function(s,config,lang){
                     accessKeyId: userDetails.whcs_accessKeyId,
                     secretAccessKey: userDetails.whcs_secretAccessKey,
                 },
-                region: userDetails.whcs_region || null
+                region: userDetails.whcs_region || null,
+                // Since aws-sdk-js-v3 ~3.729 the default changed to computing a flexible
+                // checksum (e.g. CRC32) on every request when the server advertises
+                // support for it. Many S3-compatible backends - notably Ceph RGW (what
+                // Croit ships) - don't fully/correctly validate that extra checksum
+                // trailer on streamed uploads, which surfaces as XAmzContentSHA256Mismatch
+                // even though the object content itself is fine. WHEN_REQUIRED restores
+                // the pre-3.729 behavior (only compute/validate when an operation actually
+                // requires it) and is AWS's own documented fix for this class of issue.
+                requestChecksumCalculation: "WHEN_REQUIRED",
+                responseChecksumValidation: "WHEN_REQUIRED",
             });
         }
     }
