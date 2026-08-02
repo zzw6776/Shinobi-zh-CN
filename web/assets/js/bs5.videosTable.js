@@ -354,6 +354,22 @@ $(document).ready(function(e){
         drawVideosTableViewElements()
         return false;
     })
+    .on('click','.videosTable_quick_daterange',function(e){
+        e.preventDefault()
+        var el = $(this)
+        var hours = el.attr('data-hours')
+        var days = el.attr('data-days')
+        var amount = hours ? parseInt(hours) : parseInt(days)
+        var unit = hours ? 'hours' : 'days'
+        var picker = dateSelector.data('daterangepicker')
+        picker.setStartDate(moment().subtract(amount,unit))
+        picker.setEndDate(moment())
+        // setStartDate/setEndDate only fire a `change` on the input element, not the
+        // picker's own apply callback that loadDateRangePicker() wires up, so redraw here.
+        videosTableDrawArea.bootstrapTable('destroy');
+        drawVideosTableViewElements()
+        return false;
+    })
     .on('click','.open-snapshot',function(e){
         e.preventDefault()
         var href = $(this).parents('.video-thumbnail').find('img').click()
