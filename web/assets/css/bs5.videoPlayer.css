@@ -1,8 +1,34 @@
+/* The tab is a fixed-height flex column capped to the viewport, so the video is the
+   only thing that gives up space. Everything below it (strip, info, buttons) is
+   flex:0 0 auto and therefore always stays on screen instead of being pushed off
+   and creating a scrollbar. */
 .tab-videoPlayer {
     overflow: auto;
+    display: flex;
+    flex-direction: column;
+    max-height: 100vh;
+    max-height: 100dvh; /* accounts for mobile browser chrome where supported */
+}
+/* Fixed-size by default; only the view container is allowed to flex. */
+.tab-videoPlayer > * {
+    flex: 0 0 auto;
+}
+.tab-videoPlayer > .tab-videoPlayer-view-container {
+    flex: 1 1 auto;
+    min-height: 0; /* without this a flex item refuses to shrink below its content */
+    display: flex;
+    flex-direction: column;
+}
+.tab-videoPlayer-view-container > * {
+    flex: 0 0 auto;
 }
 .tab-videoPlayer video{
+    flex: 0 1 auto; /* never grows past its natural size, but shrinks when space is tight */
+    min-height: 0;
+    max-height: 100%;
+    height: auto;
     width: 100%;
+    object-fit: contain; /* keeps aspect ratio while the box shrinks */
     background: #333;
     border-radius: 5px;
 }

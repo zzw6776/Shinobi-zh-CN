@@ -117,7 +117,7 @@ $(document).ready(function(){
         var baseHtml = `<main class="pt-3 page-tab tab-videoPlayer" id="tab-${newTabId}" video-id="${video.mid}${video.time}${video.type}" data-time="${video.time}" data-mid="${video.mid}" data-ke="${video.ke}" data-type="${video.type}">
             <div class="tab-videoPlayer-view-container" style="position: relative">
                 <div class="tab-videoPlayer-event-objects" style="position: absolute;width: 100%; height: 100%; z-index: 10"></div>
-                <video class="tab-videoPlayer-video-element mb-3" controls autoplay src="${videoUrl}"></video>
+                <video class="tab-videoPlayer-video-element mb-2" controls autoplay src="${videoUrl}"></video>
                 <div class="tab-videoPlayer-strip-wrapper">
                     <div class="video-time-strip tab-videoPlayer-event-strip mb-3" data-range-ms="${videoRangeMs}" title="${lang['Click to seek'] || 'Click to seek'}">
                         <div class="tab-videoPlayer-strip-ticks">${eventMatrixHtml}</div>
@@ -128,30 +128,33 @@ $(document).ready(function(){
                         <div class="tab-videoPlayer-strip-preview-caption"></div>
                     </div>
                 </div>
-                <div class="btn-group btn-group-justified">
-                      <a class="btn btn-sm btn-success" download href="${videoUrl}"><i class="fa fa-download"></i> ${lang.Download}</a>
-                      ${permissionCheck('video_delete',video.mid) ? `<a class="btn btn-sm btn-danger delete-video"><i class="fa fa-trash-o"></i> ${lang.Delete}</a>` : ''}
-                      ${permissionCheck('video_delete',video.mid) ? `<a class="btn btn-sm btn-${video.archive === 1 ? `success status-archived` : `default`} archive-video" title="${lang.Archive}"><i class="fa fa-${video.archive === 1 ? `lock` : `unlock-alt`}"></i> ${lang.Archive}</a>` : ''}
-                      <div class="dropdown d-inline-block">
-                          <a class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" data-bs-reference="parent">
-                            <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
-                          </a>
-                          <ul class="dropdown-menu ${definitions.Theme.isDark ? 'dropdown-menu-dark bg-dark' : ''} shadow-lg">
-                              ${buildDefaultVideoMenuItems(video,{
-                                  play: false
-                              })}
-                          </ul>
+                <div class="row m-0 ">
+                      <div class="col ps-0"><a class="btn btn-sm btn-success d-block" download href="${videoUrl}"><i class="fa fa-download"></i> ${lang.Download}</a></div>
+                      ${permissionCheck('video_delete',video.mid) ? `<div class="col"><a class="btn btn-sm btn-danger delete-video d-block"><i class="fa fa-trash-o"></i> ${lang.Delete}</a></div>` : ''}
+                      ${permissionCheck('video_delete',video.mid) ? `<div class="col"><a class="btn btn-sm btn-${video.archive === 1 ? `success status-archived` : `default`} archive-video d-block" title="${lang.Archive}"><i class="fa fa-${video.archive === 1 ? `lock` : `unlock-alt`}"></i> ${lang.Archive}</a></div>` : ''}
+                      <div class="col">
+                          <div class="dropdown">
+                              <a class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split d-block" data-bs-toggle="dropdown" aria-expanded="false" data-bs-reference="parent">
+                                <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
+                              </a>
+                              <ul class="dropdown-menu ${definitions.Theme.isDark ? 'dropdown-menu-dark bg-dark' : ''} shadow-lg">
+                                  ${buildDefaultVideoMenuItems(video,{
+                                      play: false
+                                  })}
+                              </ul>
+                          </div>
                       </div>
+                      <div class="col pe-0"><a class="btn btn-sm btn-default delete-tab-dynamic d-block"><i class="fa fa-times"></i> ${lang.Close}</a></div>
                 </div>
             </div>
             <div class="my-3 ${definitions.Theme.isDark ? 'bg-dark text-white' : 'bg-light text-dark'} card">
                 <div class="card-body">
-                      <div class="row m-0 px-3 py-3">
+                      <div class="row m-0 mb-2">
                           <div class="col-md-12 text-center">
                               <h5 class="video-title mb-0">${tabLabel}</h5>
                           </div>
                       </div>
-                      <div class="row m-0 mb-3">
+                      <div class="row m-0">
                           <div class="col-md-12">
                               <div class="row text-center">
                                   <div class="col-md-6">
