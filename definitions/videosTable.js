@@ -68,7 +68,7 @@ module.exports = (s,config,lang,Theme) => {
                    },
                    {
                       "fieldType": "btn-group",
-                      "form-group-class-pre-layer": "mb-0",
+                      "form-group-class-pre-layer": "me-3 mb-0",
                       "btns": [
                           {
                               "fieldType": "btn",
@@ -81,7 +81,7 @@ module.exports = (s,config,lang,Theme) => {
                    {
                       "fieldType": "div",
                       "class": "dropdown d-inline-block",
-                      "form-group-class-pre-layer": "me-3 mb-0",
+                      "form-group-class-pre-layer": "mb-0",
                       "divContent": `<button type="button" class="btn btn-default dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                           <i class="fa fa-clock-o"></i> ${lang['Quick Range']}
                       </button>

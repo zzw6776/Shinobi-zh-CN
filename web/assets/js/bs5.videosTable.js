@@ -77,7 +77,6 @@ $(document).ready(function(e){
     });
 
     async function drawVideosTableViewElements(pageNumber, pageSize, usePreloadedData) {
-        // Set default values if pageNumber and pageSize are not provided
         if(alreadyLoading)return;
         alreadyLoading = true
         pageNumber = pageNumber || 1;
@@ -93,32 +92,28 @@ $(document).ready(function(e){
         var wantsArchivedVideo = getVideoSetSelected() === 'archive';
         var wantCloudVideo = wantCloudVideos();
         videosTableNoticeArea.hide();
-        if (!usePreloadedData) {
-            var result = await getVideos({
-                monitorId,
-                startDate,
-                endDate,
-                searchQuery,
-                andOnly,
-                archived: wantsArchivedVideo,
-                customVideoSet: wantCloudVideo ? 'cloudVideos' : null,
-                pageSize: pageSize, // Pass pageSize to server
-                currentPage: pageNumber // Pass currentPage to server
-            });
-            loadedVideosTable = result.videos;
-        }
-
+        var result = await getVideos({
+            monitorId,
+            startDate,
+            endDate,
+            searchQuery,
+            andOnly,
+            archived: wantsArchivedVideo,
+            customVideoSet: wantCloudVideo ? 'cloudVideos' : null,
+            pageSize: pageSize, // Pass pageSize to server
+            currentPage: pageNumber // Pass currentPage to server
+        });
+        loadedVideosTable = result.videos;
         //videosTableDrawArea.bootstrapTable('destroy');
         videosTableDrawArea.bootstrapTable({
             pagination: true,
-            search: true,
+            search: false,
             pageList: [10, 25, 50, 100, 1000, 2000],
             pageSize: pageSize, // Ensure the current page size is maintained
             pageNumber: pageNumber, // Ensure the current page number is maintained
             totalRows: result.total, // Reflect total number of videos
             onPostBody: loadFramesForVideosInView,
             onPageChange: (newPageNumber, newPageSize) => {
-                // drawVideosTableViewElements(newPageNumber, newPageSize);
                 setTimeout(() => {
                     loadFramesForVideosInView();
                 }, 500);
@@ -485,8 +480,8 @@ $(document).ready(function(e){
                         delete(loadedVideosInMemory[`${data.mid}${data.time}${data.type}`])
                         clearTimeout(redrawTimeout)
                         redrawTimeout = setTimeout(function(){
-			    videosTableDrawArea.bootstrapTable('destroy');
-                            drawVideosTableViewElements(true)
+			                videosTableDrawArea.bootstrapTable('destroy');
+                            drawVideosTableViewElements()
                         },2000)
                     }
                 }
@@ -527,7 +522,6 @@ $(document).ready(function(e){
     })
     addOnTabOpen('videosTableView', function () {
         drawMonitorListToSelector(monitorsList,null,null,true)
-        // drawVideosTableViewElements()
         videosTableNoticeArea.show()
     })
     addOnTabReopen('videosTableView', function () {
