@@ -1,4 +1,4 @@
-module.exports = (s,config,lang) => {
+module.exports = (s,config,lang,Theme) => {
     return {
         "section": "Events Table",
         "blocks": {

@@ -19,8 +19,8 @@ module.exports = function(s,config,lang){
             "8": lang["Stopping"],
             "9": lang["Started"],
         },
-        "Monitor Settings": require('./monitorSettings.js')(s,config,lang),
-       "Account Settings": require('./accountSettings.js')(s,config,lang),
+        "Monitor Settings": require('./monitorSettings.js')(s,config,lang,Theme),
+       "Account Settings": require('./accountSettings.js')(s,config,lang,Theme),
        "ONVIF Device Manager": {
           "section": "ONVIF Device Manager",
           "blocks": {
@@ -500,9 +500,9 @@ module.exports = function(s,config,lang){
              },
          }
        },
-       "Permission Sets": require('./permissionSets.js')(s,config,lang),
-       "Sub-Account Manager": require('./subAccountManager.js')(s,config,lang),
-       "API Keys": require('./apiKeys.js')(s,config,lang),
+       "Permission Sets": require('./permissionSets.js')(s,config,lang,Theme),
+       "Sub-Account Manager": require('./subAccountManager.js')(s,config,lang,Theme),
+       "API Keys": require('./apiKeys.js')(s,config,lang,Theme),
      "LDAP": {
          "section": "LDAP",
          "blocks": {
@@ -564,8 +564,8 @@ module.exports = function(s,config,lang){
              }
          }
      },
-     "Alarms": require('./alarms.js')(s,config,lang),
-     "Region Editor": require('./regionEditor.js')(s,config,lang),
+     "Alarms": require('./alarms.js')(s,config,lang,Theme),
+     "Region Editor": require('./regionEditor.js')(s,config,lang,Theme),
      "Schedules": {
          "section": "Schedules",
          "blocks": {
@@ -1081,7 +1081,7 @@ module.exports = function(s,config,lang){
             },
           }
       },
-      "ONVIF Scanner": require('./onvifScanner.js')(s,config,lang),
+      "ONVIF Scanner": require('./onvifScanner.js')(s,config,lang,Theme),
      "Camera Probe": {
           "section": "Camera Probe",
           "blocks": {
@@ -1332,9 +1332,9 @@ module.exports = function(s,config,lang){
            },
          }
        },
-       "Monitor Settings Additional Input Map": require('./monitorSettingsAdditionalInputMap.js')(s,config,lang),
-       "Monitor Settings Additional Stream Channel": require('./monitorSettingsAdditionalStreamChannel.js')(s,config,lang),
-       "Monitor Stream Window": require('./monitorStreamWindow.js')(s,config,lang),
+       "Monitor Settings Additional Input Map": require('./monitorSettingsAdditionalInputMap.js')(s,config,lang,Theme),
+       "Monitor Settings Additional Stream Channel": require('./monitorSettingsAdditionalStreamChannel.js')(s,config,lang,Theme),
+       "Monitor Stream Window": require('./monitorStreamWindow.js')(s,config,lang,Theme),
        "Monitor Options": {
            "section": "Monitor Options",
            "dropdownClass": `${Theme.isDark ? 'dropdown-menu-dark' : ''} ${mainBackgroundColor}`
@@ -2129,8 +2129,8 @@ module.exports = function(s,config,lang){
            },
          }
       },
-      "Videos Table": require('./videosTable.js')(s,config,lang),
-      "Events Table": require('./eventsTable.js')(s,config,lang),
+      "Videos Table": require('./videosTable.js')(s,config,lang,Theme),
+      "Events Table": require('./eventsTable.js')(s,config,lang,Theme),
       "Admin Account Settings": {
            "section": "Admin Account Settings",
            "blocks": {

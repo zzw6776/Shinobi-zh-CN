@@ -1,4 +1,4 @@
-module.exports = (s,config,lang) => {
+module.exports = (s,config,lang,Theme) => {
     return {
         "section": "Videos Table",
         "blocks": {
@@ -104,9 +104,6 @@ module.exports = (s,config,lang) => {
              "section-pre-class": "col-md-12",
              "info": [
                  {
-                     // Lives here rather than in its own block so it adds no card
-                     // padding while empty - it only takes up space once a preview
-                     // is actually playing.
                      "fieldType": "div",
                      "id": "videosTable_preview_area",
                      "style": "max-width:640px",
