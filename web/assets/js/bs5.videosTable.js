@@ -171,7 +171,7 @@ $(document).ready(function(e){
                                     <a class="video-thumbnail-button-cell open-snapshot p-3">
                                         <i class="fa fa-camera"></i>
                                     </a>
-                                    <a class="video-thumbnail-button-cell preview-video p-3" href="${href}" title="${lang.Play}">
+                                    <a class="video-thumbnail-button-cell open-video p-3" href="${href}" title="${lang.Play}">
                                         <i class="fa fa-play"></i>
                                     </a>
                                 </div>
