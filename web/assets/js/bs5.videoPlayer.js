@@ -3,37 +3,68 @@ $(document).ready(function(){
     window.getVideoPlayerTabId = function(video){
         return `videoPlayer-${video.mid}-${moment(video.time).format('YYYY-MM-DD-HH-mm-ss')}`
     }
+    // Renders the event/tag rows shown beside the player and (re)fills `loadedEvents`,
+    // which ontimeupdate reads to draw detection matrices over the video.
+    function buildVideoPlayerEventListHtml(theEvents,loadedEvents){
+        var eventMatrixHtml = ``
+        if(!(theEvents instanceof Array) || theEvents.length === 0)return eventMatrixHtml;
+        $.each(theEvents,function(n,theEvent){
+            loadedEvents[new Date(theEvent.time)] = theEvent
+            var objectsFound = {}
+            eventMatrixHtml += `<div class="d-block tab-videoPlayer-event-row card bg-darker mb-1 p-2" data-mid="${theEvent.mid}" data-time="${theEvent.time}">`
+            eventMatrixHtml += `<div class="d-block">
+                <div class="d-block">${formattedTime(theEvent.time)}</div>
+            </div>`
+            $.each((theEvent.details || {}).matrices || [],function(n,matrix){
+                if(!objectsFound[matrix.tag])objectsFound[matrix.tag] = 1
+                ++objectsFound[matrix.tag]
+            })
+            $.each(objectsFound,function(tag,count){
+                eventMatrixHtml += `<div class="d-block">
+                    <div class="d-block" style="text-transform: capitalize">${tag} : ${count}</div>
+                </div>`
+            })
+            eventMatrixHtml += `</div>`
+        })
+        return eventMatrixHtml
+    }
+    // The event list handed over on `video.events` comes from the bulk request behind the
+    // Videos list, which is capped (eventLimit, default 300) and ordered newest-first. As
+    // new events accumulate, an older video's events fall out of that window and its tag
+    // list renders empty - minutes after the recording was saved, even though the rows are
+    // still in the database. Re-fetch scoped to just this video's own time range so the
+    // list stays correct no matter how many events the system has produced since.
+    async function refreshVideoPlayerEvents(video,theTab,loadedEvents){
+        if(!video || !video.mid || !video.time || !video.end)return;
+        try{
+            var theEvents = await getEvents({
+                monitorId: video.mid,
+                startDate: convertTZ(video.time),
+                endDate: convertTZ(video.end),
+                limit: 5000,
+            })
+            if(!(theEvents instanceof Array))return;
+            Object.keys(loadedEvents).forEach(function(key){ delete loadedEvents[key] })
+            theTab.find('.tab-videoPlayer-event-list').html(
+                buildVideoPlayerEventListHtml(theEvents,loadedEvents)
+            )
+        }catch(err){
+            console.error('refreshVideoPlayerEvents',err)
+        }
+    }
     window.createVideoPlayerTab = function(video,timeInward){
         var newTabId = getVideoPlayerTabId(video)
         var humanStartTime = formattedTime(video.time,true)
         var humanEndTime = formattedTime(video.end,true)
         var tabLabel = `<b>${lang['Video']}</b> : ${loadedMonitors[video.mid] ? loadedMonitors[video.mid].name : lang['Monitor or Key does not exist.']} : <span title="${formattedTime(video.time)}">${timeAgo(video.time)}</span>`
         var videoUrl = getLocation() + video.href
-        var hasRows = video.events && video.events.length > 0
-        var loadedEvents = {}
-        var eventMatrixHtml = ``
-        if(hasRows){
-            var objectsFound = {}
-            $.each(video.events,function(n,theEvent){
-                loadedEvents[new Date(theEvent.time)] = theEvent
-                var objectsFound = {}
-                eventMatrixHtml += `<div class="d-block tab-videoPlayer-event-row card bg-darker mb-1 p-2" data-mid="${theEvent.mid}" data-time="${theEvent.time}">`
-                eventMatrixHtml += `<div class="d-block">
-                    <div class="d-block">${formattedTime(theEvent.time)}</div>
-                </div>`
-                $.each(theEvent.details.matrices,function(n,matrix){
-                    if(!objectsFound[matrix.tag])objectsFound[matrix.tag] = 1
-                    ++objectsFound[matrix.tag]
-                })
-                $.each(objectsFound,function(tag,count){
-                    eventMatrixHtml += `<div class="d-block">
-                        <div class="d-block" style="text-transform: capitalize">${tag} : ${count}</div>
-                    </div>`
-                })
-                eventMatrixHtml += `</div>`
-            })
-            eventMatrixHtml += `</div>`
-        }
+        // Reuse the existing tab's map on reopen so the already-attached ontimeupdate
+        // handler keeps pointing at the object refreshVideoPlayerEvents() updates.
+        var existingTab = $(`#tab-${newTabId}`)
+        var loadedEvents = (existingTab.length > 0 && existingTab.data('videoPlayerLoadedEvents')) || {}
+        // Render whatever came with the video immediately, then correct it from the
+        // scoped fetch below.
+        var eventMatrixHtml = buildVideoPlayerEventListHtml(video.events,loadedEvents)
         var baseHtml = `<main class="container page-tab tab-videoPlayer" id="tab-${newTabId}" video-id="${video.mid}${video.time}${video.type}" data-time="${video.time}" data-mid="${video.mid}" data-ke="${video.ke}" data-type="${video.type}">
             <div class="my-3 ${definitions.Theme.isDark ? 'bg-dark text-white' : 'bg-light text-dark'} rounded shadow-sm">
                 <div class="p-3">
@@ -78,7 +109,7 @@ $(document).ready(function(){
                                   </div>
                               </div>
                           </div>
-                          <div class="col-md-6">
+                          <div class="col-md-6 tab-videoPlayer-event-list">
                               ${eventMatrixHtml}
                           </div>
                     </div>
@@ -86,7 +117,8 @@ $(document).ready(function(){
             </div>
         </main>`
         var tabCreateResponse = createNewTab(newTabId,tabLabel,baseHtml,{},null,'videoPlayer')
-        console.log(tabCreateResponse)
+        tabCreateResponse.theTab.data('videoPlayerLoadedEvents',loadedEvents)
+        refreshVideoPlayerEvents(video,tabCreateResponse.theTab,loadedEvents)
         var videoElement = tabCreateResponse.theTab.find('.tab-videoPlayer-video-element')[0]
         if(timeInward){
             var seekToTimeInward = function(){
