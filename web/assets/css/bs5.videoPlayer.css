@@ -4,6 +4,7 @@
 .tab-videoPlayer video{
     width: 100%;
     background: #333;
+    border-radius: 5px;
 }
 .tab-videoPlayer-event-row {
     cursor: pointer;
@@ -99,4 +100,71 @@
     top: 0;
     width: 100%;
     background: rgba(0,0,0,0.6)
+}
+
+/* videoPlayer event strip - the yellow-tick bar under the video, replacing the
+   old event list. Same visual language as the bar on the recentVideos cards. */
+.tab-videoPlayer-strip-wrapper {
+    position: relative;
+}
+.tab-videoPlayer-event-strip {
+    min-height: 34px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 4px;
+    cursor: pointer;
+    overflow: hidden;
+}
+.tab-videoPlayer-event-strip .video-time-needle-event {
+    opacity: 0.85;
+    z-index: 2;
+}
+/* The needle itself is only a 3px border, which is a near-impossible hover target.
+   This widens the hit area without changing how the tick looks. */
+.tab-videoPlayer-event-strip .video-time-needle-event::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -7px;
+    width: 17px;
+    height: 100%;
+}
+.tab-videoPlayer-event-strip .video-time-needle-event:hover {
+    opacity: 1;
+    box-shadow: 0 0 6px 1px rgba(255,251,0,0.9);
+}
+.tab-videoPlayer-strip-playhead {
+    border-left: 2px solid #f00;
+    z-index: 3;
+    pointer-events: none;
+}
+.tab-videoPlayer-strip-preview {
+    position: absolute;
+    bottom: calc(100% - 6px);
+    width: 200px;
+    display: none;
+    z-index: 1200;
+    pointer-events: none;
+    background: #000;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+}
+.tab-videoPlayer-strip-preview.is-visible {
+    display: block;
+}
+.tab-videoPlayer-strip-preview img {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 112px;
+    background: #111;
+}
+.tab-videoPlayer-strip-preview-caption {
+    padding: 3px 6px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: #fff;
+    background: rgba(0,0,0,0.85);
+    text-align: center;
+    word-break: break-word;
 }
