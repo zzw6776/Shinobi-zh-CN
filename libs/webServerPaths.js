@@ -1558,7 +1558,7 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
     * API : Motion Trigger via GET request
      */
      app.get(config.webPaths.apiPrefix+':auth/motion/:ke/:id', function (req,res){
-         s.auth(req.params,function(user){
+         s.auth(req.params,async function(user){
             const groupKey = req.params.ke
             const monitorId = req.params.id
             const monitorConfig = s.group[groupKey].rawMonitorConfigurations[monitorId]
@@ -1634,9 +1634,25 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
                  })
                  return;
              }
-             triggerEvent(simulatedEvent)
+             // triggerEvent() can legitimately discard the event (motion lock, event
+             // filters, region checks). It used to be fire-and-forget, so this endpoint
+             // always answered "Trigger Successful" even when nothing happened - which made
+             // it impossible to tell a working integration from a silently dropped one.
+             // Await it and report what actually occurred, matching how the
+             // detector_http_api gate above already reports a deliberate block.
+             const triggerResponse = await triggerEvent(simulatedEvent)
+             if(triggerResponse && triggerResponse.ok === false){
+                 s.closeJsonResponse(res,{
+                     ok: false,
+                     triggered: false,
+                     reason: triggerResponse.reason,
+                     msg: triggerResponse.msg,
+                 })
+                 return
+             }
              s.closeJsonResponse(res,{
                  ok: true,
+                 triggered: true,
                  msg: lang['Trigger Successful']
              })
          },res,req)

@@ -332,7 +332,13 @@ module.exports = (s,config,lang) => {
                     }
                 })
                 if(evaluateBooleanTokens(validationString)){
-                    if(haltState === '0' || !haltState){
+                    // `halt` is tri-state: '1' drops on success, '2' drops on failure,
+                    // '0'/unset never drops. Only '1' should suppress the actions here -
+                    // an earlier version tested `haltState === '0' || !haltState`, which
+                    // left '2' matching neither branch, so a filter set to "Drop on
+                    // Condition Failure" silently stopped applying its actions (including
+                    // record) whenever its condition succeeded.
+                    if(haltState !== '1'){
                         delete(haltState)
                         Object.keys(dFilter.actions).forEach(function(key){
                             var value = dFilter.actions[key]
@@ -870,6 +876,18 @@ module.exports = (s,config,lang) => {
             delete(activeMonitor.sendingFromSecondaryDetectorOuput)
         },timeout || 5000)
     }
+    // A trigger can legitimately be discarded for several reasons, but every one of them
+    // used to be a bare `return` - so callers (and the HTTP trigger API) could not tell an
+    // accepted trigger from a discarded one, and the API answered "Trigger Successful"
+    // either way. Return a described result instead.
+    // Logging is debugLog-only on purpose: with built-in detection running at detector_fps
+    // these drops can occur many times a second, and writing them to userLog would flood the
+    // Logs table. The HTTP API surfaces the reason to its caller, which is where it matters.
+    const eventDropped = (d,reasonKey,defaultText) => {
+        const msg = lang[reasonKey] || defaultText || reasonKey
+        s.debugLog(`Event Ignored : ${msg}`,d.ke,d.mid || d.id)
+        return { ok: false, triggered: false, reason: reasonKey, msg: msg }
+    }
     const triggerEvent = async (d,forceSave) => {
         var didCountingAlready = false
         const groupKey = d.ke
@@ -887,11 +905,13 @@ module.exports = (s,config,lang) => {
             countObjects : false
         }
         if(!s.group[d.ke] || !s.group[d.ke].activeMonitors[d.id]){
-            return s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            return eventDropped(d,'No Monitor Found, Ignoring Request')
         }
         const monitorConfig = s.group[d.ke].rawMonitorConfigurations[d.id]
         if(!monitorConfig){
-            return s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            return eventDropped(d,'No Monitor Found, Ignoring Request')
         }
         const activeMonitor = s.group[d.ke].activeMonitors[d.id]
         const monitorDetails = monitorConfig.details
@@ -899,7 +919,7 @@ module.exports = (s,config,lang) => {
             extender(d,filter)
         })
         const passedEventFilters = checkEventFilters(d,activeMonitor.details,filter)
-        if(!passedEventFilters)return;
+        if(!passedEventFilters)return eventDropped(d,'Ignored by Event Filters');
         const eventTime = new Date()
         if(
             filter.addToMotionCounter &&
@@ -931,7 +951,9 @@ module.exports = (s,config,lang) => {
         }
         if(filter.useLock){
             const passedMotionLock = checkMotionLock(d,monitorDetails)
-            if(!passedMotionLock)return
+            // Dropped because another event was accepted within detector_lock_timeout
+            // (default 2000ms), or the 15s post-launch motion_lock is still held.
+            if(!passedMotionLock)return eventDropped(d,'Ignored : Motion Lock')
         }
         const thisHasMatrices = hasMatrices(eventDetails)
         if(thisHasMatrices){
@@ -939,7 +961,7 @@ module.exports = (s,config,lang) => {
                 var regions = s.group[monitorConfig.ke].activeMonitors[monitorConfig.mid].parsedObjects.cordsForObjectDetection
                 var matricesInRegions = isAtleastOneMatrixInRegion(regions,eventDetails.matrices)
                 eventDetails.matrices = matricesInRegions
-                if(matricesInRegions.length === 0)return;
+                if(matricesInRegions.length === 0)return eventDropped(d,'Ignored : No Objects in Region');
                 if(filter.countObjects && monitorDetails.detector_obj_count === '1' && monitorDetails.detector_obj_count_in_region === '1' && !didCountingAlready){
                     countObjects(d)
                 }
@@ -950,7 +972,7 @@ module.exports = (s,config,lang) => {
                 const trackedObjects = getTracked(trackerId)
                 const objectsThatMoved = getAllMatricesThatMoved(monitorConfig,trackedObjects)
                 setLastTracked(trackerId, trackedObjects)
-                if(objectsThatMoved.length === 0)return;
+                if(objectsThatMoved.length === 0)return eventDropped(d,'Ignored : Objects Did Not Move');
                 eventDetails.matrices = objectsThatMoved
             }else if(activeMonitor.lineCounter){
                 const trackerId = `${groupKey}${monitorId}`
@@ -986,6 +1008,7 @@ module.exports = (s,config,lang) => {
             details: eventDetails,
             doObjectDetection: d.doObjectDetection
         },`DETECTOR_${monitorConfig.ke}${monitorConfig.mid}`);
+        return { ok: true, triggered: true }
     }
     function convertRegionPointsToNewDimensions(regions, options) {
       const { fromWidth, fromHeight, toWidth, toHeight } = options;
