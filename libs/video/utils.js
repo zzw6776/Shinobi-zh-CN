@@ -67,14 +67,15 @@ module.exports = (s,config,lang) => {
                 }
                 let finished = false
                 let orphanedFilesCount = 0;
-                let videosFound = 0;
+                let filePathLines = [];
+                const isUnlimited = options.checkMax === 'unlimited';
                 const videosDirectory = s.getVideoDirectory(monitor)
                 const tempDirectory = s.getStreamsDirectory(monitor)
                 // Write the `sh` script
                 try{
                     fs.writeFileSync(
                         tempDirectory + 'orphanCheck.sh',
-                        `find "${s.checkCorrectPathEnding(videosDirectory,true)}" -maxdepth 1 -type f -exec stat -c "%n" {} + | sort -r | head -n ${options.checkMax}`
+                        `find "${s.checkCorrectPathEnding(videosDirectory,true)}" -maxdepth 1 -type f -exec stat -c "%n" {} + | sort -r${isUnlimited ? `` : ` | head -n ${options.checkMax}`}`
                     );
                 } catch(err) {
                     console.log('Failed scanForOrphanedVideos', monitor.ke, monitor.mid)
@@ -95,9 +96,12 @@ module.exports = (s,config,lang) => {
                     delete(listing)
                 }
 
-                const onFinish = () => {
+                const onFinish = async () => {
                     if(!finished){
                         finished = true
+                        for (let i = 0; i < filePathLines.length; i++) {
+                            await processLine(filePathLines[i])
+                        }
                         response.ok = true
                         response.orphanedFilesCount = orphanedFilesCount
                         resolve(response)
@@ -111,10 +115,6 @@ module.exports = (s,config,lang) => {
                         const { status } = await checkIfVideoIsOrphaned(monitor,videosDirectory,filename)
                         if(status === 2){
                             ++orphanedFilesCount
-                        }
-                        ++videosFound
-                        if(videosFound === options.checkMax){
-                            onFinish()
                         }
                     }
                 }
@@ -140,14 +140,10 @@ module.exports = (s,config,lang) => {
                 setTimeout(checkInactivity, 1000)
                 // ------------------------------------------------------------------------------
 
-                listing.stdout.on('data', async (d) => {
+                listing.stdout.on('data', (d) => {
                     // Reset the inactivity timer
                     lastDataTimestamp = Date.now()
-
-                    const filePathLines = d.toString().split('\n')
-                    for (let i = 0; i < filePathLines.length; i++) {
-                        await processLine(filePathLines[i])
-                    }
+                    filePathLines.push(...d.toString().split('\n').filter(item => !!item))
                 })
                 listing.stderr.on('data', d => onError(d.toString()))
                 listing.on('close', (code) => {

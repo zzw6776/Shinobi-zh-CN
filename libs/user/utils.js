@@ -28,6 +28,37 @@ module.exports = (s,config,lang) => {
             "webdav_use_global":"0"
         }
     }
+    /**
+     * Checks the real filesystem holding a directory, so that a `sizeLimit` set larger
+     * than the volume itself cannot fill the disk without ever triggering a purge.
+     * Deliberately uncached, so that a purge loop driven by this stops as soon as
+     * enough space has actually been recovered.
+     * @param {string} directory - Path to check the containing filesystem of.
+     */
+    const isFilesystemUnderPressure = async function(directory){
+        if(config.disableDiskPressureCheck === true || !directory || !fs.promises.statfs){
+            return false
+        }
+        try{
+            const stats = await fs.promises.statfs(directory)
+            const totalSpace = stats.blocks * stats.bsize
+            const availableSpace = stats.bavail * stats.bsize
+            if(totalSpace > 0){
+                const percentUsed = ((totalSpace - availableSpace) / totalSpace) * 100
+                if(percentUsed >= (config.maxDiskPercentUsed || 95)){
+                    s.debugLog(`Disk pressure on ${directory} : ${percentUsed.toFixed(1)}% used`)
+                    return true
+                }
+            }
+        }catch(err){
+            s.debugLog(err)
+        }
+        return false
+    }
+    // A purge driven only by disk pressure is capped, because the space may be taken
+    // by something that is not video at all. Without a cap it would delete the entire
+    // archive and still never get under the threshold.
+    const maxDiskPressureBatches = () => config.maxDiskPressurePurgeBatches || 10
     const deleteSetOfVideos = function(options,callback){
         const groupKey = options.groupKey
         const err = options.err
@@ -214,9 +245,10 @@ module.exports = (s,config,lang) => {
             return deleteAddStorageVideos(groupKey,callback)
         }
         var currentStorageNumber = 0
+        var pressureBatches = 0
         function readStorageArray(){
             const theGroup = s.group[groupKey]
-            setTimeout(function(){
+            setTimeout(async function(){
                 reRunCheck = readStorageArray
                 var storage = s.listOfStorage[currentStorageNumber]
                 if(!storage){
@@ -233,7 +265,18 @@ module.exports = (s,config,lang) => {
                 var storageIndex = theGroup.addStorageUse[storageId]
                 //run purge command
                 const maxSize = (storageIndex.sizeLimit * (storageIndex.videoPercent / 100) * config.cron.deleteOverMaxOffset);
-                if(storageIndex.usedSpaceVideos > maxSize){
+                const isOverSizeLimit = storageIndex.usedSpaceVideos > maxSize
+                const isUnderDiskPressure = isOverSizeLimit ? false : await isFilesystemUnderPressure(storage.value)
+                if(isUnderDiskPressure){
+                    if(pressureBatches >= maxDiskPressureBatches()){
+                        s.debugLog(`${groupKey} disk pressure purge cap reached on ${storage.value}`)
+                        ++currentStorageNumber
+                        readStorageArray()
+                        return
+                    }
+                    ++pressureBatches
+                }
+                if(isOverSizeLimit || isUnderDiskPressure){
                     s.knexQuery({
                         action: "select",
                         columns: "*",
@@ -320,8 +363,15 @@ module.exports = (s,config,lang) => {
         }
         readStorageArray()
     }
-    const deleteMainVideos = function(groupKey,callback){
-        if(s.group[groupKey].usedSpaceVideos > (s.group[groupKey].sizeLimit * (s.group[groupKey].sizeLimitVideoPercent / 100) * config.cron.deleteOverMaxOffset)){
+    const deleteMainVideos = async function(groupKey,callback,pressureBatches){
+        pressureBatches = pressureBatches || 0
+        const isOverSizeLimit = s.group[groupKey].usedSpaceVideos > (s.group[groupKey].sizeLimit * (s.group[groupKey].sizeLimitVideoPercent / 100) * config.cron.deleteOverMaxOffset)
+        const isUnderDiskPressure = isOverSizeLimit ? false : await isFilesystemUnderPressure(s.dir.videos)
+        if(isUnderDiskPressure && pressureBatches >= maxDiskPressureBatches()){
+            s.debugLog(`${groupKey} disk pressure purge cap reached, space is likely used by something other than video`)
+            return callback()
+        }
+        if(isOverSizeLimit || isUnderDiskPressure){
             s.knexQuery({
                 action: "select",
                 columns: "*",
@@ -341,7 +391,7 @@ module.exports = (s,config,lang) => {
                     videos: rows,
                     storageIndex: null,
                     reRunCheck: () => {
-                        return deleteMainVideos(groupKey,callback)
+                        return deleteMainVideos(groupKey,callback,isUnderDiskPressure ? pressureBatches + 1 : pressureBatches)
                     }
                 },callback)
             })
@@ -515,15 +565,26 @@ module.exports = (s,config,lang) => {
             callback()
         }
     }
-    function resetAllStorageCounters(groupKey){
-        var storageIndexes = Object.keys(s.group[groupKey].addStorageUse)
-        storageIndexes.forEach((storageIndex) => {
-            s.setDiskUsedForGroupAddStorage(groupKey,{
-                size: 0,
-                storageIndex: storageIndex
-            })
-        })
-        s.setDiskUsedForGroup(groupKey,0)
+    async function resetAllStorageCounters(groupKey){
+        // recount from the database. this used to emit deltas of `0` (which changed
+        // nothing) and hand the emitter storage keys instead of storage objects, so
+        // the counters were never actually reset after a storage limit change.
+        const theGroup = s.group[groupKey]
+        if(!theGroup)return
+        const { rows } = await s.knexQueryPromise({
+            action: "select",
+            columns: "ke,uid,mail,details",
+            table: "Users",
+            where: [
+                ['ke','=',groupKey],
+                ['details','NOT LIKE',`%"sub"%`],
+            ],
+            limit: 1,
+        });
+        const user = rows && rows[0]
+        if(!user)return
+        await loadDiskUseForUser(user)
+        s.sendDiskUsedAmountToClients(groupKey)
     }
     function createAdminUser(user){
         return new Promise((resolve,reject) => {
