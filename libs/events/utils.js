@@ -1077,13 +1077,20 @@ module.exports = (s,config,lang) => {
         }
         return response
     }
-    // Tag search for Events. Unlike Videos (which has a denormalized `objects`
+    // Search for Events. Unlike Videos (which has a denormalized `objects`
     // text column - see getVideosBasedOnTagFoundInMatrixOfAssociatedEvent in
     // libs/video/utils.js), Events only stores its matrices/tag data inside the
     // JSON `details` blob, so this matches with a substring LIKE against that
     // column directly. Same simple substring-match philosophy as the video
-    // search (not a strict JSON field match), so it also matches on the
-    // detection reason/plugin name, not just literal tag values.
+    // search (not a strict JSON field match), so it matches both object tags and
+    // the event's `reason` (which is why the field is labelled "Objects or Reason").
+    // Reasons are not always lower case - ONVIF events store the topic name as the
+    // reason (e.g. "CellMotionDetector") - and Postgres LIKE is case sensitive,
+    // so ILIKE is used there to keep a typed "motion" matching regardless of DB.
+    // ILIKE is Postgres-only syntax, so it is limited to the clients knex maps to Postgres
+    // (see the `databaseType` table in INSTALL.md); MySQL and SQLite LIKE already ignore case.
+    const postgresClients = ['pg','postgres','postgresql','pgnative','cockroachdb','redshift'];
+    const likeOperator = postgresClients.indexOf(`${config.databaseType}`.toLowerCase()) > -1 ? 'ILIKE' : 'LIKE';
     async function getEventsBasedOnTag({
         groupKey,
         monitorId,
@@ -1094,7 +1101,7 @@ module.exports = (s,config,lang) => {
         andOnly,
         limit,
     }){
-        const theSearches = searchQuery.split(',').map((query) => ['details','LIKE',`%${query.trim()}%`]);
+        const theSearches = searchQuery.split(',').map((query) => ['details',likeOperator,`%${query.trim()}%`]);
         if(!andOnly){
             theSearches.forEach((item,n) => {
                 if(n !== 0)theSearches[n] = ['or', ...item];
