@@ -64,7 +64,7 @@ function generateDefaultMonitorSettings(){
            "hwaccel": "auto",
            "hwaccel_vcodec": "",
            "hwaccel_device": "",
-	   "hwaccel_format": "",
+	       "hwaccel_format": "",
            "use_coprocessor": null,
            "stream_type": "hls",
            "stream_flv_type": "http",
@@ -136,7 +136,7 @@ function generateDefaultMonitorSettings(){
            "cust_sip_record": "",
            "custom_output": "",
            "detector": "0",
-           "detector_http_api": null,
+           "detector_http_api": "1",
            "detector_send_frames": "1",
            "detector_lock_timeout": "",
            "detector_save": "1",
@@ -1043,24 +1043,17 @@ function setFieldVisibilityNewWay(){
         }
     })
 }
-function setFieldVisibilityOldWay(formElement){
-    var listToShow = []
-    formElement.find('[selector]').each(function(n,v){
+function setFieldVisibilityBySelectors(formElement){
+    formElement.find('[selector]').each(function(){
         var el = $(this)
-        var keyName = el.attr('selector')
-        var value = el.val()
-        var toShow = `${keyName}_${value}`
-        listToShow.push(toShow)
-        formElement.find(`.${keyName}_input`).hide()
+        formElement.find(`.${el.attr('selector')}_text`).text(el.find('option:selected').text())
     })
-    for (let i = 0; i < listToShow.length; i++) {
-        var item = listToShow[i];
-        var elements = formElement.find(`[class*="${item}"]`)
-        elements.show()
-    }
+    applyVisibleWhen(formElement)
+    // for definitions that still encode conditions in class names (plugins)
+    applySelectorVisibility(formElement)
 }
 function setFieldVisibility(){
-    setFieldVisibilityOldWay(editorForm)
+    setFieldVisibilityBySelectors(editorForm)
     setFieldVisibilityNewWay()
 }
 monitorStreamChannels.on('click','.delete',function(){

@@ -225,7 +225,7 @@ module.exports = (s,config,lang) => {
                  {
                      hidden:true,
                     "name": "detail=rtmp_key",
-                    "form-group-class": "h_t_input h_t_rtmp",
+                    "form-group-visibleWhen": { "h_t": "rtmp" },
                     "field": lang['Stream Key'],
                     "description": lang["fieldTextRtmpKey"],
                     "default": "",
@@ -238,8 +238,7 @@ module.exports = (s,config,lang) => {
                     "field": lang.Automatic,
                     "description": lang["fieldTextAutoHostEnable"],
                     "selector": "h_auto_host",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg h_t_mxpeg",
-                    "form-group-class-pre-layer":"h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg h_t_mxpeg h_t_local",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg","mxpeg"] },
                     "default": "",
                     "example": "",
                     "fieldType": "select",
@@ -249,7 +248,7 @@ module.exports = (s,config,lang) => {
                      hidden:true,
                     "name": "detail=auto_host",
                     "field": lang["Full URL Path"],
-                    "form-group-class": "h_auto_host_input h_auto_host_1",
+                    "form-group-visibleWhen": { "h_auto_host": "1" },
                     "description": lang["fieldTextAutoHost"],
                     "default": "",
                     "example": "rtsp://username:password@123.123.123.123/stream/1",
@@ -262,8 +261,9 @@ module.exports = (s,config,lang) => {
                     "description": lang["fieldTextProtocol"],
                     "default": "RTSP",
                     "example": "",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
+                    "form-group-pre-layer-visibleWhen": { "h_auto_host": "0" },
                     "fieldType": "select",
                     "possible": [
                         {
@@ -304,8 +304,7 @@ module.exports = (s,config,lang) => {
                     "name": "detail=rtsp_transport",
                     "field": lang["RTSP Transport"],
                     "description": lang["fieldTextRtspTransport"],
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer":"h_p_input h_p_rtsp",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"], "h_p": "rtsp" },
                     "fieldType": "select",
                     "possible": [
                         {
@@ -342,8 +341,9 @@ module.exports = (s,config,lang) => {
                     "description": lang["fieldTextMuser"],
                     "default": "",
                     "example": "kittenFinder",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
+                    "form-group-pre-layer-visibleWhen": { "h_auto_host": "0" },
                     "possible": ""
                  },
                  {
@@ -354,8 +354,9 @@ module.exports = (s,config,lang) => {
                     "description": lang["fieldTextMpass"],
                     "default": "",
                     "example": "kittenCuddler",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
+                    "form-group-pre-layer-visibleWhen": { "h_auto_host": "0" },
                     "possible": ""
                  },
                  {
@@ -365,8 +366,9 @@ module.exports = (s,config,lang) => {
                     "description": lang["fieldTextHost"],
                     "default": "",
                     "example": "111.111.111.111",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
+                    "form-group-pre-layer-visibleWhen": { "h_auto_host": "0" },
                     "possible": ""
                  },
                  {
@@ -377,8 +379,8 @@ module.exports = (s,config,lang) => {
                     "default": "80",
                     "example": "554",
                     "possible": "1-65535",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
                  },
                  {
                      hidden:true,
@@ -387,8 +389,9 @@ module.exports = (s,config,lang) => {
                     "description": lang["fieldTextPortForce"],
                     "default": "0",
                     "example": "",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
+                    "form-group-pre-layer-visibleWhen": { "h_auto_host": "0" },
                     "fieldType": "select",
                     "possible": yesNoPossibility
                  },
@@ -400,8 +403,9 @@ module.exports = (s,config,lang) => {
                     "default": "",
                     "example": "/videostream.cgi?1",
                     "possible": "",
-                    "form-group-class": "h_t_input h_t_h264 h_t_hls h_t_mp4 h_t_jpeg h_t_mjpeg h_t_local",
-                    "form-group-class-pre-layer": "h_auto_host_input h_auto_host_0 auto_host_fill",
+                    "form-group-visibleWhen": { "h_t": ["h264","hls","mp4","jpeg","mjpeg","local"] },
+                    "form-group-class-pre-layer": "auto_host_fill",
+                    "form-group-pre-layer-visibleWhen": { "h_auto_host": "0" },
                  },
                  {
                     "name": "detail=fatal_max",
@@ -435,7 +439,7 @@ module.exports = (s,config,lang) => {
                     "description": `ONVIF is usually run on port <code>8000</code>. This can be <code>80</code> as well depending on your camera model.`,
                     "default": "8000",
                     "example": "",
-                    "form-group-class": "h_onvif_input h_onvif_1",
+                    "form-group-visibleWhen": { "h_onvif": "1", "h_auto_host": "0" },
                  },
                  {
                     "fieldType": "btn",
@@ -445,7 +449,7 @@ module.exports = (s,config,lang) => {
                  {
                     "fieldType": "btn",
                     "attribute": `style="margin-top:1rem"`,
-                    "form-group-class-pre-layer": "h_onvif_input h_onvif_1",
+                    "form-group-visibleWhen": { "h_onvif": "1" },
                     "class": `btn-warning am_notice_edit open-onvif-device-manager`,
                     "btnContent": `<i class="fa fa-gears"></i> &nbsp; ${lang['ONVIF Device Manager']}`,
                  },
@@ -520,7 +524,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamLoop"],
                    "default": "1",
                    "example": "",
-                   "form-group-class": "h_t_input h_t_mp4 h_t_local",
+                   "form-group-visibleWhen": { "h_t": ["mp4","local"] },
                    "fieldType": "select",
                    "possible": yesNoPossibility
                 },
@@ -538,7 +542,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextWallClockTimestampIgnore"],
                    "default": "0",
                    "example": "",
-                   "form-group-class": "h_t_input h_t_h264",
+                   "form-group-visibleWhen": { "h_t": "h264" },
                    "fieldType": "select",
                    "possible": yesNoPossibility
                 },
@@ -576,7 +580,7 @@ module.exports = (s,config,lang) => {
                      "description": lang["fieldTextHwaccel"],
                      "default": "",
                      "example": "",
-                     "form-group-class": "h_gpud_input h_gpud_1",
+                     "form-group-visibleWhen": { "h_gpud": "1" },
                      "fieldType": "select",
                      "possible": s.listOfHwAccels
                  },
@@ -586,7 +590,7 @@ module.exports = (s,config,lang) => {
                      "description": lang["fieldTextHwaccelVcodec"],
                      "default": "",
                      "example": "",
-                     "form-group-class": "h_gpud_input h_gpud_1",
+                     "form-group-visibleWhen": { "h_gpud": "1" },
                      "fieldType": "select",
                      "possible": [
                         {
@@ -673,7 +677,7 @@ module.exports = (s,config,lang) => {
                       "description": "",
                       "default": "",
                       "example": "",
-                      "form-group-class": "h_gpud_input h_gpud_1",
+                      "form-group-visibleWhen": { "h_gpud": "1" },
                       "possible": ""
                   },
                  {
@@ -682,7 +686,7 @@ module.exports = (s,config,lang) => {
                       "description": "Hardware Acceleration Format",
                       "default": "",
                       "example": "vaapi",
-                      "form-group-class": "h_gpud_input h_gpud_1",
+                      "form-group-visibleWhen": { "h_gpud": "1" },
                       "possible": ""
                   },
              ]
@@ -757,7 +761,7 @@ module.exports = (s,config,lang) => {
                     "default": "0",
                     "example": "",
                     "fieldType": "select",
-                    "form-group-class": "h_st_input h_st_flv h_st_mp4",
+                    "form-group-visibleWhen": { "h_st": ["flv","mp4"] },
                     "possible": [
                        {
                           "name": lang.HTTP,
@@ -777,8 +781,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "10",
                    "example": "20000",
-                   "form-group-class": "h_st_lat_input h_st_lat_ws",
-                   "form-group-class-pre-layer": "h_st_input h_st_mjpeg",
+                   "form-group-visibleWhen": { "h_st_lat": "ws", "h_st": "mjpeg" },
                    "possible": ""
                 },
                 {
@@ -789,7 +792,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "20",
                    "example": "",
-                   "form-group-class": "h_st_input h_st_mjpeg",
+                   "form-group-visibleWhen": { "h_st": "mjpeg" },
                    "possible": ""
                 },
                 {
@@ -798,7 +801,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamVcodec"],
                    "default": "copy",
                    "example": "",
-                   "form-group-class": "h_st_input h_st_hls h_st_flv h_st_mp4",
+                   "form-group-visibleWhen": { "h_st": ["hls","flv","mp4"] },
                    "fieldType": "select",
                    "selector": "h_hls_v",
                    "possible": [
@@ -884,7 +887,7 @@ module.exports = (s,config,lang) => {
                    "default": "0",
                    "example": "",
                    "fieldType": "select",
-                   "form-group-class": "h_st_input h_st_hls h_st_flv h_st_mp4",
+                   "form-group-visibleWhen": { "h_st": ["hls","flv","mp4"] },
                    "possible": [
                       {
                          "name": lang.Auto,
@@ -934,7 +937,7 @@ module.exports = (s,config,lang) => {
                    "field": "HLS Segment Length",
                    "description": lang["fieldTextHlsTime"],
                    "default": "2",
-                   "form-group-class": "h_st_input h_st_hls",
+                   "form-group-visibleWhen": { "h_st": "hls" },
                 },
                 {
                     isAdvanced: true,
@@ -942,7 +945,7 @@ module.exports = (s,config,lang) => {
                    "field": "HLS List Size",
                    "description": lang["fieldTextHlsListSize"],
                    "default": "2",
-                   "form-group-class": "h_st_input h_st_hls",
+                   "form-group-visibleWhen": { "h_st": "hls" },
                 },
                 {
                     isAdvanced: true,
@@ -950,7 +953,7 @@ module.exports = (s,config,lang) => {
                    "field": "HLS Preset",
                    "description": lang["fieldTextPresetStream"],
                    "example": "ultrafast",
-                   "form-group-class": "h_st_input h_st_hls h_st_flv h_st_mp4",
+                   "form-group-visibleWhen": { "h_st": ["hls","flv","mp4"] },
                 },
                 {
                    "name": "detail=stream_quality",
@@ -1074,7 +1077,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTvChannelId"],
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_tvc_input h_tvc_1",
+                   "form-group-visibleWhen": { "h_tvc": "1" },
                    "possible": ""
                 },
                 {
@@ -1084,7 +1087,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTvChannelGroupTitle"],
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_tvc_input h_tvc_1",
+                   "form-group-visibleWhen": { "h_tvc": "1" },
                    "possible": ""
                 },
              ]
@@ -1094,7 +1097,7 @@ module.exports = (s,config,lang) => {
              "name": lang["Stream Timestamp"],
              "color": "blue",
              isAdvanced: true,
-             "section-class": "h_hls_v_input h_hls_v_libx264 h_hls_v_libx265 h_hls_v_h264_nvenc h_hls_v_hevc_nvenc h_hls_v_no",
+             "section-visibleWhen": { "h_hls_v": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
              "isSection": true,
              "info": [
                  {
@@ -1114,7 +1117,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamTimestampFont"],
                    "default": "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
                    "example": "",
-                   "form-group-class": "h_stm_input h_stm_1",
+                   "form-group-visibleWhen": { "h_stm": "1" },
                    "possible": ""
                 },
                 {
@@ -1124,7 +1127,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamTimestampFontSize"],
                    "default": "10",
                    "example": "",
-                   "form-group-class": "h_stm_input h_stm_1",
+                   "form-group-visibleWhen": { "h_stm": "1" },
                    "possible": ""
                 },
                 {
@@ -1134,7 +1137,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamTimestampColor"],
                    "default": "white",
                    "example": "",
-                   "form-group-class": "h_stm_input h_stm_1",
+                   "form-group-visibleWhen": { "h_stm": "1" },
                    "possible": ""
                 },
                 {
@@ -1144,7 +1147,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamTimestampBoxColor"],
                    "default": "0x00000000@1",
                    "example": "",
-                   "form-group-class": "h_stm_input h_stm_1",
+                   "form-group-visibleWhen": { "h_stm": "1" },
                    "possible": ""
                 },
                 {
@@ -1154,7 +1157,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamTimestampX"],
                    "default": "(w-tw)/2",
                    "example": "",
-                   "form-group-class": "h_stm_input h_stm_1",
+                   "form-group-visibleWhen": { "h_stm": "1" },
                    "possible": ""
                 },
                 {
@@ -1164,7 +1167,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamTimestampY"],
                    "default": "0",
                    "example": "",
-                   "form-group-class": "h_stm_input h_stm_1",
+                   "form-group-visibleWhen": { "h_stm": "1" },
                    "possible": ""
                 }
              ]
@@ -1174,7 +1177,7 @@ module.exports = (s,config,lang) => {
              "name": lang['Stream Watermark'],
              "color": "blue",
              isAdvanced: true,
-             "section-class": "h_hls_v_input h_hls_v_libx264 h_hls_v_libx265 h_hls_v_h264_nvenc h_hls_v_hevc_nvenc h_hls_v_no",
+             "section-visibleWhen": { "h_hls_v": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
              "isSection": true,
              "info": [
                  {
@@ -1194,7 +1197,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextStreamWatermarkLocation"],
                    "default": "0",
                    "example": "/usr/share/watermark.logo",
-                   "form-group-class": "h_wat_input h_wat_1",
+                   "form-group-visibleWhen": { "h_wat": "1" },
                    "possible": ""
                 },
                 {
@@ -1205,7 +1208,7 @@ module.exports = (s,config,lang) => {
                     "default": "0",
                     "example": "",
                     "fieldType": "select",
-                    "form-group-class": "h_wat_input h_wat_1",
+                    "form-group-visibleWhen": { "h_wat": "1" },
                     "possible": [
                         {
                            "name": lang["Top Right"],
@@ -1294,7 +1297,7 @@ module.exports = (s,config,lang) => {
                         {
                             name:'detail-substream-input=stream_flv_type',
                             field:lang['Loop Stream'],
-                            class:'h_i_SUBSTREAM_FIELDS_input h_i_SUBSTREAM_FIELDS_mp4',
+                            visibleWhen:{ "h_i_SUBSTREAM_FIELDS": "mp4" },
                             hidden:true,
                             default:'0',
                             "fieldType": "select",
@@ -1337,7 +1340,7 @@ module.exports = (s,config,lang) => {
                         {
                             name:'detail-substream-input=stream_loop',
                             field:lang['Loop Stream'],
-                            class:'h_i_SUBSTREAM_FIELDS_input h_i_SUBSTREAM_FIELDS_mp4 h_i_SUBSTREAM_FIELDS_raw',
+                            visibleWhen:{ "h_i_SUBSTREAM_FIELDS": ["mp4","raw"] },
                             hidden:true,
                             default:'0',
                             "fieldType": "select",
@@ -1357,7 +1360,7 @@ module.exports = (s,config,lang) => {
                         {
                             name:'detail-substream-input=rtsp_transport',
                             field:lang['RTSP Transport'],
-                            class:'h_i_SUBSTREAM_FIELDS_input h_i_SUBSTREAM_FIELDS_h264',
+                            visibleWhen:{ "h_i_SUBSTREAM_FIELDS": "h264" },
                             default:'',
                             "fieldType": "select",
                             type:'selector',
@@ -1402,7 +1405,7 @@ module.exports = (s,config,lang) => {
                         {
                             name:'detail-substream-input=hwaccel',
                             field:lang['hwaccel'],
-                            class:'h_accel_SUBSTREAM_FIELDS_input h_accel_SUBSTREAM_FIELDS_1',
+                            visibleWhen:{ "h_accel_SUBSTREAM_FIELDS": "1" },
                             hidden:true,
                             default:'',
                             "fieldType": "select",
@@ -1412,7 +1415,7 @@ module.exports = (s,config,lang) => {
                         {
                             name:'detail-substream-input=hwaccel_vcodec',
                             field:lang['hwaccel_vcodec'],
-                            class:'h_accel_SUBSTREAM_FIELDS_input h_accel_SUBSTREAM_FIELDS_1',
+                            visibleWhen:{ "h_accel_SUBSTREAM_FIELDS": "1" },
                             hidden:true,
                             default:'auto',
                             "fieldType": "select",
@@ -1483,7 +1486,7 @@ module.exports = (s,config,lang) => {
                         {
                             name:'detail-substream-input=hwaccel_device',
                             field:lang['hwaccel_device'],
-                            class:'h_accel_SUBSTREAM_FIELDS_input h_accel_SUBSTREAM_FIELDS_1',
+                            visibleWhen:{ "h_accel_SUBSTREAM_FIELDS": "1" },
                             hidden:true,
                             placeholder:'Example : /dev/dri/video0',
                             type:'text',
@@ -1535,7 +1538,7 @@ module.exports = (s,config,lang) => {
                         {
                            "field": lang['# of Allow MJPEG Clients'],
                            "name": `detail-substream-output="stream_mjpeg_clients"`,
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": "mjpeg" },
                            "placeholder": "20",
                         },
                         {
@@ -1543,7 +1546,7 @@ module.exports = (s,config,lang) => {
                            "name": `detail-substream-output="stream_vcodec"`,
                            "description": lang["fieldTextDetailSubstreamOutputStreamVcodec"],
                            "default": "copy",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["hls","rtmp","flv","mp4","h264"] },
                            "fieldType": "select",
                            "selector": "h_hls_v_channel_SUBSTREAM_FIELDS",
                            "possible": [
@@ -1630,7 +1633,7 @@ module.exports = (s,config,lang) => {
                            "default": "",
                            "example": "",
                            "fieldType": "select",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["hls","rtmp","flv","mp4","h264"] },
                            "possible": [
                               {
                                  "name": lang.Auto,
@@ -1680,21 +1683,21 @@ module.exports = (s,config,lang) => {
                            "field": lang["HLS Segment Length"],
                            "description": lang["fieldTextDetailSubstreamOutputHlsTime"],
                            "default": "2",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_hls",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": "hls" },
                         },
                         {
                            "name": "detail-substream-output=hls_list_size",
                            "field": lang["HLS List Size"],
                            "description": lang["fieldTextDetailSubstreamOutputHlsListSize"],
                            "default": "2",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_hls",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": "hls" },
                         },
                         {
                            "name": "detail-substream-output=preset_stream",
                            "field": lang["HLS Preset"],
                            "description": lang["fieldTextDetailSubstreamOutputPresetStream"],
                            "example": "ultrafast",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_hls",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": "hls" },
                         },
                         {
                            "name": "detail-substream-output=stream_quality",
@@ -1703,29 +1706,29 @@ module.exports = (s,config,lang) => {
                            "default": "15",
                            "example": "1",
                            // "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                            "possible": "1-23"
                         },
                         {
                            "name": "detail-substream-output=stream_v_br",
                            "field": lang["Video Bit Rate"],
                            "placeholder": "",
-                           "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_hls_v_channel_SUBSTREAM_FIELDS": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                         },
                         {
                            "name": "detail-substream-output=stream_a_br",
                            "field": lang["Audio Bit Rate"],
                            "placeholder": "128k",
-                           "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_hls_v_channel_SUBSTREAM_FIELDS": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                         },
                         {
                            "name": "detail-substream-output=stream_fps",
                            "field": lang['Frame Rate'],
                            "description": lang["fieldTextDetailSubstreamOutputStreamFps"],
                            // "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                         },
                         {
                            "name": "detail-substream-output=stream_scale_x",
@@ -1735,7 +1738,7 @@ module.exports = (s,config,lang) => {
                            "numberMin": "1",
                            "example": "640",
                            // "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                         },
                         {
                            "name": "detail-substream-output=stream_scale_y",
@@ -1745,7 +1748,7 @@ module.exports = (s,config,lang) => {
                            "numberMin": "1",
                            "example": "480",
                            // "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                         },
                         {
                            "name": "detail-substream-output=stream_rotate",
@@ -1753,7 +1756,7 @@ module.exports = (s,config,lang) => {
                            "description": lang["fieldTextDetailSubstreamOutputStreamRotate"],
                            "fieldType": "select",
                            // "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                            "possible": [
                                 {
                                    "name": lang["No Rotation"],
@@ -1787,7 +1790,7 @@ module.exports = (s,config,lang) => {
                            "field": lang["Video Filter"],
                            "description": lang["fieldTextDetailSubstreamOutputSvf"],
                            // "form-group-class-pre-layer": "h_hls_v_channel_SUBSTREAM_FIELDS_input h_hls_v_channel_SUBSTREAM_FIELDS_libx264 h_hls_v_channel_SUBSTREAM_FIELDS_libx265 h_hls_v_channel_SUBSTREAM_FIELDS_h264_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_hevc_nvenc h_hls_v_channel_SUBSTREAM_FIELDS_no",
-                           "form-group-class": "h_st_channel_SUBSTREAM_FIELDS_input h_st_channel_SUBSTREAM_FIELDS_mjpeg h_st_channel_SUBSTREAM_FIELDS_hls h_st_channel_SUBSTREAM_FIELDS_rtmp h_st_channel_SUBSTREAM_FIELDS_jsmpeg h_st_channel_SUBSTREAM_FIELDS_flv h_st_channel_SUBSTREAM_FIELDS_mp4 h_st_channel_SUBSTREAM_FIELDS_h264",
+                           "form-group-visibleWhen": { "h_st_channel_SUBSTREAM_FIELDS": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"] },
                        },
                        {
                            "name": "detail-substream-output=cust_stream",
@@ -1822,7 +1825,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "1",
                    "example": "",
-                   "form-group-class": "h_sn_input h_sn_1",
+                   "form-group-visibleWhen": { "h_sn": "1" },
                    "possible": ""
                 },
                 {
@@ -1832,7 +1835,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_sn_input h_sn_1",
+                   "form-group-visibleWhen": { "h_sn": "1" },
                    "possible": ""
                 },
                 {
@@ -1842,7 +1845,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_sn_input h_sn_1",
+                   "form-group-visibleWhen": { "h_sn": "1" },
                    "possible": ""
                 },
                 {
@@ -1853,7 +1856,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_sn_input h_sn_1",
+                   "form-group-visibleWhen": { "h_sn": "1" },
                    "possible": ""
                 },
              ]
@@ -1866,7 +1869,7 @@ module.exports = (s,config,lang) => {
              "input-mapping": "record",
              "blockquote": lang.RecordingText,
              "blockquoteClass": 'global_tip',
-             "section-class": 'h_m_input h_m_record h_m_idle',
+             "section-visibleWhen": { "h_m": ["record","idle"] },
              "info": [
                  // {
                  //    "name": "height",
@@ -2018,7 +2021,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextCrf"],
                    "default": "15",
                    "example": "1",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": "1-23"
                 },
                 {
@@ -2028,7 +2031,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextPresetRecord"],
                    "default": "",
                    "example": "ultrafast",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": ""
                 },
                 {
@@ -2093,7 +2096,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextFps"],
                    "default": "",
                    "example": "2",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": ""
                 },
                 {
@@ -2102,7 +2105,7 @@ module.exports = (s,config,lang) => {
                    "description": "Height of the stream image.",
                    "default": "",
                    "example": "720",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": ""
                 },
                 {
@@ -2111,7 +2114,7 @@ module.exports = (s,config,lang) => {
                    "description": "Width of the stream image.",
                    "default": "",
                    "example": "1280",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": ""
                 },
                 {
@@ -2131,7 +2134,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "selector": "h_vc",
                    "fieldType": "select",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": [
                         {
                            "name": lang["No Rotation"],
@@ -2166,7 +2169,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextVf"],
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
+                   "form-group-visibleWhen": { "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
                    "possible": ""
                 }
              ]
@@ -2176,8 +2179,7 @@ module.exports = (s,config,lang) => {
              "name": lang['Recording Timestamp'],
              "color": "red",
              isAdvanced: true,
-             "section-pre-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
-             "section-class": "h_m_input h_m_record h_m_idle",
+             "section-visibleWhen": { "h_m": ["record","idle"], "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
              "isSection": true,
              "info": [
                  {
@@ -2197,7 +2199,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTimestampFont"],
                    "default": "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
                    "example": "",
-                   "form-group-class": "h_rtm_input h_rtm_1",
+                   "form-group-visibleWhen": { "h_rtm": "1" },
                    "possible": ""
                 },
                 {
@@ -2207,7 +2209,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTimestampFontSize"],
                    "default": "10",
                    "example": "",
-                   "form-group-class": "h_rtm_input h_rtm_1",
+                   "form-group-visibleWhen": { "h_rtm": "1" },
                    "possible": ""
                 },
                 {
@@ -2217,7 +2219,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTimestampColor"],
                    "default": "white",
                    "example": "",
-                   "form-group-class": "h_rtm_input h_rtm_1",
+                   "form-group-visibleWhen": { "h_rtm": "1" },
                    "possible": ""
                 },
                 {
@@ -2227,7 +2229,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTimestampBoxColor"],
                    "default": "0x00000000@1",
                    "example": "",
-                   "form-group-class": "h_rtm_input h_rtm_1",
+                   "form-group-visibleWhen": { "h_rtm": "1" },
                    "possible": ""
                 },
                 {
@@ -2237,7 +2239,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTimestampX"],
                    "default": "(w-tw)/2",
                    "example": "",
-                   "form-group-class": "h_rtm_input h_rtm_1",
+                   "form-group-visibleWhen": { "h_rtm": "1" },
                    "possible": ""
                 },
                 {
@@ -2247,7 +2249,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextTimestampY"],
                    "default": "0",
                    "example": "",
-                   "form-group-class": "h_rtm_input h_rtm_1",
+                   "form-group-visibleWhen": { "h_rtm": "1" },
                    "possible": ""
                 }
              ]
@@ -2257,8 +2259,7 @@ module.exports = (s,config,lang) => {
              "name": lang['Recording Watermark'],
              "color": "red",
              isAdvanced: true,
-             "section-pre-class": "h_vc_input h_vc_libvpx h_vc_libvpx-vp9 h_vc_libx264 h_vc_libx265 h_vc_hevc_nvenc h_vc_h264_nvenc h_vc_h264_nvmpi h_vc_h264_vaapi h_vc_hevc_vaapi h_vc_h264_qsv h_vc_hevc_qsv h_vc_mpeg2_qsv h_vc_default h_vc_none",
-             "section-class": "h_m_input h_m_record h_m_idle",
+             "section-visibleWhen": { "h_m": ["record","idle"], "h_vc": ["libvpx","libvpx-vp9","libx264","libx265","hevc_nvenc","h264_nvenc","h264_nvmpi","h264_vaapi","hevc_vaapi","h264_qsv","hevc_qsv","mpeg2_qsv","default","none"] },
              "isSection": true,
              "info": [
                  {
@@ -2278,7 +2279,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextWatermarkLocation"],
                    "default": "0",
                    "example": "/usr/share/watermark.logo",
-                   "form-group-class": "h_wat_input h_wat_1",
+                   "form-group-visibleWhen": { "h_wat": "1" },
                    "possible": ""
                 },
                 {
@@ -2289,7 +2290,7 @@ module.exports = (s,config,lang) => {
                     "default": "0",
                     "example": "",
                     "fieldType": "select",
-                    "form-group-class": "h_wat_input h_wat_1",
+                    "form-group-visibleWhen": { "h_wat": "1" },
                     "possible": [
                         {
                            "name": lang["Top Right"],
@@ -2343,7 +2344,7 @@ module.exports = (s,config,lang) => {
                    "name": "detail=record_timelapse_fps",
                    "field": lang['Creation Interval'],
                    "default": "900",
-                   "form-group-class": "h_rec_ti_input h_rec_ti_1",
+                   "form-group-visibleWhen": { "h_rec_ti": "1" },
                    "fieldType": "select",
                    "possible": [
                      {
@@ -2392,20 +2393,20 @@ module.exports = (s,config,lang) => {
                     hidden: true,
                    "name": "detail=record_timelapse_scale_x",
                    "field": lang['Image Width'],
-                   "form-group-class": "h_rec_ti_input h_rec_ti_1",
+                   "form-group-visibleWhen": { "h_rec_ti": "1" },
                 },
                 {
                     hidden: true,
                    "name": "detail=record_timelapse_scale_y",
                    "field": lang['Image Height'],
-                   "form-group-class": "h_rec_ti_input h_rec_ti_1",
+                   "form-group-visibleWhen": { "h_rec_ti": "1" },
                 },
                 {
                     isAdvanced: true,
                     hidden: true,
                    "name": "detail=record_timelapse_vf",
                    "field": lang['Video Filter'],
-                   "form-group-class": "h_rec_ti_input h_rec_ti_1",
+                   "form-group-visibleWhen": { "h_rec_ti": "1" },
                 },
              ]
           },
@@ -2415,7 +2416,7 @@ module.exports = (s,config,lang) => {
 
              "color": "red",
              isAdvanced: true,
-             "section-class": "h_rec_ti_input h_rec_ti_1",
+             "section-visibleWhen": { "h_rec_ti": "1" },
              "isSection": true,
              "info": [
                  {
@@ -2435,7 +2436,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextRecordTimelapseWatermarkLocation"],
                    "default": "0",
                    "example": "/usr/share/watermark.logo",
-                   "form-group-class": "h_wat_timelapse_input h_wat_timelapse_1",
+                   "form-group-visibleWhen": { "h_wat_timelapse": "1" },
                    "possible": ""
                 },
                 {
@@ -2446,7 +2447,7 @@ module.exports = (s,config,lang) => {
                     "default": "0",
                     "example": "",
                     "fieldType": "select",
-                    "form-group-class": "h_wat_timelapse_input h_wat_timelapse_1",
+                    "form-group-visibleWhen": { "h_wat_timelapse": "1" },
                     "possible": [
                         {
                            "name": lang["Top Right"],
@@ -2470,7 +2471,7 @@ module.exports = (s,config,lang) => {
           },
           "Detector": {
              "name": lang['Detector Settings'],
-             "headerTitle": `${lang['Detector Settings']} <small>${lang['Primary Engine']} : <b class="h_det_pam_input h_det_pam_1">Pixel Array</b><span class="h_det_pam_input h_det_pam_0"><b class="shinobi-detector_name"></b> <b class="shinobi-detector-invert">${lang['Not Connected']}</b><b class="shinobi-detector" style="display:none">${lang['Connected']}</b></span></small></h4>`,
+             "headerTitle": `${lang['Detector Settings']} <small>${lang['Primary Engine']} : <b visible-when='{"h_det_pam":"1"}'>Pixel Array</b><span visible-when='{"h_det_pam":"0"}'><b class="shinobi-detector_name"></b> <b class="shinobi-detector-invert">${lang['Not Connected']}</b><b class="shinobi-detector" style="display:none">${lang['Connected']}</b></span></small></h4>`,
              "color": "orange",
              "isSection": true,
              "input-mapping":"detector",
@@ -2486,7 +2487,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "",
                     "example": "",
-                    "form-group-class-pre-pre-layer": "h_det_input h_det_1",
+                    "form-group-visibleWhen": { "h_det": "1" },
                     "form-group-class-pre-layer": "form-group",
                     "possible": ""
                  },
@@ -2507,7 +2508,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextDetectorSave"],
                    "default": "1",
                    "example": "",
-                   "form-group-class": "h_det_input h_det_1",
+                   "form-group-visibleWhen": { "h_det": "1" },
                    "fieldType": "select",
                    "possible": yesNoPossibility
                 },
@@ -2519,7 +2520,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "selector": "h_det_fil",
                    "fieldType": "select",
-                   "form-group-class-pre-layer": "h_det_input h_det_1",
+                   "form-group-visibleWhen": { "h_det": "1" },
                    "possible": yesNoPossibility
                 },
                 {
@@ -2528,8 +2529,7 @@ module.exports = (s,config,lang) => {
                    "description": "",
                    "default": "0",
                    "fieldType": "select",
-                   "form-group-class": "h_det_fil_input h_det_fil_1",
-                   "form-group-class-pre-layer": "h_det_input h_det_1",
+                   "form-group-visibleWhen": { "h_det_fil": "1", "h_det": "1" },
                    "possible": yesNoPossibility
                 },
                 {
@@ -2554,50 +2554,12 @@ module.exports = (s,config,lang) => {
                      ]
                 },
                 {
-                    hidden: true,
-                   "name": "detail=detector_trigger",
-                   "field": lang['Trigger Record'],
-                   "description": "This will order the camera to record if it is set to \"Watch-Only\" when an Event is detected.",
-                   "default": "0",
-                   "example": "",
-                   "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
-                   "fieldType": "select",
-                   "possible": yesNoPossibility
-                },
-                {
-                   "name": "detail=detector_buffer_seconds_before",
-                   "field": lang['Buffer Time from Event'],
-                   "description": lang["fieldTextBufferTimeFromEvent"],
-                   "default": "5",
-                   "form-group-class": "h_det_input h_det_1",
-                   "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_sip",
-                },
-                {
-                   "name": "detail=detector_timeout",
-                   "field": lang["Recording Timeout"],
-                   "description": "The length of time \"Trigger Record\" will run for. This is read in minutes.",
-                   "default": "10",
-                   "example": "",
-                   "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
-                   "possible": ""
-                },
-                {
-                   "name": "detail=watchdog_reset",
-                   "field": lang["Timeout Reset on Next Event"],
-                   "description": lang["fieldTextWatchdogReset"],
-                   "default": "1",
-                   "fieldType": "select",
-                   "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
-                   "possible": yesNoPossibility
-                },
-                {
                     isAdvanced: true,
                     hidden: true,
                    "name": "detail=detector_delete_motionless_videos",
                    "field": lang['Delete Motionless Video'],
                    "default": "0",
-                   "form-group-class": "h_det_input h_det_1",
-                   "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_del",
+                   "form-group-visibleWhen": { "h_det": "1", "h_rec_mtd": "del" },
                    "fieldType": "select",
                    "possible": yesNoPossibility
                 },
@@ -2642,14 +2604,14 @@ module.exports = (s,config,lang) => {
                    "default": "0",
                    "example": "",
                    "selector": "h_det_fra",
-                   "form-group-class": "h_det_input h_det_1",
+                   "form-group-visibleWhen": { "h_det": "1" },
                    "fieldType": "select",
                    "possible": yesNoPossibility
                 },
                 {
                     isAdvanced: true,
                     hidden: true,
-                    "form-group-class": "h_det_input h_det_1",
+                    "form-group-visibleWhen": { "h_det": "1" },
                    "name": "detail=detector_fps",
                    "field": lang["Detector Rate"],
                    "description": lang["fieldTextDetectorFps"],
@@ -2660,7 +2622,7 @@ module.exports = (s,config,lang) => {
                 {
                     isAdvanced: true,
                     hidden: true,
-                    "form-group-class": "h_det_input h_det_1",
+                    "form-group-visibleWhen": { "h_det": "1" },
                    "name": "detail=detector_scale_x",
                    "field": lang["Feed-in Image Width"],
                    "description": lang["fieldTextDetectorScaleX"],
@@ -2671,7 +2633,7 @@ module.exports = (s,config,lang) => {
                 {
                     isAdvanced: true,
                     hidden: true,
-                    "form-group-class": "h_det_input h_det_1",
+                    "form-group-visibleWhen": { "h_det": "1" },
                    "name": "detail=detector_scale_y",
                    "field": lang["Feed-in Image Height"],
                    "description": lang["fieldTextDetectorScaleY"],
@@ -2687,15 +2649,8 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextDetectorLockTimeout"],
                    "default": "2000",
                    "example": "",
-                   "form-group-class": "h_det_input h_det_1",
+                   "form-group-visibleWhen": { "h_det": "1" },
                    "possible": ""
-                },
-                {
-                    isAdvanced: true,
-                   "name": "detail=detector_send_video_length",
-                   "field": lang["Notification Video Length"],
-                   "description": lang["fieldTextDetectorSendVideoLength"],
-                   "default": "10"
                 },
                 {
                     isAdvanced: true,
@@ -2715,12 +2670,12 @@ module.exports = (s,config,lang) => {
                 {
                     hidden: true,
                     "name": lang['Motion Detection'],
-                    "headerTitle": `${lang['Motion Detection']} <small>${lang['Primary Engine']} : <b class="h_det_pam_input h_det_pam_1">Pixel Array</b><span class="h_det_pam_input h_det_pam_0"><b class="shinobi-detector_name"></b> <b class="shinobi-detector-invert">${lang['Not Connected']}</b><b class="shinobi-detector" style="display:none">${lang['Connected']}</b></span></small>`,
+                    "headerTitle": `${lang['Motion Detection']} <small>${lang['Primary Engine']} : <b visible-when='{"h_det_pam":"1"}'>Pixel Array</b><span visible-when='{"h_det_pam":"0"}'><b class="shinobi-detector_name"></b> <b class="shinobi-detector-invert">${lang['Not Connected']}</b><b class="shinobi-detector" style="display:none">${lang['Connected']}</b></span></small>`,
                     "color": "orange",
                     id: "monSectionDetectorMotion",
                     isSection: true,
                     isFormGroupGroup: true,
-                    "section-class": "h_det_input h_det_1",
+                    "section-visibleWhen": { "h_det": "1" },
                     "info": [
                         {
                            "name": "detail=detector_pam",
@@ -2823,7 +2778,7 @@ module.exports = (s,config,lang) => {
                            "possible": yesNoPossibility
                         },
                         {
-                            "form-group-class": "h_det_tile_mode_input h_det_tile_mode_1",
+                            "form-group-visibleWhen": { "h_det_tile_mode": "1" },
                            "name": "detail=detector_tile_size",
                            "field": lang["Tile Size"],
                            "description": lang.fieldTextTileSize,
@@ -2858,7 +2813,7 @@ module.exports = (s,config,lang) => {
                    isFormGroupGroup: true,
                    isSection: true,
                    "input-mapping": "detector_object",
-                   "section-class": "h_det_input h_det_1",
+                   "section-visibleWhen": { "h_det": "1" },
                    "info": [
                        {
                           "name": "detail=detector_use_detect_object",
@@ -2879,7 +2834,7 @@ module.exports = (s,config,lang) => {
                          "default": "all",
                          "attribute": "multiple",
                          "fieldType": "select",
-                         "form-group-class": "h_casc_input h_casc_1",
+                         "form-group-visibleWhen": { "h_casc": "1" },
                          "possible": [
                             {
                                "name": `${lang.All} (${lang.Default})`,
@@ -2893,7 +2848,7 @@ module.exports = (s,config,lang) => {
                          "default": "0",
                          "fieldType": "select",
                          "selector": "h_obj_ignore_move",
-                         "form-group-class": "h_casc_input h_casc_1",
+                         "form-group-visibleWhen": { "h_casc": "1" },
                          "possible": yesNoPossibility
                       },
                       {
@@ -2902,7 +2857,7 @@ module.exports = (s,config,lang) => {
                          "field": lang['Minimum Movement'],
                          "description": lang.inPercent,
                          "default": "5",
-                         "form-group-class": "h_obj_ignore_move_input h_obj_ignore_move_1"
+                         "form-group-visibleWhen": { "h_obj_ignore_move": "1" }
                       },
                       {
                           isAdvanced: true,
@@ -2911,7 +2866,7 @@ module.exports = (s,config,lang) => {
                          "description": lang["fieldTextDetectorSendFramesObject"],
                          "default": "1",
                          "fieldType": "select",
-                         "form-group-class": "h_casc_input h_casc_1",
+                         "form-group-visibleWhen": { "h_casc": "1" },
                          "possible": yesNoPossibility
                       },
                       {
@@ -2922,7 +2877,7 @@ module.exports = (s,config,lang) => {
                          "description": lang["fieldTextDetectorObjCountInRegion"],
                          "default": "0",
                          "example": "",
-                         "form-group-class": "h_det_count_input h_det_count_1",
+                         "form-group-visibleWhen": { "h_det_count": "1" },
                          "fieldType": "select",
                          "possible": yesNoPossibility
                       },
@@ -2933,7 +2888,7 @@ module.exports = (s,config,lang) => {
                          "default": "1",
                          "example": "",
                          "fieldType": "select",
-                         "form-group-class": "h_casc_input h_casc_1",
+                         "form-group-visibleWhen": { "h_casc": "1" },
                          "possible": yesNoPossibility
                       },
                       {
@@ -2945,7 +2900,7 @@ module.exports = (s,config,lang) => {
                          "example": "",
                          "selector": "h_det_mot_fir",
                          "fieldType": "select",
-                         "form-group-class": "h_casc_input h_casc_1",
+                         "form-group-visibleWhen": { "h_casc": "1" },
                          "possible": yesNoPossibility
                      },
                      {
@@ -2955,7 +2910,7 @@ module.exports = (s,config,lang) => {
                         "description": "",
                         "default": "2",
                         "example": "",
-                        "form-group-class": "h_casc_input h_casc_1",
+                        "form-group-visibleWhen": { "h_casc": "1" },
                         "possible": ""
                      },
                      {
@@ -2965,7 +2920,7 @@ module.exports = (s,config,lang) => {
                         "field": lang['Image Width'],
                         "description": "",
                         "default": "1280",
-                        "form-group-class": "h_casc_input h_casc_1",
+                        "form-group-visibleWhen": { "h_casc": "1" },
                         "fieldType": "number",
                         "numberMin": "1",
                         "possible": ""
@@ -2977,7 +2932,7 @@ module.exports = (s,config,lang) => {
                         "field": lang['Image Height'],
                         "description": "",
                         "default": "720",
-                        "form-group-class": "h_casc_input h_casc_1",
+                        "form-group-visibleWhen": { "h_casc": "1" },
                         "fieldType": "number",
                         "numberMin": "1",
                         "possible": ""
@@ -2991,7 +2946,7 @@ module.exports = (s,config,lang) => {
                   id: "monSectionLineCounter",
                   isSection: true,
                   isFormGroupGroup: true,
-                  "section-class": "h_det_input h_det_1",
+                  "section-visibleWhen": { "h_det": "1" },
                   "info": [
                         {
                             "name": "detail=detectorLineCounter",
@@ -3004,13 +2959,13 @@ module.exports = (s,config,lang) => {
                         },
                         {
                             "id": "monitorSettings-lineCounter-canvas-container",
-                            "form-group-class": "h_det_line_input h_det_line_1",
+                            "form-group-visibleWhen": { "h_det_line": "1" },
                             "fieldType": "div",
                             "style": "overflow-x: auto; width: 100%; text-align: center",
                         },
                         {
                             "id": "detector-line-counter-spacing",
-                            "form-group-class": "h_det_line_input h_det_line_1",
+                            "form-group-visibleWhen": { "h_det_line": "1" },
                             "field": lang['Line Spacing'],
                             "fieldType": "number",
                             "numberMin": "10",
@@ -3018,7 +2973,7 @@ module.exports = (s,config,lang) => {
                         },
                         {
                             "name": "detail=detectorLineCounterTags",
-                            "form-group-class": "h_det_line_input h_det_line_1",
+                            "form-group-visibleWhen": { "h_det_line": "1" },
                             "field": lang['Objects to Count'],
                             "placeholder": "person"
                         },
@@ -3029,13 +2984,15 @@ module.exports = (s,config,lang) => {
                             "info": [
                                 {
                                     "id": "detector-line-counter-name-down",
-                                    "form-group-class": "h_det_line_input h_det_line_1 col-md-6",
+                                    "form-group-class": "col-md-6",
+                                    "form-group-visibleWhen": { "h_det_line": "1" },
                                     "field": lang['Down Label'],
                                     "placeholder": "Down"
                                 },
                                 {
                                     "id": "detector-line-counter-name-up",
-                                    "form-group-class": "h_det_line_input h_det_line_1 col-md-6",
+                                    "form-group-class": "col-md-6",
+                                    "form-group-visibleWhen": { "h_det_line": "1" },
                                     "field": lang['Up Label'],
                                     "placeholder": "Up"
                                 }
@@ -3043,7 +3000,7 @@ module.exports = (s,config,lang) => {
                         },
                         {
                             "id": "detector-line-counter-reset-daily",
-                            "form-group-class": "h_det_line_input h_det_line_1",
+                            "form-group-visibleWhen": { "h_det_line": "1" },
                             "field": lang['Reset Daily'],
                             "fieldType": "select",
                             "possible": yesNoPossibility
@@ -3058,8 +3015,54 @@ module.exports = (s,config,lang) => {
                    id: "monSectionDetectorTraditionalRecording",
                    isSection: true,
                    isFormGroupGroup: true,
-                   "section-class": "h_det_input h_det_1",
+                   "section-visibleWhen": [{ "h_det": "1" }, { "h_onvif_events": "1" }],
                    "info": [
+                       {
+                           hidden: true,
+                          "name": "detail=detector_trigger",
+                          "field": lang['Trigger Record'],
+                          "description": "This will order the camera to record if it is set to \"Watch-Only\" when an Event is detected.",
+                          "default": "0",
+                          "example": "",
+                          "form-group-visibleWhen": { "h_rec_mtd": ["hot","sip"] },
+                          "fieldType": "select",
+                          "possible": yesNoPossibility
+                       },
+                       {
+                          "name": "detail=detector_buffer_seconds_before",
+                          "field": lang['Buffer Time from Event'],
+                          "description": lang["fieldTextBufferTimeFromEvent"],
+                          "default": "5",
+                          "form-group-visibleWhen": { "h_det": "1" },
+                          "form-group-visibleWhen": { "h_rec_mtd": "sip" },
+                       },
+                       {
+                          "name": "detail=detector_timeout",
+                          "field": lang["Recording Timeout"],
+                          "description": "The length of time \"Trigger Record\" will run for. This is read in minutes.",
+                          "default": "10",
+                          "example": "",
+                          "form-group-visibleWhen": { "h_rec_mtd": ["hot","sip"] },
+                          "possible": ""
+                       },
+                       {
+                          "name": "detail=watchdog_reset",
+                          "field": lang["Timeout Reset on Next Event"],
+                          "description": lang["fieldTextWatchdogReset"],
+                          "default": "1",
+                          "fieldType": "select",
+                          "form-group-visibleWhen": { "h_rec_mtd": ["hot","sip"] },
+                          "possible": yesNoPossibility
+                       },
+                       {
+                          "name": "detail=detector_record_overlap",
+                          "field": lang['Recording Overlap'],
+                          "description": lang.fieldTextRecordingOverlap,
+                          "default": "0",
+                          "form-group-visibleWhen": { "h_rec_mtd": ["hot","sip"] },
+                          "fieldType": "select",
+                          "possible": yesNoPossibility
+                       },
                        {
                           "name": "detail=detector_buffer_vcodec",
                           "field": lang['HLS Video Encoder'],
@@ -3130,7 +3133,7 @@ module.exports = (s,config,lang) => {
                           "description": "",
                           "default": "30",
                           "example": "",
-                          "form-group-class": "h_buff_input h_buff_libx264 h_buff_h264_vaapi h_buff_hevc_vaapi",
+                          "form-group-visibleWhen": { "h_buff": ["libx264","h264_vaapi","hevc_vaapi"] },
                           "possible": ""
                        },
                        {
@@ -3141,7 +3144,7 @@ module.exports = (s,config,lang) => {
                           "fieldType": "number",
                           "numberMin": "1",
                           "example": "640",
-                          "form-group-class": "h_buff_input h_buff_libx264 h_buff_h264_vaapi h_buff_hevc_vaapi",
+                          "form-group-visibleWhen": { "h_buff": ["libx264","h264_vaapi","hevc_vaapi"] },
                           "possible": ""
                        },
                        {
@@ -3152,7 +3155,7 @@ module.exports = (s,config,lang) => {
                           "fieldType": "number",
                           "numberMin": "1",
                           "example": "480",
-                          "form-group-class": "h_buff_input h_buff_libx264 h_buff_h264_vaapi h_buff_hevc_vaapi",
+                          "form-group-visibleWhen": { "h_buff": ["libx264","h264_vaapi","hevc_vaapi"] },
                           "possible": ""
                        },
                        {
@@ -3164,15 +3167,6 @@ module.exports = (s,config,lang) => {
                            name: 'detail=event_record_probesize',
                            field: lang['Probe Size'],
                            default: '32',
-                       },
-                       {
-                          "name": "detail=detector_record_overlap",
-                          "field": lang['Recording Overlap'],
-                          "description": lang.fieldTextRecordingOverlap,
-                          "default": "0",
-                          "form-group-class-pre-layer": "h_rec_mtd_input h_rec_mtd_hot h_rec_mtd_sip",
-                          "fieldType": "select",
-                          "possible": yesNoPossibility
                        },
                        {
                           "fieldType": "div",
@@ -3188,7 +3182,7 @@ module.exports = (s,config,lang) => {
                    id: "monSectionAudioDetector",
                    isSection: true,
                    isFormGroupGroup: true,
-                   "section-class": "h_det_input h_det_1",
+                   "section-visibleWhen": { "h_det": "1" },
                    "info": [
                        {
                           "name": "detail=detector_audio",
@@ -3226,7 +3220,7 @@ module.exports = (s,config,lang) => {
                   isFormGroupGroup: true,
                   "blockquoteClass": "global_tip",
                   "blockquote": lang.eventBasedPtzDescription,
-                  "section-class": "h_det_input h_det_1",
+                  "section-visibleWhen": { "h_det": "1" },
                   "info": [
                       {
                          "name": "detail=detectorEventPtz",
@@ -3255,7 +3249,7 @@ module.exports = (s,config,lang) => {
                     isSection: true,
                     isAdvanced: true,
                     isFormGroupGroup: true,
-                    "section-class": "h_det_input h_det_1",
+                    "section-visibleWhen": { "h_det": "1" },
                     "info": [
                         {
                            "name": "detail=detector_webhook",
@@ -3265,7 +3259,7 @@ module.exports = (s,config,lang) => {
                            "example": "",
                            "selector": "h_det_web",
                            "fieldType": "select",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
+                           "form-group-visibleWhen": { "h_det": "1" },
                            "possible": yesNoPossibility
                         },
                         {
@@ -3274,8 +3268,7 @@ module.exports = (s,config,lang) => {
                            "description": lang["fieldTextDetectorWebhookTimeout"],
                            "default": "10",
                            "example": "",
-                           "form-group-class": "h_det_web_input h_det_web_1",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
+                           "form-group-visibleWhen": { "h_det_web": "1", "h_det": "1" },
                            "possible": ""
                         },
                         {
@@ -3285,8 +3278,7 @@ module.exports = (s,config,lang) => {
                            "description": "",
                            "default": "",
                            "example": "http://111.111.111.111?mid={{MONITOR_ID}}&group={{GROUP_KEY}}&confidence={{CONFIDENCE}}",
-                           "form-group-class": "h_det_web_input h_det_web_1",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
+                           "form-group-visibleWhen": { "h_det_web": "1", "h_det": "1" },
                            "possible": ""
                         },
                         {
@@ -3295,8 +3287,7 @@ module.exports = (s,config,lang) => {
                            "description": "",
                            "default": "GET",
                            "example": "",
-                           "form-group-class": "h_det_web_input h_det_web_1",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
+                           "form-group-visibleWhen": { "h_det_web": "1", "h_det": "1" },
                            "fieldType": "select",
                            "possible": [
                                {
@@ -3324,7 +3315,7 @@ module.exports = (s,config,lang) => {
                     isSection: true,
                     isAdvanced: true,
                     isFormGroupGroup: true,
-                    "section-class": "h_det_input h_det_1",
+                    "section-visibleWhen": { "h_det": "1" },
                     "info": [
                         {
                            "name": "detail=detector_command_enable",
@@ -3334,7 +3325,7 @@ module.exports = (s,config,lang) => {
                            "example": "",
                            "selector": "h_det_com",
                            "fieldType": "select",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
+                           "form-group-visibleWhen": { "h_det": "1" },
                            "possible": yesNoPossibility
                         },
                         {
@@ -3342,9 +3333,8 @@ module.exports = (s,config,lang) => {
                            "field": lang['Command'],
                            "description": lang["fieldTextDetectorCommand"],
                            "default": "",
-                           "form-group-class": "h_det_com_input h_det_com_1",
+                           "form-group-visibleWhen": { "h_det_com": "1", "h_det": "1" },
                            "example": "/home/script.sh {{MONITOR_ID}} {{GROUP_KEY}} {{CONFIDENCE}}",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
                            "possible": ""
                         },
                         {
@@ -3353,8 +3343,7 @@ module.exports = (s,config,lang) => {
                            "description": lang["fieldTextDetectorCommandTimeout"],
                            "default": "10",
                            "example": "",
-                           "form-group-class": "h_det_com_input h_det_com_1",
-                           "form-group-class-pre-layer": "h_det_input h_det_1",
+                           "form-group-visibleWhen": { "h_det_com": "1", "h_det": "1" },
                            "possible": ""
                         },
                     ]
@@ -3367,7 +3356,7 @@ module.exports = (s,config,lang) => {
                    isSection: true,
                    isAdvanced: true,
                    isFormGroupGroup: true,
-                   "section-class": "h_det_input h_det_1",
+                   "section-visibleWhen": { "h_det": "1" },
                    "info": [
                        {
                           "name": "detail=detector_notrigger",
@@ -3412,7 +3401,7 @@ module.exports = (s,config,lang) => {
                         "description": "",
                         "default": "",
                         "example": "http://111.111.111.111?mid={{MONITOR_ID}}&group={{GROUP_KEY}}&confidence={{CONFIDENCE}}",
-                        "form-group-class": "h_det_web_notrig_input h_det_web_notrig_1",
+                        "form-group-visibleWhen": { "h_det_web_notrig": "1" },
                         "possible": ""
                      },
                      {
@@ -3421,7 +3410,7 @@ module.exports = (s,config,lang) => {
                         "description": "",
                         "default": "GET",
                         "example": "",
-                        "form-group-class": "h_det_web_notrig_input h_det_web_notrig_1",
+                        "form-group-visibleWhen": { "h_det_web_notrig": "1" },
                         "fieldType": "select",
                         "possible": [
                             {
@@ -3455,7 +3444,7 @@ module.exports = (s,config,lang) => {
                         "field": lang['Command'],
                         "description": lang["fieldTextDetectorNotriggerCommand"],
                         "default": "",
-                        "form-group-class": "h_det_com_notrig_input h_det_com_notrig_1",
+                        "form-group-visibleWhen": { "h_det_com_notrig": "1" },
                         "example": "/home/script.sh {{MONITOR_ID}} {{GROUP_KEY}} {{CONFIDENCE}}",
                         "possible": ""
                      },
@@ -3466,7 +3455,7 @@ module.exports = (s,config,lang) => {
                         "description": lang["fieldTextDetectorNotriggerCommandTimeout"],
                         "default": "10",
                         "example": "",
-                        "form-group-class": "h_det_com_notrig_input h_det_com_notrig_1",
+                        "form-group-visibleWhen": { "h_det_com_notrig": "1" },
                         "possible": ""
                      },
                    ]
@@ -3495,7 +3484,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "",
                     "example": "http://111.111.111.111:8080",
-                    "form-group-class": "h_c_input h_c_1",
+                    "form-group-visibleWhen": { "h_c": "1" },
                     "possible": ""
                  },
                  {
@@ -3530,7 +3519,7 @@ module.exports = (s,config,lang) => {
                     "field": lang['ONVIF Home Control'],
                     "description": lang.fieldTextOnvifHomeControl,
                     "default": "0",
-                    "form-group-class": "h_control_call_input h_control_call_ONVIF",
+                    "form-group-visibleWhen": { "h_control_call": "ONVIF" },
                     "fieldType": "select",
                     "possible": [
                         {
@@ -3553,7 +3542,7 @@ module.exports = (s,config,lang) => {
                     "field": lang['Digest Authentication'],
                     "default": "0",
                     "fieldType": "select",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": yesNoPossibility
                  },
                  {
@@ -3585,7 +3574,7 @@ module.exports = (s,config,lang) => {
                     "example": "",
                     "selector": "h_cs",
                     "fieldType": "select",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_ONVIF h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","ONVIF","PUT","POST"] },
                     "possible": [
                        {
                           "name": lang.No,
@@ -3607,7 +3596,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "1000",
                     "example": "",
-                    "form-group-class": "h_cs_input h_cs_1",
+                    "form-group-visibleWhen": { "h_cs": "1" },
                     "possible": ""
                  },
                  {
@@ -3616,7 +3605,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "0.1",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_ONVIF",
+                    "form-group-visibleWhen": { "h_control_call": "ONVIF" },
                     "possible": ""
                  },
                  {
@@ -3635,7 +3624,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "person",
                     "example": "",
-                    "form-group-class": "h_det_tracking_input h_det_tracking_1",
+                    "form-group-visibleWhen": { "h_det_tracking": "1" },
                     "possible": ""
                  },
                  // {
@@ -3663,7 +3652,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3672,7 +3661,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3681,8 +3670,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class-pre-layer": "h_cs_input h_cs_1 h_cs_2",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"], "h_cs": ["1","2"] },
                     "possible": ""
                  },
                  {
@@ -3691,7 +3679,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3700,8 +3688,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class-pre-layer": "h_cs_input h_cs_1 h_cs_2",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"], "h_cs": ["1","2"] },
                     "possible": ""
                  },
                  {
@@ -3710,7 +3697,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3719,8 +3706,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class-pre-layer": "h_cs_input h_cs_1 h_cs_2",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"], "h_cs": ["1","2"] },
                     "possible": ""
                  },
                  {
@@ -3729,7 +3715,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3738,8 +3724,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class-pre-layer": "h_cs_input h_cs_1 h_cs_2",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"], "h_cs": ["1","2"] },
                     "possible": ""
                  },
                  {
@@ -3748,7 +3733,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3757,7 +3742,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3766,7 +3751,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3775,8 +3760,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class-pre-layer": "h_cs_input h_cs_1 h_cs_2",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"], "h_cs": ["1","2"] },
                     "possible": ""
                  },
                  {
@@ -3785,7 +3769,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"] },
                     "possible": ""
                  },
                  {
@@ -3794,8 +3778,7 @@ module.exports = (s,config,lang) => {
                     "description": "",
                     "default": "/",
                     "example": "",
-                    "form-group-class-pre-layer": "h_cs_input h_cs_1 h_cs_2",
-                    "form-group-class": "h_control_call_input h_control_call_GET h_control_call_PUT h_control_call_POST",
+                    "form-group-visibleWhen": { "h_control_call": ["GET","PUT","POST"], "h_cs": ["1","2"] },
                     "possible": ""
                  },
                  {
@@ -3834,7 +3817,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="field=mode"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3845,7 +3828,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="field=tags"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3854,7 +3837,7 @@ module.exports = (s,config,lang) => {
                    "default": "0",
                    "fieldType": "select",
                    "attribute": `copy="field=detail=auto_compress_videos"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3865,7 +3848,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="field=detail=stream_channels"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3876,7 +3859,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionConnection"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3887,7 +3870,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionInput"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3898,7 +3881,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionTimelapse"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3909,7 +3892,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionStream,#monSectionStreamTimestamp,#monSectionStreamWatermark"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3920,7 +3903,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionJPEGAPI"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3931,7 +3914,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionRecording,#monSectionRecordingTimestamp,#monSectionRecordingWatermark"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3942,7 +3925,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionDetector,#monSectionDetectorBuffer,#monSectionLisencePlateDetector,#monSectionNoMotionDetector"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3950,7 +3933,7 @@ module.exports = (s,config,lang) => {
                    "field": lang['Regions'],
                    "fieldType": "select",
                    "attribute": `copy="field=detail=cords"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3961,7 +3944,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionControl"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3972,7 +3955,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionCustom"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3983,7 +3966,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionGrouping"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -3994,7 +3977,7 @@ module.exports = (s,config,lang) => {
                    "example": "",
                    "fieldType": "select",
                    "attribute": `copy="#monSectionLogging"`,
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "form-group-class-pre-layer": "col-md-6",
                    "possible": yesNoPossibility
                 },
@@ -4006,7 +3989,7 @@ module.exports = (s,config,lang) => {
                    "fieldType": "select",
                    "attribute": "multiple",
                     id: 'copy_settings_monitors',
-                   "form-group-class": "h_copy_settings_input h_copy_settings_1",
+                   "form-group-visibleWhen": { "h_copy_settings": "1" },
                    "possible": [
                       {
                          "name": lang['New Monitor'],
@@ -4033,6 +4016,14 @@ module.exports = (s,config,lang) => {
                     "info": [
 
                     ],
+                 },
+                 {
+                     isAdvanced: true,
+                    "name": "detail=detector_send_video_length",
+                    "field": lang["Notification Video Length"],
+                    "section-visibleWhen": [{ "h_det": "1" }, { "h_onvif_events": "1" }],
+                    "description": lang["fieldTextDetectorSendVideoLength"],
+                    "default": "10"
                  },
                 {
                    "name": "detail=notify_onUnexpectedExit",
@@ -4091,7 +4082,7 @@ module.exports = (s,config,lang) => {
                    "name": "detail=cust_snap",
                    "field": lang["JPEG API Flags"],
                    "description": lang["fieldTextCustSnap"],
-                   "form-group-class": "h_sn_input h_sn_1",
+                   "form-group-visibleWhen": { "h_sn": "1" },
                 },
                 {
                     hidden: true,
@@ -4104,7 +4095,7 @@ module.exports = (s,config,lang) => {
                    "name": "detail=cust_record",
                    "field": lang["Recording Flags"],
                    "description": lang["fieldTextCustRecord"],
-                   "form-group-class": "h_m_input h_m_record",
+                   "form-group-visibleWhen": { "h_m": "record" },
                 },
                 {
                     hidden: true,
@@ -4130,7 +4121,7 @@ module.exports = (s,config,lang) => {
                    "description": lang["fieldTextCustSipRecord"],
                    "default": "",
                    "example": "",
-                   "form-group-class": "h_rec_mtd_input h_rec_mtd_sip",
+                   "form-group-visibleWhen": { "h_rec_mtd": "sip" },
                    "possible": ""
                 },
                 {

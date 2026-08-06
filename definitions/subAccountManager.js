@@ -154,7 +154,8 @@ module.exports = (s,config,lang) => {
            },
            "Monitors": {
               noHeader: true,
-              "section-class": "search-parent h_perm_allmonitors_input h_perm_allmonitors_1",
+              "section-class": "search-parent",
+              "section-visibleWhen": { "h_perm_allmonitors": "1" },
               "color": "green",
               "info": [
                  {

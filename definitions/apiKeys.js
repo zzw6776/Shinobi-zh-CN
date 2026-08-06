@@ -159,7 +159,8 @@ module.exports = (s,config,lang) => {
             "Monitors": {
               noHeader: true,
               styles: "display:none;",
-              "section-class": "search-parent h_apiKey_monitorsRestricted_input h_apiKey_monitorsRestricted_1",
+              "section-class": "search-parent",
+              "section-visibleWhen": { "h_apiKey_monitorsRestricted": "1" },
               "color": "green",
               "info": [
                  {

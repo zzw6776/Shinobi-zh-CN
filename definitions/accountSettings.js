@@ -25,7 +25,7 @@ module.exports = (s,config,lang) => {
                      "field": lang['API Key'],
                      "name": "detail=shinobihub_key",
                      "placeholder": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-                     "form-group-class": "autosave_shinobihub_input autosave_shinobihub_1",
+                     "form-group-visibleWhen": { "autosave_shinobihub": "1" },
                      "description": "",
                      "default": "",
                      "example": "",

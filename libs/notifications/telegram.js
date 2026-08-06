@@ -292,7 +292,7 @@ module.exports = function(s,config,lang,getSnapshot){
                isFormGroupGroup: true,
                "name": "Telegram",
                "color": "blue",
-               "section-class": "h_det_telegram_input h_det_telegram_1",
+               "section-visibleWhen": { "h_det_telegram": "1" },
                "info": [
                    {
                       "name": "detail=detector_telegrambot_send_video",
@@ -368,7 +368,7 @@ module.exports = function(s,config,lang,getSnapshot){
                       "fieldType": "password",
                       "placeholder": "XXXXXXXXXXXXXXXXXXXXXXXX.XXXXXXXXXXXXXXX_XXXXXXXXXXXXXXXXXX",
                       "field": lang.Token,
-                      "form-group-class":"u_telegram_bot_input u_telegram_bot_1",
+                      "form-group-visibleWhen":{ "u_telegram_bot": "1" },
                       "description": "",
                       "default": "",
                       "example": "",
@@ -379,7 +379,7 @@ module.exports = function(s,config,lang,getSnapshot){
                       "name": "detail=telegrambot_channel",
                       "placeholder": "xxxxxxxxxxxxxxxxxx",
                       "field": lang["Recipient ID"],
-                      "form-group-class":"u_telegram_bot_input u_telegram_bot_1",
+                      "form-group-visibleWhen":{ "u_telegram_bot": "1" },
                       "description": "",
                       "default": "",
                       "example": "",

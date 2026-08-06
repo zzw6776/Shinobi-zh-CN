@@ -299,7 +299,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                     isFormGroupGroup: true,
                     name: 'Pushover',
                     color: 'blue',
-                    'section-class': 'h_det_pushover_input h_det_pushover_1',
+                    'section-visibleWhen': { "h_det_pushover": "1" },
                     info: [
                         {
                             name: 'detail=detector_pushover_timeout',
@@ -362,7 +362,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                         fieldType: 'password',
                         placeholder: 'azGDORePK8gMaC0QOYAMyEEuzJnyUi',
                         field: lang.Token,
-                        'form-group-class': 'u_pushover_input u_pushover_1',
+                        'form-group-visibleWhen': { "u_pushover": "1" },
                         description: '',
                         default: '',
                         example: '',
@@ -373,7 +373,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                         name: 'detail=pushover_recipient_identifier',
                         placeholder: 'uQiRzpo4DXghDmr9QzzfQu27cmVRsG',
                         field: lang['Recipient ID'],
-                        'form-group-class': 'u_pushover_input u_pushover_1',
+                        'form-group-visibleWhen': { "u_pushover": "1" },
                         description: '',
                         default: '',
                         example: '',

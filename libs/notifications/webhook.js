@@ -284,14 +284,14 @@ module.exports = function(s,config,lang,getSnapshot){
                "name": "detail=global_webhook_url",
                "placeholder": "http://your-webhook-point/onEvent/{{INNER_EVENT_TITLE}}?info={{INNER_EVENT_INFO}}",
                "field": lang["Webhook URL"],
-               "form-group-class":"u_global_webhook_input u_global_webhook_1",
+               "form-group-visibleWhen":{ "u_global_webhook": "1" },
            },
            {
                 hidden: true,
                 "name": "detail=global_webhook_method",
                "field": lang['Call Method'],
                "default": "GET",
-               "form-group-class":"u_global_webhook_input u_global_webhook_1",
+               "form-group-visibleWhen":{ "u_global_webhook": "1" },
                "fieldType": "select",
                "possible": [
                    {

@@ -332,7 +332,7 @@ module.exports = function(s,config,lang,getSnapshot){
                 isFormGroupGroup: true,
                 name: `${lang.Email} (${lang['System Level']})`,
                 color: 'blue',
-                'section-class': 'h_det_input h_det_1',
+                'section-visibleWhen': { "h_det": "1" },
                 info: [
                     {
                        "name": "detail=detector_mail",

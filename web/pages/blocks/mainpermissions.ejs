@@ -123,9 +123,7 @@ $('#edit').change(function(e){
     $.aN.e.find('[detail]').first().change()
 }).change()
 $.aN.e.on('change','[selector]',function(e){
-    e.v=$(this).val();e.a=$(this).attr('selector')
-    $.aN.e.find('.'+e.a+'_input').hide()
-    $.aN.e.find('.'+e.a+'_'+e.v).show();
+    onSelectorChange(this,$.aN.e)
 }).find('[selector]').change();
 $.aN.e.find('[detail="permissions"]').change(function(){
     var hasAllPrivileges = $(this).val() === 'all'

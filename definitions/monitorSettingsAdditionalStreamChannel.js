@@ -1,4 +1,4 @@
-module.exports = (config,lang) => {
+module.exports = (s,config,lang) => {
     return {
           "section": "Monitor Settings Additional Stream Channel",
           "blocks": {
@@ -58,19 +58,19 @@ module.exports = (config,lang) => {
                     {
                        "field": lang['Server URL'],
                        "name": `channel-detail="rtmp_server_url"`,
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_rtmp",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": "rtmp" },
                        "example": "rtmp://live-api.facebook.com:80/rtmp/",
                     },
                     {
                        "field": lang['Stream Key'],
                        "name": `channel-detail="rtmp_stream_key"`,
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_rtmp",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": "rtmp" },
                        "example": "1111111111?ds=1&a=xxxxxxxxxx",
                     },
                     {
                        "field": lang['# of Allow MJPEG Clients'],
                        "name": `channel-detail="stream_mjpeg_clients"`,
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": "mjpeg" },
                        "placeholder": "20",
                     },
                     {
@@ -78,7 +78,7 @@ module.exports = (config,lang) => {
                        "name": `channel-detail="stream_vcodec"`,
                        "description": lang["fieldTextChannelStreamVcodec"],
                        "default": "no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4  h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["hls","rtmp","flv","mp4","h264"] },
                        "fieldType": "select",
                        "selector": "h_hls_v_channel_$[TEMP_ID]",
                        "possible": [
@@ -164,7 +164,7 @@ module.exports = (config,lang) => {
                        "default": "0",
                        "example": "",
                        "fieldType": "select",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4  h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["hls","rtmp","flv","mp4","h264"] },
                        "possible": [
                           {
                              "name": lang.Auto,
@@ -213,21 +213,21 @@ module.exports = (config,lang) => {
                        "field": lang["HLS Segment Length"],
                        "description": lang["fieldTextChannelHlsTime"],
                        "default": "2",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_hls",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": "hls" },
                     },
                     {
                        "name": "channel-detail=hls_list_size",
                        "field": lang["HLS List Size"],
                        "description": lang["fieldTextChannelHlsListSize"],
                        "default": "2",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_hls",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": "hls" },
                     },
                     {
                        "name": "channel-detail=preset_stream",
                        "field": lang["HLS Preset"],
                        "description": lang["fieldTextChannelPresetStream"],
                        "example": "ultrafast",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_hls",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": "hls" },
                     },
                     {
                        "name": "channel-detail=stream_quality",
@@ -235,30 +235,26 @@ module.exports = (config,lang) => {
                        "description": lang["fieldTextChannelStreamQuality"],
                        "default": "15",
                        "example": "1",
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                        "possible": "1-23"
                     },
                     {
                        "name": "channel-detail=stream_v_br",
                        "field": lang["Video Bit Rate"],
                        "placeholder": "",
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                     },
                     {
                        "name": "channel-detail=stream_a_br",
                        "field": lang["Audio Bit Rate"],
                        "placeholder": "128k",
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                     },
                     {
                        "name": "channel-detail=stream_fps",
                        "field": lang['Frame Rate'],
                        "description": lang["fieldTextChannelStreamFps"],
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                     },
                     {
                        "name": "channel-detail=stream_scale_x",
@@ -267,8 +263,7 @@ module.exports = (config,lang) => {
                        "fieldType": "number",
                        "numberMin": "1",
                        "example": "640",
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                     },
                     {
                        "name": "channel-detail=stream_scale_y",
@@ -277,16 +272,14 @@ module.exports = (config,lang) => {
                        "fieldType": "number",
                        "numberMin": "1",
                        "example": "480",
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                     },
                     {
                        "name": "channel-detail=stream_rotate",
                        "field": lang["Rotate"],
                        "description": lang["fieldTextChannelStreamRotate"],
                        "fieldType": "select",
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                        "possible": [
                             {
                                "name": lang["No Rotation"],
@@ -319,8 +312,7 @@ module.exports = (config,lang) => {
                        "name": "channel-detail=svf",
                        "field": lang["Video Filter"],
                        "description": lang["fieldTextChannelSvf"],
-                       "form-group-class-pre-layer": "h_hls_v_channel_$[TEMP_ID]_input h_hls_v_channel_$[TEMP_ID]_libx264 h_hls_v_channel_$[TEMP_ID]_libx265 h_hls_v_channel_$[TEMP_ID]_h264_nvenc h_hls_v_channel_$[TEMP_ID]_hevc_nvenc h_hls_v_channel_$[TEMP_ID]_no",
-                       "form-group-class": "h_st_channel_$[TEMP_ID]_input h_st_channel_$[TEMP_ID]_mjpeg h_st_channel_$[TEMP_ID]_hls h_st_channel_$[TEMP_ID]_rtmp h_st_channel_$[TEMP_ID]_jsmpeg h_st_channel_$[TEMP_ID]_flv h_st_channel_$[TEMP_ID]_mp4 h_st_channel_$[TEMP_ID]_h264",
+                       "form-group-visibleWhen": { "h_st_channel_$[TEMP_ID]": ["mjpeg","hls","rtmp","jsmpeg","flv","mp4","h264"], "h_hls_v_channel_$[TEMP_ID]": ["libx264","libx265","h264_nvenc","hevc_nvenc","no"] },
                    },
                    {
                        "name": "channel-detail=cust_stream",

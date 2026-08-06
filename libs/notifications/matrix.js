@@ -333,7 +333,7 @@ module.exports = function(s,config,lang,getSnapshot){
                isFormGroupGroup: true,
                "name": "Matrix.org",
                "color": "purple",
-               "section-class": "h_det_matrixbot_input h_det_matrixbot_1",
+               "section-visibleWhen": { "h_det_matrixbot": "1" },
                "info": [
                    {
                       "name": "detail=detector_matrixbot_send_video",
@@ -426,21 +426,21 @@ module.exports = function(s,config,lang,getSnapshot){
                       "name": "detail=matrixbot_baseUrl",
                       "placeholder": "",
                       "field": lang["Host"],
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                    },
                    {
                        hidden: true,
                       "name": "detail=matrixbot_userId",
                       "placeholder": "xxxxxxxxxxxxxxxxxx",
                       "field": lang["User ID"],
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                    },
                    {
                        hidden: true,
                       "name": "detail=matrixbot_roomId",
                       "placeholder": "xxxxxxxxxxxxxxxxxx",
                       "field": lang["Room ID"],
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                    },
                    {
                        hidden: true,
@@ -448,7 +448,7 @@ module.exports = function(s,config,lang,getSnapshot){
                       "fieldType": "password",
                       "placeholder": "XXXXXXXXXXXXXXXXXXXXXXXX",
                       "field": lang.Token,
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                   },
                ]
             }

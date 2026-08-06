@@ -147,7 +147,7 @@ module.exports = function(s,config,lang,getSnapshot){
         isFormGroupGroup: true,
         name: 'Mobile App Push',
         color: 'blue',
-        'section-class': 'h_det_fcm_input h_det_fcm_1',
+        'section-visibleWhen': { "h_det_fcm": "1" },
         info: [
             {
                 name: 'detail=detector_fcm_timeout',

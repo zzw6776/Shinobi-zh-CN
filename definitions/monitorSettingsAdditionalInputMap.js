@@ -1,4 +1,4 @@
-module.exports = (config,lang) => {
+module.exports = (s,config,lang) => {
     return {
           "section": "Monitor Settings Additional Input Map",
           "blocks": {
@@ -84,7 +84,7 @@ module.exports = (config,lang) => {
                     {
                         name:'map-detail=stream_loop',
                         field:lang['Loop Stream'],
-                        "form-group-class":'h_i_$[TEMP_ID]_input h_i_$[TEMP_ID]_mp4 h_i_$[TEMP_ID]_raw',
+                        "form-group-visibleWhen":{ "h_i_$[TEMP_ID]": ["mp4","raw"] },
                         hidden:true,
                         default:'0',
                         "fieldType": "select",
@@ -103,7 +103,7 @@ module.exports = (config,lang) => {
                     {
                         name:'map-detail=rtsp_transport',
                         field:lang['RTSP Transport'],
-                        "form-group-class":'h_i_$[TEMP_ID]_input h_i_$[TEMP_ID]_h264',
+                        "form-group-visibleWhen":{ "h_i_$[TEMP_ID]": "h264" },
                         default:'',
                         "fieldType": "select",
                         type:'selector',
@@ -146,7 +146,7 @@ module.exports = (config,lang) => {
                     {
                         name:'map-detail=hwaccel',
                         field:lang['hwaccel'],
-                        "form-group-class":'h_accel_$[TEMP_ID]_input h_accel_$[TEMP_ID]_1',
+                        "form-group-visibleWhen":{ "h_accel_$[TEMP_ID]": "1" },
                         hidden:true,
                         default:'',
                         "fieldType": "select",
@@ -156,7 +156,7 @@ module.exports = (config,lang) => {
                     {
                         name:'map-detail=hwaccel_vcodec',
                         field:lang['hwaccel_vcodec'],
-                        "form-group-class":'h_accel_$[TEMP_ID]_input h_accel_$[TEMP_ID]_1',
+                        "form-group-visibleWhen":{ "h_accel_$[TEMP_ID]": "1" },
                         hidden:true,
                         default:'auto',
                         "fieldType": "select",
@@ -243,7 +243,7 @@ module.exports = (config,lang) => {
                     {
                         name:'map-detail=hwaccel_device',
                         field:lang['hwaccel_device'],
-                        "form-group-class":'h_accel_$[TEMP_ID]_input h_accel_$[TEMP_ID]_1',
+                        "form-group-visibleWhen":{ "h_accel_$[TEMP_ID]": "1" },
                         hidden:true,
                         placeholder:'Example : /dev/dri/video0',
                         type:'text',

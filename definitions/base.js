@@ -77,7 +77,7 @@ module.exports = function(s,config,lang){
                         "field": lang['IP Address'],
                         "name": "setNetworkInterface:ipv4",
                         "placeholder": "xxx.xxx.xxx.xxx",
-                        "form-group-class": "onvif_dhcp_input onvif_dhcp_1",
+                        "form-group-visibleWhen": { "onvif_dhcp": "1" },
                         "description": "",
                         "default": "",
                         "example": "",
@@ -2226,7 +2226,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=edit_size",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2243,7 +2243,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=edit_days",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2260,7 +2260,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=edit_event_days",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2277,7 +2277,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=edit_log_days",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2295,7 +2295,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=use_aws_s3",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2312,7 +2312,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=use_whcs",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2329,7 +2329,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=use_sftp",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2346,7 +2346,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=use_webdav",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2363,7 +2363,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=use_discordbot",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2380,7 +2380,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=use_ldap",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2397,7 +2397,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=aws_use_global",
                           "default":'0',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2414,7 +2414,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=whcs_use_global",
                           "default":'0',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2431,7 +2431,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=b2_use_global",
                           "default":'0',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,
@@ -2448,7 +2448,7 @@ module.exports = function(s,config,lang){
                           "name": "detail=webdav_use_global",
                           "default":'0',
                           "fieldType": "select",
-                          "form-group-class":"more_perms_input more_perms_limited",
+                          "form-group-visibleWhen":{ "more_perms": "limited" },
                           possible: [
                             {
                                 "name": lang.No,

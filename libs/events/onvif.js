@@ -326,6 +326,7 @@ module.exports = function (s, config, lang) {
         "name": "detail=onvif_events",
         "field": lang['ONVIF Events'],
         "default": "0",
+        "selector": "h_onvif_events",
         "form-group-class": "h_onvif_input h_onvif_1",
         "fieldType": "select",
         "possible": [

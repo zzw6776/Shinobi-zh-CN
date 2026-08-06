@@ -311,7 +311,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                 isFormGroupGroup: true,
                 name: lang.Email,
                 color: 'blue',
-                'section-class': 'h_det_emailClient_input h_det_emailClient_1',
+                'section-visibleWhen': { "h_det_emailClient": "1" },
                 info: [
                     {
                         name: 'detail=detector_emailClient_timeout',
@@ -367,7 +367,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                     field: lang.Host,
                     name: 'detail=emailClient_host',
                     example: 'smtp.gmail.com',
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                 },
                 {
                     hidden: true,
@@ -375,12 +375,12 @@ module.exports = function (s, config, lang, getSnapshot) {
                     name: 'detail=emailClient_port',
                     example: '587',
                     description: lang.emailClientPortText,
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                 },
                 {
                     hidden: true,
                     name: 'detail=emailClient_secure',
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                     field: lang.Secure,
                     default: '0',
                     example: '',
@@ -400,7 +400,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                 {
                     hidden: true,
                     name: 'detail=emailClient_unauth',
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                     field: lang.rejectUnauth,
                     default: '0',
                     example: '',
@@ -421,21 +421,21 @@ module.exports = function (s, config, lang, getSnapshot) {
                     field: lang.Email,
                     name: 'detail=emailClient_user',
                     example: 'test@gmail.com',
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                 },
                 {
                     hidden: true,
                     field: lang.Password,
                     fieldType: 'password',
                     name: 'detail=emailClient_pass',
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                 },
                 {
                     hidden: true,
                     field: lang['Send to'],
                     name: 'detail=emailClient_sendTo',
                     example: 'testrecipient@gmail.com',
-                    'form-group-class': 'u_emailClient_input u_emailClient_1',
+                    'form-group-visibleWhen': { "u_emailClient": "1" },
                 },
             ],
         };
