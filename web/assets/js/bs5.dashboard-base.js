@@ -598,6 +598,33 @@ function getDetailValues(parentForm){
     return theList
 }
 
+// Maps a Monitor Settings field name ("mode", "detail=detector") to its human label, read
+// from the definitions the form itself is built from. Used when showing which fields a
+// Monitor State preset carries, and when picking changes to put into one.
+var monitorSettingsFieldLabels = null
+function getMonitorSettingsFieldLabels(){
+    if(monitorSettingsFieldLabels)return monitorSettingsFieldLabels
+    monitorSettingsFieldLabels = {}
+    var readBlock = function(block){
+        if(!block)return
+        if(block.blocks){
+            Object.keys(block.blocks).forEach(function(blockKey){ readBlock(block.blocks[blockKey]) })
+        }
+        if(block.info){
+            block.info.forEach(function(field){
+                if(field.info)readBlock(field)
+                if(field.name && field.field)monitorSettingsFieldLabels[field.name] = field.field
+            })
+        }
+    }
+    readBlock(definitions['Monitor Settings'])
+    return monitorSettingsFieldLabels
+}
+function normalizeMonitorValueForCompare(value){
+    if(value === undefined || value === null)return ''
+    if(value instanceof Object)return JSON.stringify(value)
+    return `${value}`
+}
 function onDetailFieldChange(_this){
     var parentForm = $(_this).parents('form');
     parentForm.find('[name="details"]').val(JSON.stringify(getDetailValues(parentForm)));

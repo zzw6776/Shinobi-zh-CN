@@ -801,6 +801,18 @@ module.exports = function(s,config,lang){
         if(typeof cn === 'function'){cn()}
     }
     //
+    // Filters a Monitor State preset's monitor list down to the ones that still exist, using
+    // the group's loaded configurations as the source of truth. If the group is not loaded
+    // there is nothing to check against, so the list is passed through untouched rather than
+    // being wrongly emptied.
+    s.getMonitorsPresentInPreset = function(groupKey,monitorsInPreset){
+        const list = monitorsInPreset || []
+        const rawMonitorConfigurations = s.group[groupKey] ? s.group[groupKey].rawMonitorConfigurations : null
+        if(!rawMonitorConfigurations)return list
+        return list.filter((monitor) => {
+            return monitor && !!rawMonitorConfigurations[monitor.mid]
+        })
+    }
     s.activateMonitorStates = function(groupKey,stateName,user,callback){
         var endData = {
             ok: false
@@ -809,7 +821,10 @@ module.exports = function(s,config,lang){
             if(notFound === false){
                 var monitorQuery = []
                 var monitorPresets = {}
-                preset.details.monitors.forEach(function(monitor){
+                // A preset can outlive the monitors it names. Skip anything that is no longer
+                // in the group so one deleted monitor cannot stop the rest of the state from
+                // being applied - and so an empty query never selects every monitor.
+                s.getMonitorsPresentInPreset(groupKey,preset.details.monitors).forEach(function(monitor){
                     if(monitorQuery.length === 0){
                         monitorQuery.push(['ke','=',groupKey])
                     }else{
@@ -818,6 +833,11 @@ module.exports = function(s,config,lang){
                     monitorQuery.push(['mid','=',monitor.mid])
                     monitorPresets[monitor.mid] = monitor
                 })
+                if(monitorQuery.length === 0){
+                    endData.msg = lang['State Configuration has no monitors associated']
+                    callback(endData)
+                    return
+                }
                 s.knexQuery({
                     action: "select",
                     columns: "*",

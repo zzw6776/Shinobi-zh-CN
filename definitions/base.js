@@ -730,61 +730,22 @@ module.exports = function(s,config,lang){
                     },
                 ]
              },
-             "Monitor States": {
-                 noHeader: true,
-                "color": "green",
-                "section-pre-class": "col-md-6",
-                "info": [
-                    {
-                       "id": "monitorStatesSelector",
-                       "field": lang["Monitor States"],
-                       "fieldType": "select",
-                       "possible": [
-                           {
-                              "name": lang['Add New'],
-                              "value": ""
-                           },
-                           {
-                              "name": lang['Saved Presets'],
-                              "optgroup": []
-                           },
-                       ]
-                   },
-                ]
+             "How to Create a Preset": {
+                "name": lang["How to Create a Monitor State Preset"],
+                "color": "blue",
+                "section-pre-class": "col-md-12",
+                "blockquoteClass": "global_tip",
+                "blockquote": lang.CreateMonitorStateInstructionsText,
+                "info": []
             },
-            "Preset": {
-               "name": lang["Preset"],
-               "color": "green",
-               "section-pre-class": "col-md-6",
-               "info": [
-                   {
-                      "fieldType": "btn",
-                      "attribute": `type="submit" style="display:none"`,
-                      "class": `btn-danger delete`,
-                      "btnContent": `<i class="fa fa-trash"></i> &nbsp; ${lang.Delete}`,
-                   },
-                   {
-                      "name": "name",
-                      "field": lang.Name,
-                      "description": "",
-                      "example": "Motion Off",
-                      "possible": ""
-                   }
-               ]
-           },
-            "Monitors": {
-               "name": lang["Monitors"],
+            "Saved Presets": {
+               "name": lang["Saved Presets"],
                "color": "green",
                "section-pre-class": "col-md-12",
                "info": [
-                   {
-                      "fieldType": "btn",
-                      "class": `btn-success add-monitor`,
-                      "btnContent": `<i class="fa fa-plus"></i> &nbsp; ${lang['Add New']}`,
-                   },
                   {
                       "fieldType": "div",
-                      id: "monitorStatesMonitors",
+                      id: "monitorStatesList",
                   }
                ]
            },
