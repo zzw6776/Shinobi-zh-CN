@@ -299,6 +299,8 @@ module.exports = (s,config,lang) => {
             const commandString = `-y -threads 1 -f concat -safe 0 -i "${concatListFile}" -c:v copy -an -preset ultrafast "${finalMp4OutputLocation}"`
             s.debugLog("stitchMp4Files",commandString)
             const videoBuildProcess = spawn(config.ffmpegDir,splitForFFMPEG(commandString))
+            // Lets the caller hold on to the process so a long stitch can be aborted.
+            if(options.onProcess)options.onProcess(videoBuildProcess);
             videoBuildProcess.stdout.on('data',function(data){
                 s.debugLog('stdout',finalMp4OutputLocation,data.toString())
             })
