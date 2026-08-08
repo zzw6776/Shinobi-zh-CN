@@ -1,6 +1,7 @@
 {
    "Shinobi": "Shinobi",
    "Can use": "Can use",
+   "GPU": "GPU",
    "Can see CPU and RAM usage": "Can see CPU and RAM usage",
    "showSystemUsageText": "When set to No the CPU and RAM bars are removed from the dashboard and the readings are not sent to it at all. Sub accounts of this group inherit this setting.",
    "Leave blank to randomly generate": "Leave blank to randomly generate",

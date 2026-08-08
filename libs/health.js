@@ -3,6 +3,13 @@ var exec = require('child_process').exec;
 var spawn = require('child_process').spawn;
 const { getCpuUsageOnLinux, getRamUsageOnLinux } = require('./health/utils.js')
 module.exports = function(s,config,lang,io){
+    require('./health/gpu.js')(s,config)
+    // Detected once the process is up, so the probe commands do not compete with startup and
+    // s.systemLog is available to record what was found. Until it finishes readGpuUsage
+    // simply returns nothing, so the first poll or two carry no GPU figures.
+    s.onProcessReady(function(){
+        s.detectGpuProviders()
+    })
     let lastLoggedCpu = new Date()
     let lastLoggedRam = new Date()
     const allowedLogInterval = 1000 * 1000 * 60 * 60 // 1 hour
@@ -160,22 +167,26 @@ module.exports = function(s,config,lang,io){
             setInterval(async () => {
                 const cpu = await s.cpuUsage()
                 const ram = await s.ramUsage()
+                const gpus = await s.readGpuUsage()
                 logCpu(cpu)
                 logRam(ram.percent)
                 s.tx({
                     f: 'os',
                     cpu: cpu,
-                    ram: ram
+                    ram: ram,
+                    gpus: gpus
                 },'OSSTATS')
             },10000)
         }else{
             setInterval(async () => {
                 const cpu = await s.cpuUsage()
                 const ram = await s.ramUsage()
+                const gpus = await s.readGpuUsage()
                 s.tx({
                     f: 'os',
                     cpu: cpu,
-                    ram: ram
+                    ram: ram,
+                    gpus: gpus
                 },'OSSTATS')
             },10000)
         }
