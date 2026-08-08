@@ -76,6 +76,41 @@ function eventsTable_findCoveringVideo(theEvent,videos){
         return eventTime >= start && eventTime <= end
     }) || null
 }
+//Minimal HTML-escaping for text interpolated into card markup (camera name / tags).
+function escapeHtmlEventsTable(value){
+    if(value === undefined || value === null)return ''
+    return (`${value}`)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#039;')
+}
+//The event card markup. Kept at module scope so anything else that wants to present events
+//- the map pin popup, for one - renders them identically rather than growing its own look.
+function eventsTable_buildCard(theEvent,frame,video){
+    var loadedMonitor = loadedMonitors[theEvent.mid]
+    var monitorName = loadedMonitor && loadedMonitor.name ? loadedMonitor.name : theEvent.mid
+    var use24HourTime = dashboardOptions().use24HourTime == '1';
+    var tags = eventsTable_getEventTags(theEvent)
+    var icon = eventsTable_getEventIcon(tags,theEvent.details && theEvent.details.reason)
+    var thumbSrc = frame ? frame.href : ''
+    var hasVideo = !!video
+    return `<div class="event-card ${hasVideo ? 'has-video cursor-pointer' : 'no-video'}" data-mid="${theEvent.mid}" data-time="${theEvent.time}">
+        <div class="event-card-thumb-block">
+            <div class="event-card-icon-badge" title="${escapeHtmlEventsTable(tags.join(', '))}"><i class="fa fa-${icon}"></i></div>
+            ${!hasVideo ? `<div class="event-card-no-video-badge" title="${lang['eventsTableNoVideoTitle'] || 'No recording covers this event'}"><i class="fa fa-video-camera"></i> ${lang['No Video'] || 'No Video'}</div>` : ''}
+            ${thumbSrc ? `<img class="event-card-thumb" data-src="${thumbSrc}">` : `<div class="event-card-thumb event-card-thumb-empty"><i class="fa fa-${icon}"></i></div>`}
+            <div class="event-card-bottom-overlay">
+                <div class="event-card-camera">${escapeHtmlEventsTable(monitorName)}</div>
+                <div class="event-card-time">
+                    <span>${timeAgo(theEvent.time)}</span>
+                    <span>${formattedTime(theEvent.time, !use24HourTime)}</span>
+                </div>
+            </div>
+        </div>
+    </div>`
+}
 $(document).ready(function(e){
     var theEnclosure = $('#tab-eventsTableView')
     var monitorsList = theEnclosure.find('.monitors_list')
@@ -92,6 +127,10 @@ $(document).ready(function(e){
     var eventsTablePageIndicator = $('#eventsTable_page_indicator')
     var loadedEventsTableRows = [];
     var alreadyLoading = false;
+    // The "Ready to Search" placeholder belongs to the state before any search has run, not
+    // to the act of opening the tab - once results exist, opening the tab must not bring it
+    // back over them.
+    var eventsTableHasSearched = false;
     var eventsTablePageSize = 60;
     var eventsTableCurrentPage = 1;
     var eventsTableTotalPages = 1;
@@ -118,8 +157,11 @@ $(document).ready(function(e){
     window.openEventsTableView = function(monitorId){
         drawMonitorListToSelector(monitorsList,null,null,true)
         monitorsList.val(monitorId || '')
-        drawEventsTableViewElements()
+        // The tab is opened first : opening it fires the tab-open hook, which puts the
+        // "Ready to Search" placeholder up. Searching before that meant the placeholder was
+        // raised again after the results had already been drawn, and then sat on top of them.
         openTab(`eventsTableView`,{})
+        drawEventsTableViewElements()
     }
     loadDateRangePicker(dateSelector,{
         onChange: function(start, end, label) {
@@ -130,39 +172,6 @@ $(document).ready(function(e){
         drawEventsTableViewElements()
     })
 
-    function eventsTable_buildCard(theEvent,frame,video){
-        var loadedMonitor = loadedMonitors[theEvent.mid]
-        var monitorName = loadedMonitor && loadedMonitor.name ? loadedMonitor.name : theEvent.mid
-        var use24HourTime = dashboardOptions().use24HourTime == '1';
-        var tags = eventsTable_getEventTags(theEvent)
-        var icon = eventsTable_getEventIcon(tags,theEvent.details && theEvent.details.reason)
-        var thumbSrc = frame ? frame.href : ''
-        var hasVideo = !!video
-        return `<div class="event-card ${hasVideo ? 'has-video cursor-pointer' : 'no-video'}" data-mid="${theEvent.mid}" data-time="${theEvent.time}">
-            <div class="event-card-thumb-block">
-                <div class="event-card-icon-badge" title="${escapeHtmlEventsTable(tags.join(', '))}"><i class="fa fa-${icon}"></i></div>
-                ${!hasVideo ? `<div class="event-card-no-video-badge" title="${lang['eventsTableNoVideoTitle'] || 'No recording covers this event'}"><i class="fa fa-video-camera"></i> ${lang['No Video'] || 'No Video'}</div>` : ''}
-                ${thumbSrc ? `<img class="event-card-thumb" data-src="${thumbSrc}">` : `<div class="event-card-thumb event-card-thumb-empty"><i class="fa fa-${icon}"></i></div>`}
-                <div class="event-card-bottom-overlay">
-                    <div class="event-card-camera">${escapeHtmlEventsTable(monitorName)}</div>
-                    <div class="event-card-time">
-                        <span>${timeAgo(theEvent.time)}</span>
-                        <span>${formattedTime(theEvent.time, !use24HourTime)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>`
-    }
-    //Minimal HTML-escaping for text interpolated into card markup (camera name / tags).
-    function escapeHtmlEventsTable(value){
-        if(value === undefined || value === null)return ''
-        return (`${value}`)
-            .replace(/&/g,'&amp;')
-            .replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;')
-            .replace(/"/g,'&quot;')
-            .replace(/'/g,'&#039;')
-    }
     function eventsTable_updatePaginationControls(){
         if(eventsTableTotalPages <= 1){
             eventsTablePaginationArea.addClass('d-none')
@@ -180,6 +189,7 @@ $(document).ready(function(e){
     async function drawEventsTableViewElements(pageNumber){
         if(alreadyLoading)return;
         alreadyLoading = true
+        eventsTableHasSearched = true
         eventsTableCurrentPage = pageNumber || 1;
         var dateRange = getSelectedTime(dateSelector);
         var startDate = dateRange.startDate;
@@ -219,6 +229,10 @@ $(document).ready(function(e){
         var total = eventsData.total || events.length
         loadedEventsTableRows = events
         eventsTableTotalPages = Math.max(1,Math.ceil(total / eventsTablePageSize))
+
+        // Hidden again on arrival, not only before the request : the tab-open hook can raise
+        // the placeholder while these fetches are still in flight.
+        eventsTableNoticeArea.hide();
 
         if(events.length === 0){
             eventsTableDrawArea.html('')
@@ -312,7 +326,7 @@ $(document).ready(function(e){
 
     addOnTabOpen('eventsTableView', function () {
         drawMonitorListToSelector(monitorsList,null,null,true)
-        eventsTableNoticeArea.show()
+        if(!eventsTableHasSearched)eventsTableNoticeArea.show()
     })
     addOnTabReopen('eventsTableView', function () {
         var theSelected = `${monitorsList.val()}`
