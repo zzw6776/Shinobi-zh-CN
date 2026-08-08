@@ -75,6 +75,19 @@ $(document).ready(function(e){
         drawCalendarViewElements()
         return false;
     })
+    .on('click','.calendar_quick_daterange',function(e){
+        e.preventDefault()
+        var el = $(this)
+        var hours = el.attr('data-hours')
+        var days = el.attr('data-days')
+        var amount = hours ? parseInt(hours) : parseInt(days)
+        var unit = hours ? 'hours' : 'days'
+        var picker = dateSelector.data('daterangepicker')
+        picker.setStartDate(moment().subtract(amount,unit))
+        picker.setEndDate(moment())
+        drawCalendarViewElements()
+        return false;
+    })
     addOnTabOpen('calendarView', function () {
         drawMonitorListToSelector(monitorsList)
         drawCalendarViewElements()
@@ -83,6 +96,6 @@ $(document).ready(function(e){
         var theSelected = `${monitorsList.val()}`
         drawMonitorListToSelector(monitorsList)
         monitorsList.val(theSelected)
-        drawCalendarViewElements()
+        // drawCalendarViewElements()
     })
 })
