@@ -531,6 +531,8 @@
    "Join Public Beta": "Join Public Beta",
    "ShinobiShop Subscriptions": "ShinobiShop Subscriptions",
    "All Monitors": "All Monitors",
+   "calendarLimitNoticeText": "Older recordings in this range are not drawn. Move to a shorter view or pick a single monitor to see them.",
+   "recordings shown": "recordings shown",
    "Motion Meter": "Motion Meter",
    "FFmpegTip": "FFprobe is a simple multimedia streams analyzer. You can use it to output all kinds of information about an input including duration, frame rate, frame size, etc.",
    "Complete Stream URL": "Complete Stream URL",

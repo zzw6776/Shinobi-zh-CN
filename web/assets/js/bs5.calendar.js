@@ -2,6 +2,7 @@ $(document).ready(function(e){
     var theEnclosure = $('#tab-calendarView')
     var monitorsList = theEnclosure.find('.monitors_list')
     var calendarDrawArea = $('#calendar_draw_area')
+    var calendarLimitNotice = $('#calendar_limit_notice')
     var loadedVideosInMemory = {};
     var calendarIsBuilt = false
     monitorsList.change(function(){
@@ -21,20 +22,40 @@ $(document).ready(function(e){
         }
         return `hsl(${Math.abs(hash) % 360},60%,42%)`
     }
+    // A month of every monitor can run to thousands of recordings. The request is capped so
+    // one wide view can't pull the whole archive; the cap is announced whenever it bites,
+    // because the API returns newest-first and a silent cap would quietly empty out the
+    // older end of the range.
+    var maxCalendarEvents = 2000
+    function setLimitNotice(isTruncated,drawnCount){
+        if(!isTruncated){
+            calendarLimitNotice.addClass('d-none').html('')
+            return
+        }
+        calendarLimitNotice.removeClass('d-none').html(
+            `<i class="fa fa-exclamation-triangle"></i> ${lang.Warning ? lang.Warning + ' : ' : ''}`
+            + `${drawnCount} ${lang['recordings shown']}. ${lang['calendarLimitNoticeText']}`
+        )
+    }
     function fetchVideosForVisibleRange(start,end,timezone,callback){
         var selectedMonitor = monitorsList.val()
         // The API reads dates in the server's configured timezone, the same conversion the
         // date-picker driven tabs get from getSelectedTime().
         var startDate = moment(convertTZ(start.toDate())).format('YYYY-MM-DDTHH:mm:ss')
         var endDate = moment(convertTZ(end.toDate())).format('YYYY-MM-DDTHH:mm:ss')
-        var queryString = ['start=' + startDate,'end=' + endDate,'limit=0']
+        // Asking for one past the cap is how the overflow is detected : this endpoint reports
+        // no total, so the extra row is the only signal that more exist.
+        var queryString = ['start=' + startDate,'end=' + endDate,'limit=' + (maxCalendarEvents + 1)]
         // Leaving the monitor off the path is what asks for every monitor the user can see,
         // the same way the Videos and Events tabs handle their All Monitors option.
         var apiURL = getApiPrefix('videos') + (selectedMonitor ? '/' + selectedMonitor : '');
         var calendarData = []
         loadedVideosInMemory = {}
         $.getJSON(apiURL + '?' + queryString.join('&'),function(data){
-            $.each(data.videos,function(n,v){
+            var videos = data.videos || []
+            var isTruncated = videos.length > maxCalendarEvents
+            if(isTruncated)videos = videos.slice(0,maxCalendarEvents);
+            $.each(videos,function(n,v){
                 if(v.status !== 0){
                     loadedVideosInMemory[`${v.mid}${v.time}${v.type}`] = Object.assign({},v)
                     var loadedMonitor = loadedMonitors[v.mid]
@@ -47,8 +68,10 @@ $(document).ready(function(e){
                     calendarData.push(v)
                 }
             })
+            setLimitNotice(isTruncated,calendarData.length)
             callback(calendarData)
         }).fail(function(){
+            setLimitNotice(false)
             callback([])
         })
     }

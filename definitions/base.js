@@ -2169,6 +2169,14 @@ module.exports = function(s,config,lang){
                 noHeader: true,
                "section-pre-class": "col-md-12",
                "info": [
+                   // Shown only when the visible range holds more recordings than the tab
+                   // will draw, so a partial calendar is never mistaken for a complete one.
+                   {
+                       "fieldType": "div",
+                       "id": "calendar_limit_notice",
+                       "class": "alert alert-warning d-none",
+                       "divContent": ""
+                   },
                    {
                        "fieldType": "div",
                        "id": "calendar_draw_area",
