@@ -2134,8 +2134,9 @@ module.exports = function(s,config,lang){
       "Calendar": {
           "section": "Calendar",
           "blocks": {
-              // Same top bar as the Events and Videos tabs : one full-width row of search
-              // controls pinned above the content it filters.
+              // No date picker here : the calendar's own navigation *is* the date range, so
+              // videos are fetched for whatever span it is currently showing. That leaves the
+              // monitor selector as the only thing to search by.
               "Search Settings": {
                  noHeader: true,
                  "name": lang["Search Settings"],
@@ -2151,40 +2152,16 @@ module.exports = function(s,config,lang){
                          "possible": []
                      },
                      {
-                         "class": "date_selector",
-                         "field": lang.Date,
-                         "form-group-class": "col me-3 mb-0",
-                     },
-                     {
                         "fieldType": "btn-group",
-                        "form-group-class-pre-layer": "me-3 mb-0",
+                        "form-group-class-pre-layer": "mb-0",
                         "btns": [
                             {
                                 "fieldType": "btn",
                                 "class": `btn-success fill refresh-data`,
-                                "icon": `search`,
-                                "btnContent": `${lang['Search']}`,
+                                "icon": `refresh`,
+                                "btnContent": `${lang['Refresh']}`,
                             },
                         ],
-                     },
-                     {
-                        "fieldType": "div",
-                        "class": "dropdown d-inline-block",
-                        "form-group-class-pre-layer": "mb-0",
-                        "divContent": `<button type="button" class="btn btn-default dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fa fa-clock-o"></i> ${lang['Quick Range']}
-                        </button>
-                        <ul class="dropdown-menu ${Theme.isDark ? 'dropdown-menu-dark bg-dark' : ''} shadow-lg">
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-hours="1">${lang.Last} 1 ${lang.hours}</a></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-hours="3">${lang.Last} 3 ${lang.hours}</a></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-hours="6">${lang.Last} 6 ${lang.hours}</a></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-hours="9">${lang.Last} 9 ${lang.hours}</a></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-hours="12">${lang.Last} 12 ${lang.hours}</a></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-hours="24">${lang.Last} 24 ${lang.hours}</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-days="7">${lang.Last} 7 ${lang.Days}</a></li>
-                            <li><a class="dropdown-item calendar_quick_daterange" href="#" data-days="30">${lang.Last} 30 ${lang.Days}</a></li>
-                        </ul>`
                      },
                 ]
             },
