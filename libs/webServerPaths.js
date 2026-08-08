@@ -438,6 +438,13 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
             }
         }
         function checkRoute(pageTarget,userInfo){
+            // Resolve the group's effective setting onto the user being rendered. A sub
+            // account carries its own details and has no copy of this Superuser permission,
+            // so without this the sidebar bars would still be drawn for them even though the
+            // readings are never sent.
+            if(userInfo && userInfo.details){
+                userInfo.details.show_system_usage = s.groupCanSeeSystemUsage(userInfo.ke) ? '1' : '0'
+            }
             switch(pageTarget){
                 case'cam':
                     renderPage(config.renderPaths.dashcam,{

@@ -22,16 +22,10 @@ module.exports = function(s,config,lang){
     var loadBackblazeB2ForUser = function(e){
         var userDetails = JSON.parse(e.details);
         try{
-            if(userDetails.b2_use_global === '1' && config.cloudUploaders && config.cloudUploaders.BackblazeB2){
-                // {
-                //     bb_b2_accountId: "",
-                //     bb_b2_applicationKey: "",
-                //     bb_b2_bucket: "",
-                //     bb_b2_dir: "",
-                // }
-                userDetails = Object.assign(userDetails,config.cloudUploaders.BackblazeB2)
-            }
+            // Forced (Superuser configured) credentials are merged into the account details
+            // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
             if(!s.group[e.ke].bb_b2 &&
+               userDetails.use_bb_b2 !== '0' &&
                userDetails.bb_b2_accountId &&
                userDetails.bb_b2_accountId !=='' &&
                userDetails.bb_b2_applicationKey &&
@@ -49,7 +43,10 @@ module.exports = function(s,config,lang){
                 var backblazeErr = function(err){
                     // console.log(err)
                     const msg = err.stack || err.data || err;
-                    delete(msg.data)
+                    // `err.stack` is a string, and deleting a property off one throws in
+                    // strict mode -- which turned a logged credential error into an uncaught
+                    // exception. Only strip the nested payload when there is an object.
+                    if(msg && typeof msg === 'object')delete(msg.data)
                     s.userLog({mid:'$USER',ke:e.ke},{type:lang['Backblaze Error'],msg: msg})
                 }
                 async function createB2Connection(){
@@ -209,6 +206,9 @@ module.exports = function(s,config,lang){
        "name": lang["Backblaze B2"],
        "color": "forestgreen",
        "uploaderId": 'b2',
+       "enableFlag": 'use_bb_b2',
+       "globalFlag": 'b2_use_global',
+       "globalConfigKey": 'BackblazeB2',
        "info": [
            {
               "name": "detail=bb_b2_save",

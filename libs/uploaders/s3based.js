@@ -44,16 +44,8 @@ module.exports = function(s,config,lang){
     function loadGroupApp(e){
         // e = user
         var userDetails = JSON.parse(e.details)
-        if(userDetails.whcs_use_global === '1' && config.cloudUploaders && config.cloudUploaders.WasabiHotCloudStorage){
-            // {
-            //     whcs_accessKeyId: "",
-            //     whcs_secretAccessKey: "",
-            //     whcs_region: "",
-            //     whcs_bucket: "",
-            //     whcs_dir: "",
-            // }
-            userDetails = Object.assign(userDetails,config.cloudUploaders.WasabiHotCloudStorage)
-        }
+        // Forced (Superuser configured) credentials are merged into the account details
+        // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
         //S3-Based Network Storage
         if(
            !s.group[e.ke].whcs &&
@@ -267,6 +259,9 @@ module.exports = function(s,config,lang){
        "name": lang["S3-Based Network Storage"],
        "color": "forestgreen",
        "uploaderId": 'whcs',
+       "enableFlag": 'use_whcs',
+       "globalFlag": 'whcs_use_global',
+       "globalConfigKey": 'WasabiHotCloudStorage',
        "info": [
            {
               "name": "detail=whcs_save",

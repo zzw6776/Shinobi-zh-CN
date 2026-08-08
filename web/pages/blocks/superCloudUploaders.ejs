@@ -1,0 +1,17 @@
+<div class="card bg-dark text-white mb-4">
+    <div class="card-body">
+        <h5 class="card-title"><%- lang['Global Cloud Uploaders'] %></h5>
+        <p class="card-text mb-0"><%- lang.globalCloudUploadersText %></p>
+    </div>
+</div>
+<form id="cloudUploadersForm">
+    <div class="row">
+        <% Object.keys(define['Global Cloud Uploaders'].blocks).forEach(function(blockKey) { -%>
+            <%- include('home/drawBlock', {
+                  theBlock: define['Global Cloud Uploaders'].blocks[blockKey]
+                }) %>
+        <% }) -%>
+    </div>
+    <%- include('super/stickySubmitBar'); %>
+</form>
+<script src="<%-window.libURL%>assets/js/super.cloudUploaders.js" type="text/javascript"></script>

@@ -1,8 +1,10 @@
 <!--Confirmation Window-->
 <div class="modal fade full" id="add_edit" tabindex="-1" role="dialog" aria-labelledby="permissionsLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+  <div class="modal-dialog modal-xl" role="document">
     <form class="modal-content" style="background:transparent">
-      <div>
+      <%# Each block is its own card and carries `section-pre-class: col-md-6`, so the
+          blocks need a row to sit in -- same layout the dashboard's Account Settings uses. %>
+      <div class="row">
           <%  Object.keys(define['Admin Account Settings'].blocks).forEach(function(blockKey) { -%>
             <%- include('home/drawBlock', {
                     theBlock: define['Admin Account Settings'].blocks[blockKey]

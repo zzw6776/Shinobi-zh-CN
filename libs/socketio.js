@@ -369,6 +369,11 @@ module.exports = function(s,config,lang,io){
                 const onSuccess = async (r) => {
                     r = r[0];
                     cn.join('GRP_'+d.ke);cn.join('CPU');
+                    // 'CPU' also carries plugin events, so the opt out is a separate room:
+                    // a group set to not see system usage never joins it and therefore never
+                    // receives the readings at all, rather than being sent them and hiding them.
+                    const canSeeSystemUsage = s.groupCanSeeSystemUsage(d.ke)
+                    if(canSeeSystemUsage)cn.join('OSSTATS');
                     cn.ke=d.ke,
                     cn.uid=d.uid,
                     cn.auth=d.auth;
@@ -419,11 +424,13 @@ module.exports = function(s,config,lang,io){
                     tx({
                         f:'init_success',
                         users:s.group[d.ke].vid,
-                        os:{
+                        // Core count, platform and total RAM are part of the same picture, so
+                        // they are withheld too rather than sent and left unused.
+                        os: canSeeSystemUsage ? {
                             platform:s.platform,
                             cpuCount:s.coreCount,
                             totalmem:s.totalmem
-                        }
+                        } : undefined
                     })
                     try{
                         // (s.group[d.ke] ? Object.values(s.group[d.ke].rawMonitorConfigurations) : []).forEach((monitor) => {

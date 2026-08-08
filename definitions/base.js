@@ -1694,12 +1694,14 @@ module.exports = function(s,config,lang){
                          info: [
                              {
                                  "fieldType": "indicatorBar",
+                                 "evaluation": "details.show_system_usage !== '0'",
                                  "icon": "square",
                                  "name": "cpu",
                                  "label": `<span class="os_cpuCount"><i class="fa fa-spinner fa-pulse"></i></span> ${lang.CPU}<span class="os_cpuCount_trailer"></span> : <span class="os_platform" style="text-transform:capitalize"><i class="fa fa-spinner fa-pulse"></i></span>`,
                              },
                              {
                                  "fieldType": "indicatorBar",
+                                 "evaluation": "details.show_system_usage !== '0'",
                                  "icon": "microchip",
                                  "name": "ram",
                                  "label": `<span class="os_totalmem used"><i class="fa fa-spinner fa-pulse"></i></span> ${lang.MB} ${lang.RAM}`,
@@ -1744,6 +1746,84 @@ module.exports = function(s,config,lang){
                  "noHeader": true,
                  "noDefaultSectionClasses": true,
                  "info": []
+              }
+           }
+       },
+       // Sidebar for the Superuser panel (web/pages/super.ejs). Same shape as SideMenu
+       // above so it renders through web/pages/blocks/super/menuSide.ejs, but without the
+       // monitor list and system indicators, which are group-scoped and meaningless here.
+       // Each `pageOpen` must match a `.page-tab` id in super.ejs (`tab-<pageOpen>`).
+       "SuperSideMenu": {
+           "section": "SuperSideMenu",
+           showMonitors: false,
+           "blocks": {
+               "Container1": {
+                  "class": `col-md-3 col-lg-2 d-md-block ${mainBackgroundColor} sidebar collapse`,
+                  "links": [
+                      {
+                          icon: 'users',
+                          label: lang['Accounts'],
+                          pageOpen: 'accounts',
+                      },
+                      {
+                          icon: 'cogs',
+                          label: lang['Configuration'],
+                          pageOpen: 'config',
+                      },
+                      {
+                          icon: 'terminal',
+                          label: lang['Controls and Logs'],
+                          pageOpen: 'system',
+                      },
+                      {
+                          icon: 'sliders',
+                          label: lang['Preferences'],
+                          pageOpen: 'changeSuperPreferences',
+                      },
+                      { divider: true },
+                      {
+                          icon: 'globe',
+                          label: lang['Easy Remote Access (P2P)'],
+                          pageOpen: 'easyRemoteAccess',
+                      },
+                      {
+                          icon: 'puzzle-piece',
+                          label: lang['Custom Auto Load'],
+                          pageOpen: 'customAutoLoad',
+                      },
+                      {
+                          icon: 'plug',
+                          label: lang['Plugin Manager'],
+                          pageOpen: 'superPluginManager',
+                      },
+                      {
+                          icon: 'hdd-o',
+                          label: lang['Mount Manager'],
+                          pageOpen: 'superMountManager',
+                      },
+                      {
+                          icon: 'cloud-upload',
+                          label: lang['Global Cloud Uploaders'],
+                          pageOpen: 'cloudUploaders',
+                      },
+                      { divider: true },
+                      {
+                          icon: 'sitemap',
+                          label: lang['Central Management'],
+                          pageOpen: 'centralManagement',
+                      },
+                      {
+                          icon: 'random',
+                          label: lang[`Failover ${!config.isFailover ? 'Servers' : 'Keys'}`],
+                          pageOpen: !config.isFailover ? 'failoverServers' : 'failoverKeys',
+                      },
+                      { divider: true },
+                      {
+                          icon: 'sign-out',
+                          label: lang['Logout'],
+                          class: 'logout',
+                      },
+                  ]
               }
            }
        },
@@ -2147,12 +2227,21 @@ module.exports = function(s,config,lang){
       },
       "Videos Table": require('./videosTable.js')(s,config,lang,Theme),
       "Events Table": require('./eventsTable.js')(s,config,lang,Theme),
+      // Declared here, filled in at load time by libs/uploaders.js from the cloud uploader
+      // registry. It has to exist up front because libs/definitions.js caches a shallow copy
+      // of this object as soon as it is built -- a new top level key added later would not
+      // reach that copy, while mutating this `blocks` object in place does.
+      "Global Cloud Uploaders": {
+           "section": "Global Cloud Uploaders",
+           "blocks": {},
+      },
       "Admin Account Settings": {
            "section": "Admin Account Settings",
            "blocks": {
-               "Editor": {
-                  "name": lang["Admin Account Settings"],
+               "Account": {
+                  "name": lang["Account"],
                   "color": "blue",
+                  "section-pre-class": "col-md-6",
                   "info": [
                       {
                          "name": "mail",
@@ -2161,18 +2250,24 @@ module.exports = function(s,config,lang){
                       {
                          "name": "ke",
                          "field": lang['Group Key'],
+                         // legacyCreateAdminUser generates one with s.gid() when this is
+                         // left empty. On edit the field is disabled and already filled, so
+                         // this only ever shows while creating an account.
+                         "placeholder": lang['Leave blank to randomly generate'],
                       },
                       {
                          "name": "pass",
                          "type": "password",
                          "field": lang['Password'],
                          "fieldType": "password",
+                         "attribute": 'autocomplete="new-password"',
                       },
                       {
                          "name": "password_again",
                          "type": "password",
                          "field": lang['Password Again'],
                          "fieldType": "password",
+                         "attribute": 'autocomplete="new-password"',
                       },
                       {
                           "field": lang['2-Factor Authentication'],
@@ -2190,6 +2285,13 @@ module.exports = function(s,config,lang){
                             },
                          ]
                       },
+                 ]
+              },
+              "Limits": {
+                 "name": lang["Limits"],
+                 "color": "orange",
+                 "section-pre-class": "col-md-6",
+                 "info": [
                       {
                          "name": "detail=size",
                          "field": lang['Max Storage Amount'],
@@ -2220,6 +2322,13 @@ module.exports = function(s,config,lang){
                          "field": lang['Max Number of Cameras'],
                          "placeholder": lang['Leave blank for unlimited']
                       },
+                 ]
+              },
+              "Permissions": {
+                 "name": lang["Permissions"],
+                 "color": "red",
+                 "section-pre-class": "col-md-6",
+                 "info": [
                       {
                           "field": lang.Permissions,
                           "name": "detail=permissions",
@@ -2305,13 +2414,18 @@ module.exports = function(s,config,lang){
                             },
                          ]
                       },
-                      // NEEDS TO MOVE DESIGNATED FILES AFTER TESTING >
+                      // Per uploader permissions are generated at load time from the cloud
+                      // uploader registry (see libs/uploaders.js), so every uploader -- including
+                      // ones added by plugins -- gets both an enable toggle and a "force server
+                      // credentials" toggle without being listed here by hand. These two fields are
+                      // Superuser only: beforeAccountSave resets them from stored details, so an
+                      // Admin cannot change them from their own Account Settings.
                       {
-                          "field": lang['Can use Amazon S3'],
-                          "name": "detail=use_aws_s3",
+                          "field": lang['Can see CPU and RAM usage'],
+                          "name": "detail=show_system_usage",
                           "default":'1',
                           "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
+                          "description": lang.showSystemUsageText,
                           possible: [
                             {
                                 "name": lang.No,
@@ -2323,57 +2437,21 @@ module.exports = function(s,config,lang){
                             },
                          ]
                       },
-                      {
-                          "field": lang['Can use Wasabi Hot Cloud Storage'],
-                          "name": "detail=use_whcs",
-                          "default":'1',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
-                      {
-                          "field": lang['Can use SFTP'],
-                          "name": "detail=use_sftp",
-                          "default":'1',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
-                      {
-                          "field": lang['Can use WebDAV'],
-                          "name": "detail=use_webdav",
-                          "default":'1',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
+                 ]
+              },
+              "CloudUploaders": {
+                 "name": lang["Cloud Uploaders"],
+                 "color": "forestgreen",
+                 "section-pre-class": "col-md-6",
+                 "info": [
+                      { "cloudUploaderPermissionsAnchor": true },
+                 ]
+              },
+              "Integrations": {
+                 "name": lang["Integrations"],
+                 "color": "purple",
+                 "section-pre-class": "col-md-6",
+                 "info": [
                       {
                           "field": lang['Can use Discord Bot'],
                           "name": "detail=use_discordbot",
@@ -2408,75 +2486,14 @@ module.exports = function(s,config,lang){
                             },
                          ]
                       },
-                      {
-                          "field": lang['Use Global Amazon S3 Video Storage'],
-                          "name": "detail=aws_use_global",
-                          "default":'0',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
-                      {
-                          "field": lang['Use Global Wasabi Hot Cloud Storage Video Storage'],
-                          "name": "detail=whcs_use_global",
-                          "default":'0',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
-                      {
-                          "field": lang['Use Global Backblaze B2 Video Storage'],
-                          "name": "detail=b2_use_global",
-                          "default":'0',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
-                      {
-                          "field": lang['Use Global WebDAV Video Storage'],
-                          "name": "detail=webdav_use_global",
-                          "default":'0',
-                          "fieldType": "select",
-                          "form-group-visibleWhen":{ "more_perms": "limited" },
-                          possible: [
-                            {
-                                "name": lang.No,
-                               "value": "0"
-                            },
-                            {
-                               "name": lang.Yes,
-                               "value": "1"
-                            },
-                         ]
-                      },
                       // NEEDS TO MOVE DESIGNATED FILES AFTER TESTING />
+                 ]
+              },
+              "Save": {
+                 "noHeader": true,
+                 "noDefaultSectionClasses": true,
+                 "section-pre-class": "col-md-12",
+                 "info": [
                       {
                          "fieldType": "btn-group",
                          "btns": [
@@ -2514,23 +2531,17 @@ module.exports = function(s,config,lang){
                                "type": "password",
                                "fieldType": "password",
                                "field": lang['Password'],
+                               "attribute": 'autocomplete="new-password"',
                             },
                             {
                                "name": "pass_again",
                                "type": "password",
                                "fieldType": "password",
                                "field": lang['Password Again'],
+                               "attribute": 'autocomplete="new-password"',
                             },
-                            {
-                               "fieldType": "btn-group",
-                               "btns": [
-                                   {
-                                       "fieldType": "btn",
-                                       "class": `submit btn-success`,
-                                       "btnContent": `${lang['Save']}`,
-                                   },
-                               ],
-                            },
+                            // Save now lives in the tab's floating bar
+                            // (web/pages/blocks/super/stickySubmitBar.ejs).
                         ]
                     },
                     {

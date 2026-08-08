@@ -145,6 +145,54 @@ module.exports = function(s,config,lang,app){
         },res,req)
     })
     /**
+    * API : Superuser : Get Global Cloud Uploader credentials (conf.json > cloudUploaders)
+    * Superuser only. These are the credentials an account is put on when a Cloud Uploader
+    * is Forced for it, and they are deliberately never exposed on any Admin facing route.
+    */
+    app.get(config.webPaths.superApiPrefix+':auth/system/cloudUploaders', function (req,res){
+        s.superAuth(req.params,async (resp) => {
+            const currentConfig = s.parseJSON(fs.readFileSync(s.location.config),{})
+            s.closeJsonResponse(res,{
+                ok: true,
+                cloudUploaders: currentConfig.cloudUploaders || {},
+            })
+        },res,req)
+    })
+    /**
+    * API : Superuser : Set Global Cloud Uploader credentials
+    */
+    app.post(config.webPaths.superApiPrefix+':auth/system/cloudUploaders', function (req,res){
+        s.superAuth(req.params,async (resp) => {
+            const endData = { ok: true }
+            const postBody = s.getPostData(req,'cloudUploaders')
+            if(!postBody || !(postBody instanceof Object)){
+                endData.ok = false
+                endData.msg = lang.postDataBroken
+            }else{
+                const currentConfig = s.parseJSON(fs.readFileSync(s.location.config),{})
+                // The audit entry keeps the shape of the change without writing the
+                // credentials themselves into the log table.
+                s.systemLog('conf.json Modified',{
+                    by: resp.$user.mail,
+                    ip: resp.ip,
+                    old: Object.assign({},currentConfig,{
+                        cloudUploaders: Object.keys(currentConfig.cloudUploaders || {})
+                    }),
+                    changed: 'cloudUploaders',
+                })
+                // Assigned rather than deep merged so that clearing a field actually
+                // clears it instead of leaving the previous value underneath.
+                currentConfig.cloudUploaders = postBody
+                const configError = await modifyConfiguration(currentConfig)
+                if(configError)s.systemLog(configError)
+                // Deliberately not broadcasting `save_configuration`: that is the raw
+                // Configuration editor's signal and the panel renders it as an error styled
+                // notice, so firing it here put a red "Saved" toast next to this tab's own.
+            }
+            s.closeJsonResponse(res,endData)
+        },res,req)
+    })
+    /**
     * API : Superuser : Activate Key
     */
     app.post(config.webPaths.superApiPrefix+':auth/system/activate', function (req,res){
@@ -173,6 +221,42 @@ module.exports = function(s,config,lang,app){
             checkSubscription(subscriptionId,function(hasSubcribed){
                 endData.ok = hasSubcribed
                 config.userHasSubscribed = hasSubcribed
+                s.closeJsonResponse(res,endData)
+            })
+        },res,req)
+    })
+    /**
+    * API : Superuser : Remove the License Key and return to an unactivated state
+    */
+    app.post(config.webPaths.superApiPrefix+':auth/system/deactivate', function (req,res){
+        s.superAuth(req.params,async (resp) => {
+            const endData = { ok: true }
+            const currentConfig = JSON.parse(fs.readFileSync(s.location.config))
+            const hadSubscriptionId = !!currentConfig.subscriptionId
+            s.systemLog('conf.json Modified',{
+                by: resp.$user.mail,
+                ip: resp.ip,
+                old: currentConfig,
+                changed: 'subscriptionId removed',
+            })
+            delete currentConfig.subscriptionId
+            const configError = await modifyConfiguration(currentConfig)
+            if(configError)s.systemLog(configError)
+            config.subscriptionId = ''
+            endData.hadSubscriptionId = hadSubscriptionId
+            // Startup activates from `subscriptionId || peerConnectKey || p2pApiKey`, so if
+            // either of the other two is set this install can come back activated after a
+            // restart. Those belong to Central Management and P2P and are removed from their
+            // own tabs, so say so rather than silently deleting someone's other keys.
+            endData.otherKeysPresent = [
+                config.peerConnectKey ? 'peerConnectKey' : null,
+                config.p2pApiKey ? 'p2pApiKey' : null,
+            ].filter(Boolean)
+            // Re-run the check with nothing, so the licensing module resets the state it
+            // derives (userHasSubscribed, camera count, expiry) instead of us guessing at it.
+            checkSubscription('',function(hasSubscribed){
+                config.userHasSubscribed = hasSubscribed
+                endData.userHasSubscribed = hasSubscribed
                 s.closeJsonResponse(res,endData)
             })
         },res,req)

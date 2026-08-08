@@ -233,6 +233,17 @@ module.exports = function(s,config,lang){
             if(r && r[0]){
                 r = r[0];
                 const details = JSON.parse(r.details);
+                // Overlay any Superuser forced cloud uploader credentials before anything
+                // reads the details, so the uploader clients and `s.group[ke].init` below
+                // agree on which account the uploads are going to. The merged copy is written
+                // back onto the row because each uploader's loadGroupApp re-parses
+                // `e.details` itself rather than using the object passed to it. This is the
+                // only place the forced values are applied; they are never persisted to the
+                // Users table, so they stay out of anything sent to a dashboard client.
+                if(s.applyForcedCloudUploaderDetails){
+                    s.applyForcedCloudUploaderDetails(details);
+                    r.details = JSON.stringify(details);
+                }
                 //load extenders
                 s.loadGroupAppExtensions.forEach(function(extender){
                     extender(r,details)
@@ -387,6 +398,9 @@ module.exports = function(s,config,lang){
                     formDetails.edit_days = details.edit_days
                     formDetails.use_admin = details.use_admin
                     formDetails.use_ldap = details.use_ldap
+                    // Superuser set: reset it from what is stored so an Admin cannot grant
+                    // themselves the system usage readings from their own Account Settings.
+                    formDetails.show_system_usage = details.show_system_usage
                     //check
                     if(details.edit_days == "0"){
                         formDetails.days = details.days;

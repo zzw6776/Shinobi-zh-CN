@@ -54,16 +54,8 @@ module.exports = (s,config,lang,app,io) => {
     var loadGoogleDriveForUser = async function(e){
         // e = user
         var userDetails = JSON.parse(e.details)
-        if(userDetails.googd_use_global === '1' && config.cloudUploaders && config.cloudUploaders.GoogleDrive){
-            // {
-            //     googd_accessKeyId: "",
-            //     googd_secretAccessKey: "",
-            //     googd_region: "",
-            //     googd_bucket: "",
-            //     googd_dir: "",
-            // }
-            userDetails = Object.assign(userDetails,config.cloudUploaders.GoogleDrive)
-        }
+        // Forced (Superuser configured) credentials are merged into the account details
+        // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
         if(userDetails.googd_save === '1'){
             s.group[e.ke].googleDriveFolderIds = {}
             var oAuth2Client
@@ -285,6 +277,9 @@ module.exports = (s,config,lang,app,io) => {
        "name": lang["Google Drive"],
        "color": "forestgreen",
        "uploaderId": 'googd',
+       "enableFlag": 'use_googd',
+       "globalFlag": 'googd_use_global',
+       "globalConfigKey": 'GoogleDrive',
        "info": [
            {
               "name": "detail=googd_save",

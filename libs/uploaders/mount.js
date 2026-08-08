@@ -94,9 +94,8 @@ module.exports = function(s,config,lang){
     function loadGroupApp(e){
         // e = user
         var userDetails = JSON.parse(e.details)
-        if(userDetails.mnt_use_global === '1' && config.cloudUploaders && config.cloudUploaders.WasabiHotCloudStorage){
-            userDetails = Object.assign(userDetails,config.cloudUploaders.mountedDrive)
-        }
+        // Forced (Superuser configured) credentials are merged into the account details
+        // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
         //Mounted Drive Storage
         if(
            !s.group[e.ke].mnt &&
@@ -504,6 +503,9 @@ module.exports = function(s,config,lang){
        "name": lang["Mounted Drive Storage"],
        "color": "forestgreen",
        "uploaderId": 'mnt',
+       "enableFlag": 'use_mnt',
+       "globalFlag": 'mnt_use_global',
+       "globalConfigKey": 'mountedDrive',
        "info": [
            {
               "name": "detail=mnt_save",

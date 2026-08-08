@@ -231,8 +231,13 @@ body {
 .text-monospace {
     font-family: monospace;
 }
+/* text-overflow only takes effect on a single overflowing line, so the class has to
+   carry nowrap and overflow itself — without them long text hard-clips mid-character
+   instead of showing the ellipsis. */
 .text-ellipsis {
     text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 .float{
 

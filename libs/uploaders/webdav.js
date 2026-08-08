@@ -24,15 +24,8 @@ module.exports = async function(s,config,lang){
             var loadWebDavForUser = function(e){
                 // e = user
                 var userDetails = JSON.parse(e.details);
-                if(userDetails.webdav_use_global === '1' && config.cloudUploaders && config.cloudUploaders.WebDAV){
-                    // {
-                    //     webdav_user: "",
-                    //     webdav_pass: "",
-                    //     webdav_url: "",
-                    //     webdav_dir: "",
-                    // }
-                    userDetails = Object.assign(userDetails,config.cloudUploaders.WebDAV)
-                }
+                // Forced (Superuser configured) credentials are merged into the account details
+                // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
                 //owncloud/webdav
                 if(!s.group[e.ke].webdav &&
                    userDetails.webdav_user&&
@@ -260,6 +253,9 @@ module.exports = async function(s,config,lang){
                "name": lang.WebDAV,
                "color": "forestgreen",
                "uploaderId": 'webdav',
+               "enableFlag": 'use_webdav',
+               "globalFlag": 'webdav_use_global',
+               "globalConfigKey": 'WebDAV',
                "info": [
                    {
                       "name": "detail=webdav_save",

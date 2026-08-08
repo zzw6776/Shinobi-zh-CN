@@ -143,6 +143,9 @@ $(document).ready(async function(){
     onWebSocketEvent(function (d){
         switch(d.f){
             case'init_success':
+                // Absent when the group is not permitted to see system usage; the CPU and RAM
+                // bars are not rendered in that case either.
+                if(!d.os)break;
                 var coreCount = d.os.cpuCount
                 var operatingSystem = d.os.platform
                 var totalRAM = d.os.totalmem

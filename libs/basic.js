@@ -101,6 +101,15 @@ module.exports = function(s,config){
             s.createHash = function(x){return crypto.createHash('sha256').update(x).digest("hex")}
         break;
     }
+    // Whether a group is allowed to see CPU and RAM usage on the dashboard. The value is a
+    // Superuser set permission on the group's Admin account, read from `s.group[ke].init`
+    // (which holds that Admin's details), so sub accounts of the group inherit it and can
+    // never be shown more than the Admin. Absent means allowed, so existing installs are
+    // unaffected.
+    s.groupCanSeeSystemUsage = function(groupKey){
+        const groupInit = s.group[groupKey] && s.group[groupKey].init
+        return !groupInit || groupInit.show_system_usage !== '0'
+    }
     s.defaultSuperPasswordHash = '21232f297a57a5a743894a0e4a801fc3'
     s.superUserUsesDefaultPassword = function(superUser){
         return !!superUser && typeof superUser.pass === 'string'

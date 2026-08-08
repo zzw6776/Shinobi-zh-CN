@@ -1,14 +1,10 @@
 PNotify.prototype.options.styling = "fontawesome";
 var isSubAccount = !!$user.details.sub
 var loadedMonitors = {}
-var tabTree = null
-var pageLoadingData = {}
-var pageTabLinks = $('#pageTabLinks')
-var createdTabLinks = $('#createdTabLinks')
-var pageTabContainer = $('#pageTabContainer')
-var floatingBackButton = $('#floating-back-button')
-var loadedPages = {}
-var activeTabName = 'initial'
+// Tab state (tabTree, loadedPages, activeTabName, openTab, createNewTab, the onTab*
+// lifecycle, dashboardOptions and onDashboardReady) lives in bs5.tabEngine.js, which is
+// shared with the Superuser panel and must be loaded before this file. The dashboard's
+// own per-type tab behavior is registered further down via registerTabTypeHandler.
 var chartColors = {
     red: 'rgb(255, 99, 132)',
     orange: 'rgb(255, 159, 64)',
@@ -206,24 +202,6 @@ const mergeDeep = function(...objects) {
     return prev;
   }, {});
 }
-function dashboardOptions(r,rr,rrr){
-    if(!rrr){rrr={};};if(typeof rrr === 'string'){rrr={n:rrr}};if(!rrr.n){rrr.n='ShinobiOptions_'+location.host+'_'+$user.ke+$user.uid}
-    ii={o:localStorage.getItem(rrr.n)};try{ii.o=JSON.parse(ii.o)}catch(e){ii.o={}}
-    if(!ii.o){ii.o={}}
-    if(r&&rr&&!rrr.x){
-        ii.o[r]=rr;
-    }
-    switch(rrr.x){
-        case 0:
-            delete(ii.o[r])
-        break;
-        case 1:
-            delete(ii.o[r][rr])
-        break;
-    }
-    localStorage.setItem(rrr.n,JSON.stringify(ii.o))
-    return ii.o
-}
 function getLocation(d){
     var url
     if(d && d.info && d.info.URL){
@@ -354,237 +332,21 @@ function fullScreenInit(target){
     }
 }
 
-function saveTabBlipPosition(tabId){
-    var loadedTab = loadedPages[tabId]
-    if(!loadedTab)return;
-    var theDoc = document.documentElement
-    loadedTab.bodyScrollX = parseFloat(`${theDoc.scrollTop}`)
-    loadedTab.bodyScrollY = parseFloat(`${theDoc.scrollLeft}`)
-}
-function loadTabBlipPosition(tabId){
-    var loadedTab = loadedPages[tabId]
-    if(!loadedTab)return;
-    blipTo(loadedTab.bodyScrollX || 0,loadedTab.bodyScrollY || 0)
-}
-
-function blipTo(xPageValue,yPageValue){
-    document.documentElement.style.scrollBehavior = 'auto';
-    setTimeout(() => window.scrollTo(yPageValue, xPageValue), 5);
-    setTimeout(() => document.documentElement.style.scrollBehavior = 'smooth', 5);
-}
-
-function openTab(theTab,loadData,backAction,haltTrigger,type,overrideOnTabOpen){
-    loadData = loadData ? loadData : {}
-    if(tabTree && tabTree.back && tabTree.back.name === theTab){
-        goBackOneTab()
-        return;
-    }
-    saveTabBlipPosition(activeTabName)
-    var allTabs = $('.page-tab');
-    allTabs.hide().removeClass('tab-active');
-    $(`#tab-${theTab}`).show().addClass('tab-active');
-    pageLoadingData = Object.assign(loadData,{});
-    if(!haltTrigger){
-        tabTree = {
-            name: theTab,
-            loadData: loadData,
-            back: tabTree,
-        }
-        $('body').trigger(`tab-open-${theTab}`);
-    }
-    if(tabTree && tabTree.back){
-        floatingBackButton.show()
-    }else{
-        floatingBackButton.hide()
-    }
-    var targetUiElement = pageTabLinks.find(`.side-menu-link[page-open="${theTab}"]`)
-    if(targetUiElement.length > 0){
-        pageTabLinks.find(`.side-menu-link`).removeClass('page-link-active active')
-        pageTabLinks.find('ul').hide();
-        targetUiElement.addClass('page-link-active active').parents('li').find('ul').show();
-    }
-    //
-    $('[tab-specific-content]').hide()
-    $(`[tab-specific-content="${theTab}"]`).show()
-    //
-    onTabAway(activeTabName)
-    activeTabName = `${theTab}`;
-    if(!loadedPages[theTab]){
-        loadedPages[theTab] = {
-            name: theTab,
-            loadData: loadData,
-            type: type || 'other'
-        }
-        overrideOnTabOpen ? overrideOnTabOpen(activeTabName) : onTabOpen(activeTabName)
-    }else{
-        overrideOnTabOpen ? overrideOnTabOpen(activeTabName) : onTabReopen(activeTabName)
-    }
-    // mobile-only, close menu on page change
-    $('#sidebarMenu').removeClass('show');
-}
-
-function goBackOneTab(){
-    if(tabTree.backAction)tabTree.backAction()
-    tabTree = tabTree.back
-    if(tabTree){
-        if($(`#tab-${tabTree.name}`).length === 0)goBackOneTab();
-        openTab(tabTree.name,tabTree.loadData,tabTree.backAction,true)
-    }
-}
-
-function goBackHome(){
-    if(tabTree.back){
-        goBackOneTab()
-        goBackHome()
-    }else{
-        pageTabLinks.find(`.side-menu-link`).removeClass('page-link-active active');
-        pageTabLinks.find(`.side-menu-link.go-home`).addClass('page-link-active active');
-    }
-}
-
-function createNewTab(tabName,tabLabel,baseHtml,loadData,backAction,type){
-    var theTab = $(`#tab-${tabName}`)
-    var existAlready = true
-    if(theTab.length === 0){
-        var tabIcon = 'file-o'
-        switch(type){
-            case'videoPlayer':
-                tabIcon = 'play-circle'
-            break;
-            case'livePlayer':
-                tabIcon = 'eye'
-            break;
-            case'videosList':
-                tabIcon = 'film'
-            break;
-        }
-        existAlready = false
-        pageTabContainer.append(baseHtml)
-        createdTabLinks.append(buildTabHtml(tabName,tabLabel,tabIcon))
-        theTab = $(`#tab-${tabName}`)
-    }
-    openTab(tabName,loadData,backAction,null,type)
-    return {
-        existAlready: existAlready,
-        theTab: theTab,
-    }
-}
-
-function deleteTab(tabId){
-    $(`[page-open="${tabId}"]`).remove()
-    $(`#tab-${tabId}`).remove()
-    onTabClose(tabId)
-    delete(loadedPages[tabId])
-}
-
-var addedOnTabAway = {}
-function addOnTabAway(tabId,action){
-    if(!addedOnTabAway[tabId])addedOnTabAway[tabId] = []
-    addedOnTabAway[tabId].push(action)
-}
-
-function onTabAway(tabId){
-    var loadedTab = loadedPages[tabId]
-    if(!loadedTab)return
-    var type = loadedTab.type
-    switch(type){
-        case'videoPlayer':
-            pauseVideoPlayer(tabId)
-        break;
-        case'livePlayer':
-        break;
-    }
-    if(addedOnTabAway[tabId]){
-        addedOnTabAway[tabId].forEach(function(theAction){
-            try{
-                theAction(loadedTab)
-            }catch(err){
-                console.log(err)
-            }
-        })
-    }
-}
-
-var addedOnTabReopen = {}
-function addOnTabReopen(tabId,action){
-    if(!addedOnTabReopen[tabId])addedOnTabReopen[tabId] = []
-    addedOnTabReopen[tabId].push(action)
-}
-
-function onTabReopen(tabId){
-    var loadedTab = loadedPages[tabId]
-    if(!loadedTab)return
-    var type = loadedTab.type
-    loadTabBlipPosition(tabId)
-    console.log(`onTabReopen`,tabId,type)
-    switch(type){
-        case'videoPlayer':
-            resumeVideoPlayer(tabId)
-        break;
-        case'livePlayer':
-        break;
-    }
-    if(addedOnTabReopen[tabId]){
-        addedOnTabReopen[tabId].forEach(function(theAction){
-            try{
-                theAction(loadedTab)
-            }catch(err){
-                console.log(err)
-            }
-        })
-    }
-}
-
-var addedOnTabOpen = {}
-function addOnTabOpen(tabId,action){
-    if(!addedOnTabOpen[tabId])addedOnTabOpen[tabId] = []
-    addedOnTabOpen[tabId].push(action)
-}
-
-function onTabOpen(tabId){
-    var loadedTab = loadedPages[tabId]
-    if(!loadedTab)return
-    var type = loadedTab.type
-    loadTabBlipPosition(tabId)
-    if(addedOnTabOpen[tabId]){
-        addedOnTabOpen[tabId].forEach(function(theAction){
-            theAction(loadedTab)
-        })
-    }
-}
-
-
-var addedOnTabClose = {}
-function addOnTabClose(tabId,action){
-    addedOnTabClose[tabId] = action
-}
-
-function onTabClose(tabId){
-    var loadedTab = loadedPages[tabId]
-    if(!loadedTab)return
-    var type = loadedTab.type
-    console.log(`onTabClose`,tabId,type)
-    switch(type){
-        case'videoPlayer':
-            closeVideoPlayer(tabId)
-        break;
-        case'livePlayer':
-            closeLivePlayer(tabId)
-        break;
-    }
-    if(addedOnTabClose[tabId])addedOnTabClose[tabId](loadedTab)
-}
-
-// function saveTabStates(){
-//     localStorage.setItem(`Shinobi-Tab-States-${location.origin}`,JSON.stringify(loadedPages))
-// }
-//
-// function loadTabStates(){
-//     var tabStates = JSON.parse(localStorage.getItem(`Shinobi-Tab-States-${location.origin}`)) || {}
-//     $.each(tabStates,function(tabId,data){
-//
-//     })
-// }
+// Dashboard-only tab behavior. bs5.tabEngine.js knows nothing about players; it calls
+// these back by the `type` a tab was created with.
+registerTabTypeHandler('videoPlayer',{
+    icon: 'play-circle',
+    onAway: function(tabId){ pauseVideoPlayer(tabId) },
+    onReopen: function(tabId){ resumeVideoPlayer(tabId) },
+    onClose: function(tabId){ closeVideoPlayer(tabId) },
+})
+registerTabTypeHandler('livePlayer',{
+    icon: 'eye',
+    onClose: function(tabId){ closeLivePlayer(tabId) },
+})
+registerTabTypeHandler('videosList',{
+    icon: 'film',
+})
 
 function getDetailValues(parentForm){
     var theList = {}
@@ -630,117 +392,6 @@ function onDetailFieldChange(_this){
     parentForm.find('[name="details"]').val(JSON.stringify(getDetailValues(parentForm)));
 }
 
-// Conditional visibility is declared as data, not encoded in class names. A definition
-// carries a `visibleWhen` rule which drawBlock renders as a `visible-when` attribute on the
-// element it governs, and every rule is evaluated independently against the current form
-// values. The old scheme (`h_det_input h_det_1 h_onvif_events_input h_onvif_events_1`) let
-// whichever selector changed last hide a section another selector still wanted shown, and
-// matched class names by substring so `h_vc_libvpx` also matched `h_vc_libvpx-vp9`.
-//
-// A rule is an OR of AND groups. Each group maps a field key to the value(s) that satisfy it:
-//     visibleWhen: { h_det: '1' }                        // detector enabled
-//     visibleWhen: { h_t: ['h264','hls','mp4'] }         // any of these stream types
-//     visibleWhen: [{ h_det: '1' },{ h_onvif_events: '1' }]  // either one keeps it visible
-// A key resolves against `selector="key"`, then `detail="key"`, then `name="key"`.
-function getVisibilityFieldValue(parent,key,cache){
-    if(cache[key] !== undefined)return cache[key]
-    var el = parent.find(`[selector="${key}"],[detail="${key}"],[name="${key}"]`).first()
-    cache[key] = el.length > 0 ? `${el.val()}` : null
-    return cache[key]
-}
-function matchesVisibilityGroup(parent,group,cache){
-    var keys = Object.keys(group || {})
-    for(var i = 0; i < keys.length; i++){
-        var key = keys[i]
-        var value = getVisibilityFieldValue(parent,key,cache)
-        if(value === null)return false
-        var accepted = group[key]
-        if(!(accepted instanceof Array))accepted = [accepted]
-        var matched = accepted.some(function(oneValue){
-            return `${oneValue}` === value
-        })
-        if(!matched)return false
-    }
-    return true
-}
-function getVisibleWhenRule(el){
-    var rule = el.data('visibleWhenParsed')
-    if(rule === undefined){
-        try{
-            rule = JSON.parse(el.attr('visible-when'))
-        }catch(err){
-            console.log('Bad visible-when rule',el.attr('visible-when'),err)
-            rule = null
-        }
-        if(rule && !(rule instanceof Array))rule = [rule]
-        el.data('visibleWhenParsed',rule)
-    }
-    return rule
-}
-function applyVisibleWhen(parent){
-    var cache = {}
-    parent.find('[visible-when]').each(function(){
-        var el = $(this)
-        var rule = getVisibleWhenRule(el)
-        if(!rule)return
-        var shouldShow = rule.some(function(group){
-            return matchesVisibilityGroup(parent,group,cache)
-        })
-        if(shouldShow){
-            el.show()
-        }else{
-            el.hide()
-        }
-    })
-}
-// Legacy fallback for definitions that still encode conditions in class names (plugins,
-// third party definitions). Same OR semantics as `visible-when` so the two agree.
-function getSelectorValues(parent){
-    var values = {}
-    parent.find('[selector]').each(function(){
-        var el = $(this)
-        var theParam = el.attr('selector')
-        if(!theParam)return
-        if(!values[theParam])values[theParam] = []
-        values[theParam].push(`${el.val()}`)
-    })
-    return values
-}
-function applySelectorVisibility(parent,values){
-    values = values || getSelectorValues(parent)
-    var params = Object.keys(values)
-    if(params.length === 0)return
-    var governedSelector = params.map(function(theParam){
-        return `.${theParam}_input`
-    }).join(',')
-    parent.find(governedSelector).each(function(){
-        var el = $(this)
-        var classes = `${el.attr('class') || ''}`.split(/\s+/)
-        var isGoverned = false
-        var shouldShow = false
-        params.forEach(function(theParam){
-            if(classes.indexOf(`${theParam}_input`) === -1)return
-            isGoverned = true
-            values[theParam].forEach(function(theValue){
-                if(classes.indexOf(`${theParam}_${theValue}`) > -1)shouldShow = true
-            })
-        })
-        if(!isGoverned)return
-        if(shouldShow){
-            el.show()
-        }else{
-            el.hide()
-        }
-    })
-}
-function onSelectorChange(_this,parent){
-    var el = $(_this)
-    var theParam = el.attr('selector')
-    var theSelected = el.find('option:selected').text()
-    parent.find(`.${theParam}_text`).text(theSelected)
-    applyVisibleWhen(parent)
-    applySelectorVisibility(parent)
-}
 
 function createOptionHtml(options){
     return `<option ${options.selected ? 'selected' : ''} value="${options.value}">${options.label || options.name}</option>`
@@ -1179,16 +830,6 @@ function convertJsonToAccordionHtml(theJson){
 }
 function findCommonElements(array1, array2) {
     return array2.filter(item => array1.includes(item));
-}
-// on page load
-var readyFunctions = []
-function onDashboardReady(theAction){
-    readyFunctions.push(theAction)
-}
-function onDashboardReadyExecute(theAction){
-    $.each(readyFunctions,function(n,theAction){
-        theAction()
-    })
 }
 function popImage(imageSrc){
     $('body').append(`<div class="popped-image"><img src="${imageSrc}"></div>`)

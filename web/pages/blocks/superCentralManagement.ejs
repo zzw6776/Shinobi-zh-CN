@@ -1,4 +1,6 @@
-<div class="tab-pane text-left" id="centralManagement" role="tabpanel">
+<main class="container page-tab pt-3 text-left" id="tab-centralManagement">
+<%# inner id kept: super.centralManagement.js scopes itself to $('#centralManagement') %>
+<div id="centralManagement">
     <form>
         <div class="row" style="display:flex">
             <div class="col-md-12">
@@ -23,9 +25,6 @@
                             <div class="form-group">
                                 <input placeholder="<%-lang['P2P API Key']%>" class="form-control btn btn-dark text-left text-white" type="text" name="peerConnectKey" value="<%- config.peerConnectKey %>" placeholder="API Key from https://licenses.shinobi.video">
                             </div>
-                            <div class="btn-group d-flex flex-row">
-                                <a href="#" class="submit flex-grow-1 btn btn-success"><i class="fa fa-check"></i> <%- lang.Save %></a>
-                            </div>
                         </div>
                     </div>
                     <div class="card bg-dark text-white">
@@ -38,6 +37,8 @@
                 <% } %>
             </div>
         </div>
+    <%- include('super/stickySubmitBar'); %>
     </form>
     <script src="<%-window.libURL%>assets/js/super.centralManagement.js" type="text/javascript"></script>
 </div>
+</main>

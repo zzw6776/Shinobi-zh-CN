@@ -152,6 +152,9 @@ module.exports = function(s,config,lang,io){
             })
         }
     }
+    // CPU/RAM readings go to their own room rather than 'CPU'. That room also carries plugin
+    // events every dashboard needs, so it cannot be used to opt a group out of these stats.
+    // Only sockets whose group is permitted join 'OSSTATS' -- see libs/socketio.js.
     if(config.childNodes.mode !== 'child'){
         if(config.logCpuAndRamDangerZone){
             setInterval(async () => {
@@ -163,7 +166,7 @@ module.exports = function(s,config,lang,io){
                     f: 'os',
                     cpu: cpu,
                     ram: ram
-                },'CPU')
+                },'OSSTATS')
             },10000)
         }else{
             setInterval(async () => {
@@ -173,7 +176,7 @@ module.exports = function(s,config,lang,io){
                     f: 'os',
                     cpu: cpu,
                     ram: ram
-                },'CPU')
+                },'OSSTATS')
             },10000)
         }
     }
