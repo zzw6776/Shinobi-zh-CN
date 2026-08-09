@@ -13,6 +13,9 @@ module.exports = function(s,config,lang,io){
     const {
         legacyFilterEvents
     } = require('./events/utils.js')(s,config,lang)
+    const {
+        redactConfigForLog,
+    } = require('./system/utils.js')(config)
     s.clientSocketConnection = {}
     //send data to socket client function
     s.tx = function(z,y,x){
@@ -903,7 +906,7 @@ module.exports = function(s,config,lang,io){
                                 }
                             break;
                             case'configure':
-                                s.systemLog('conf.json Modified',{by:cn.mail,ip:cn.ip,old:jsonfile.readFileSync(s.location.config)})
+                                s.systemLog('conf.json Modified',{by:cn.mail,ip:cn.ip,old:redactConfigForLog(jsonfile.readFileSync(s.location.config))})
                                 jsonfile.writeFile(s.location.config,d.data,{spaces: 2},function(){
                                     s.tx({f:'save_configuration'},cn.id)
                                 })

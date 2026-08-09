@@ -9,6 +9,7 @@ module.exports = function(s,config,lang,app){
         modifyConfiguration,
         updateSystem,
         getSystemInfo,
+        redactConfigForLog,
      } = require('./system/utils.js')(config)
     // System Control is reachable from the dashboard by accounts granted
     // `use_system_control`, and from the Superuser panel as before.
@@ -138,7 +139,7 @@ module.exports = function(s,config,lang,app){
                 s.systemLog('conf.json Modified',{
                     by: resp.$user.mail,
                     ip: resp.ip,
-                    old: s.parseJSON(fs.readFileSync(s.location.config),{})
+                    old: redactConfigForLog(s.parseJSON(fs.readFileSync(s.location.config),{}))
                 })
                 const configError = await modifyConfiguration(postBody)
                 if(configError)s.systemLog(configError)
@@ -178,7 +179,7 @@ module.exports = function(s,config,lang,app){
                 s.systemLog('conf.json Modified',{
                     by: resp.$user.mail,
                     ip: resp.ip,
-                    old: Object.assign({},currentConfig,{
+                    old: Object.assign(redactConfigForLog(currentConfig),{
                         cloudUploaders: Object.keys(currentConfig.cloudUploaders || {})
                     }),
                     changed: 'cloudUploaders',
@@ -212,7 +213,7 @@ module.exports = function(s,config,lang,app){
                 s.systemLog('conf.json Modified',{
                     by: resp.$user.mail,
                     ip: resp.ip,
-                    old: currentConfig
+                    old: redactConfigForLog(currentConfig)
                 })
                 const configError = await modifyConfiguration(Object.assign(currentConfig,{
                     subscriptionId: subscriptionId,
@@ -241,7 +242,7 @@ module.exports = function(s,config,lang,app){
             s.systemLog('conf.json Modified',{
                 by: resp.$user.mail,
                 ip: resp.ip,
-                old: currentConfig,
+                old: redactConfigForLog(currentConfig),
                 changed: 'subscriptionId removed',
             })
             delete currentConfig.subscriptionId
