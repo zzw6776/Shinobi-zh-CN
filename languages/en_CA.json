@@ -1,6 +1,12 @@
 {
    "Shinobi": "Shinobi",
    "Can use": "Can use",
+   "Connect": "Connect",
+   "Disconnect": "Disconnect",
+   "p2pCheckingServers": "Checking which servers are online...",
+   "p2pNoServersOnline": "No servers responded. Try again later.",
+   "Actions": "Actions",
+   "Host Address": "Host Address",
    "subAccountToolAccessText": "Only takes effect if the Admin account for this group has the same access. Off for new sub-accounts and for sub-accounts created before this option existed.",
    "Can use Easy Remote Access": "Can use Easy Remote Access",
    "useRemoteAccessText": "Lets this account open Easy Remote Access (P2P) from the normal dashboard and change the P2P settings for this server. Accounts created before this option existed default to No.",

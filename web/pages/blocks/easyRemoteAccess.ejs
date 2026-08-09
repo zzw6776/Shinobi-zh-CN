@@ -27,6 +27,7 @@
      window.p2pServerList = <%- JSON.stringify(p2pServerList) %>
      window.multipleSelected = <%- multipleSelected %>
      window.selectedServers = <%- JSON.stringify(selectedServers) %>
+     window.p2pHostSelected = <%- JSON.stringify(config.p2pHostSelected || '') %>
      window.useBetterP2P = <%- !!config.useBetterP2P %>
  </script>
 <link rel="stylesheet" href="<%-window.libURL%>assets/css/super.easyRemoteAccess.css">
@@ -63,57 +64,34 @@
             </div>
         </div>
     </div>
+    <%# Rows are drawn by super.easyRemoteAccess.js once every server has been probed, so
+        that the list only ever shows servers that actually answered. %>
     <div class="row p2p-toggle-affected" id="p2pServerList">
-        <% Object.keys(p2pServerList).forEach((key) => {
-            const details = p2pServerList[key]
-            if(config.useBetterP2P && !details.v2)return;
-            if(!config.useBetterP2P && details.v2)return;
-        %>
-            <div class="col-md-4">
-                <div class="card bg-dark cursor-pointer text-white mb-4 <% if((!multipleSelected && config.p2pHostSelected === key) || multipleSelected && selectedServers.indexOf(key) > -1){ %>active<% } %>" drawn-id="<%- key %>">
-                    <div class="card-header" style="min-height:auto">
-                        <span class="badge badge-sm badge-danger pull-right selected-badge"><%- lang.Selected %></span>
-                        <span class="badge badge-sm badge-info name-badge"><%- details.name.toUpperCase() %></span>
+        <div class="col-md-12">
+            <div class="card bg-dark text-white mb-4">
+                <div class="card-body">
+                    <div id="p2pServerListLoading" class="text-center py-4">
+                        <i class="fa fa-spinner fa-pulse fa-2x"></i>
+                        <div class="mt-2"><small><%- lang.p2pCheckingServers %></small></div>
                     </div>
-                    <div style="min-height:auto">
-                        <div title="Host Address" class="d-flex flex-row text-center">
-                            <div class="flex-grow-1"><span class="info-badge badge badge-sm badge-default"><%- details.host %></span></div>
-                        </div>
-                        <div class="d-flex flex-row align-items-center">
-                            <div><i class="fa fa-download"></i></div>
-                            <div class="flex-grow-1 text-left epic-text epic-text-filter"><%- lang['Download Bandwidth'] %></div>
-                            <div class="text-right">
-                                <span class="info-badge badge badge-sm badge-default"><span class="networkUseDown"><i class="fa fa-spinner fa-pulse"></i></span> / <%- details.maxNetworkSpeed.down %></span>
-                            </div>
-                        </div>
-                        <div class="d-flex flex-row align-items-center">
-                            <div><i class="fa fa-upload"></i></div>
-                            <div class="flex-grow-1 text-left epic-text epic-text-filter"><%- lang['Upload Bandwidth'] %></div>
-                            <div class="text-right">
-                                <span class="info-badge badge badge-sm badge-default"><span class="networkUseUp"><i class="fa fa-spinner fa-pulse"></i></span> / <%- details.maxNetworkSpeed.up %></span>
-                            </div>
-                        </div>
-                        <div title="CPU Usage" class="d-flex flex-row align-items-center">
-                            <div><i class="fa fa-cubes"></i></div>
-                            <div class="flex-grow-1 align-items-center text-left epic-text epic-text-filter"><span class="cpuCores"></span> <%- lang.Threads %></div>
-                            <div class="text-right"><span class="info-badge badge badge-sm badge-default"><span class="cpuUsage"><i class="fa fa-spinner fa-pulse"></i></span>%</span></div>
-                        </div>
-                        <div title="RAM Usage" class="d-flex flex-row align-items-center">
-                            <div><i class="fa fa-tasks"></i></div>
-                            <div class="flex-grow-1 text-left epic-text epic-text-filter"><span class="ramTotal"><i class="fa fa-spinner fa-pulse"></i></span> <%- lang.RAM %></div>
-                            <div class="text-right"><span class="info-badge badge badge-sm badge-default"><span class="ramPercent"><i class="fa fa-spinner fa-pulse"></i></span>%, <span class="ramUsed"><i class="fa fa-spinner fa-pulse"></i></span> MB</span></div>
-                        </div>
+                    <div id="p2pServerListEmpty" class="text-center py-4" style="display:none">
+                        <small><%- lang.p2pNoServersOnline %></small>
                     </div>
-                    <div class="card-footer" style="min-height:auto">
-                        <div>
-                            <a target="_blank" href="#" class="d-block btn btn-default activate-remote-selection"><i class="fa fa-check"></i> <%- lang['Activate'] %></a>
-                            <a target="_blank" href="#" class="d-block btn btn-default remote-dashboard-link-copy"><i class="fa fa-copy"></i> <%- lang['Copy Remote Link'] %></a>
-                            <a target="_blank" href="#" class="d-block btn btn-info remote-dashboard-link" target="_blank"><i class="fa fa-external-link"></i> <%- lang['Open Remote Dashboard'] %></a>
-                        </div>
-                    </div>
+                    <table class="table table-striped mb-0" id="p2pServerTable" style="display:none">
+                        <thead>
+                            <tr>
+                                <th><%- lang.Name %></th>
+                                <th><%- lang['Host Address'] %></th>
+                                <th><%- lang['Download Bandwidth'] %></th>
+                                <th><%- lang['Upload Bandwidth'] %></th>
+                                <th class="text-right"><%- lang.Actions %></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-        <% }) %>
+        </div>
     </div>
     <%- include('super/stickySubmitBar'); %>
 </form>
