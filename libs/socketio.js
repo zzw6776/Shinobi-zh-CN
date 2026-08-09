@@ -383,6 +383,11 @@ module.exports = function(s,config,lang,io){
     //                    s.group[d.ke].vid[cn.id]={uid:d.uid};
                     r.details = JSON.parse(r.details);
                     await applyPermissionsToUser(r)
+                    // Live install output for the dashboard Plugin Manager tab. Must come
+                    // after the details are parsed above -- reading the permission off the
+                    // raw JSON string silently yields undefined, so the socket never joined
+                    // and an install ran to completion with the panel showing nothing.
+                    if(s.userCanUsePluginManager(r))cn.join('PLUGINMANAGER');
                     // cn.checkedPermissions = s.checkPermission(r)
                     s.group[d.ke].users[d.auth] = {
                         cnid: cn.id,
@@ -831,6 +836,8 @@ module.exports = function(s,config,lang,io){
                 d.ok=s.superAuth({ auth: d.auth },function(data){
                     cn.mail = data.$user.mail
                     cn.join('$');
+                    // Plugin Manager output is shared with permitted dashboard accounts.
+                    cn.join('PLUGINMANAGER');
                     s.superUsersApi[d.auth].cnid = cn.id
                     cn.ip=cn.request.connection.remoteAddress
                     s.userLog({ke:'$',mid:'$USER'},{type:lang['Websocket Connected'],msg:{for:lang['Superuser'],id:cn.mail,ip:cn.ip}})

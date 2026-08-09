@@ -142,6 +142,10 @@ $.aC.e.on('click','.add',function(e){
     $.aN.e.modal('show')
     $('#edit').prop('checked',false).change().parent().removeClass('is-checked')
     $.aN.f[0].reset()
+    // A new account gets the Plugin Manager, an existing one that has never had the option
+    // set does not. The field's own default is the "No" that editing a pre-existing account
+    // must show, so creation opts in here rather than the other way round.
+    $.aN.e.find('[detail="use_plugin_manager"]').val('1')
 })
 $.aC.e.on('click','.delete',function(e){
     e.e=$(this).parents('.user-row');
@@ -174,6 +178,17 @@ $.aC.e.on('click','.permission',function(e){
     e.account=$.ccio.accounts[e.u];
     $.aN.selected=e.account;
     $.aN.e.find('input').val('');
+    // Inputs are cleared above but selects were not, and this one modal is reused for every
+    // account. Any field the account being opened has no stored value for would otherwise
+    // keep the previous account's selection -- which reads as though the account has a
+    // setting it does not. Put selects back to the default they were rendered with first;
+    // the loop below then applies whatever this account actually has.
+    $.aN.e.find('select[detail]').each(function(){
+        var selectField = $(this)
+        var defaultValue = selectField.attr('data-default')
+        var hasMatchingOption = selectField.find(`option[value="${defaultValue}"]`).length > 0
+        selectField.val(hasMatchingOption ? defaultValue : selectField.find('option').first().val())
+    });
     $.each(e.account,function(n,v){
         if(n=='pass'){return}
         var el = $.aN.e.find('[name="'+n+'"]')

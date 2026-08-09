@@ -115,6 +115,7 @@ module.exports = function(s,config,lang,io){
             'home/onvifDeviceManager',
             'home/configFinder',
             'home/logViewer',
+            'home/pluginManager',
             'home/calendar',
             'home/fileBin',
             'home/videosTable',

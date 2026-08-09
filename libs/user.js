@@ -401,6 +401,7 @@ module.exports = function(s,config,lang){
                     // Superuser set: reset it from what is stored so an Admin cannot grant
                     // themselves the system usage readings from their own Account Settings.
                     formDetails.show_system_usage = details.show_system_usage
+                    formDetails.use_plugin_manager = details.use_plugin_manager
                     //check
                     if(details.edit_days == "0"){
                         formDetails.days = details.days;

@@ -54,4 +54,14 @@
     </div>
 </div>
 <link rel="stylesheet" href="<%-window.libURL%>assets/css/super.pluginManager.css">
+<script>
+// This block is shared by the Superuser panel and the dashboard's Plugin Manager tab. The
+// dashboard sets the prefix itself (it needs getApiPrefix, which only exists once the footer
+// scripts have run), so only fall back to the Superuser session form when nothing set it.
+// Registered before super.pluginManager.js so it wins the ready queue.
+$(document).ready(function(){
+    if(window.pluginManagerApiPrefix)return;
+    window.pluginManagerApiPrefix = `${superApiPrefix}${$user.sessionKey}/plugins`
+})
+</script>
 <script src="<%-window.libURL%>assets/js/super.pluginManager.js" type="text/javascript"></script>

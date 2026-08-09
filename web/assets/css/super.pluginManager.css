@@ -57,3 +57,25 @@
 #pluginManagerList [package-name]:not(:last-child){
     margin-bottom: 1rem !important;
 }
+
+/* --- Hosted by two different pages -------------------------------------------------
+   This panel renders both in the Superuser panel and in the dashboard's Plugin Manager
+   tab. The Superuser page carries `dark` on <body> (which is what bs5.darktheme.css keys
+   its table colours off) plus a page-level white from super-page.css; the dashboard has
+   neither, so the same markup came out near-black on near-black there. The block sets its
+   own colours rather than depending on whichever page is hosting it. */
+#superPluginManager,
+#superPluginManager .card-header {
+    color: #fff;
+}
+#superPluginManager .table-striped > tbody > tr > td {
+    color: #fff;
+    border-color: #222;
+}
+
+/* The dashboard scrolls on <body>, so a Commands menu opened on the last row extended past
+   the end of the content with nothing below to scroll into and appeared cut off. Give the
+   panel room to grow only while a menu is actually open, so there is no permanent gap. */
+#superPluginManager:has(.dropdown-menu.show) {
+    padding-bottom: 16rem;
+}

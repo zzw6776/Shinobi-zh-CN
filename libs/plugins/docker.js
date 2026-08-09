@@ -30,6 +30,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
     const {
         modifyConfiguration,
     } = require('../system/utils.js')(config)
+    const { addPluginManagerRoute } = require('./access.js')(s,config,lang,app)
     const fs = require('fs')
     const containerName = (packageName) => `shinobi-plugin-${packageName}`
     const registryImage = (packageName,variant) => {
@@ -144,7 +145,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
                     module: packageName,
                     process: 'install-' + channel,
                     data: data.toString(),
-                },'$')
+                },'PLUGINMANAGER')
             }
             let proc
             try{
@@ -172,135 +173,125 @@ module.exports = (s,config,lang,app,io,helpers) => {
     * API : Superuser : Pull + Run a plugin as a Docker container, connected
     * back to this Shinobi instance over websocket (client-mode plugin).
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/docker/deploy', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            const variant = req.body.variant
-            const hostOverride = (req.body.host || '').trim()
-            if(!isSafeToken(packageName) || !isSafeToken(variant)){
-                s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
-                return
+    addPluginManagerRoute('post','/docker/deploy', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        const variant = req.body.variant
+        const hostOverride = (req.body.host || '').trim()
+        if(!isSafeToken(packageName) || !isSafeToken(variant)){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        const variants = getDockerVariants(packageName)
+        if(variants.indexOf(variant) === -1){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        // the plug name (how the plugin identifies itself when it connects, and the
+        // key used for config.pluginKeys[plug]) lives in the plugin's own conf.json/
+        // conf.sample.json, not package.json - getModuleConfiguration reads the right one
+        const moduleConfig = getModuleConfiguration(packageName)
+        const plug = moduleConfig.plug || packageName
+        let image = registryImage(packageName,variant)
+        const name = containerName(packageName)
+        const host = hostOverride || detectHostIp()
+        const key = ensurePluginKey(plug)
+        await persistPluginKeys()
+        s.closeJsonResponse(res,{ ok: true })
+        // remove any existing container under this name first (covers both a
+        // stale exited container and a currently-running one being redeployed
+        // with a different variant/host/etc)
+        await new Promise((resolve) => execFile('docker',['rm','-f',name],{timeout:15000},() => resolve()))
+        let pullResult = await runDockerStreamed(packageName,['pull',image],false)
+        if(!pullResult.ok && DL_PREFIX.test(packageName)){
+            // first attempt used the local `dl_`-prefixed folder name verbatim -
+            // retry against the real (unprefixed) published image name before
+            // giving up.
+            const fallbackImage = registryImage(stripDlPrefix(packageName),variant)
+            const fallbackPull = await runDockerStreamed(packageName,['pull',fallbackImage],false)
+            if(fallbackPull.ok){
+                image = fallbackImage
+                pullResult = fallbackPull
             }
-            const variants = getDockerVariants(packageName)
-            if(variants.indexOf(variant) === -1){
-                s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
-                return
-            }
-            // the plug name (how the plugin identifies itself when it connects, and the
-            // key used for config.pluginKeys[plug]) lives in the plugin's own conf.json/
-            // conf.sample.json, not package.json - getModuleConfiguration reads the right one
-            const moduleConfig = getModuleConfiguration(packageName)
-            const plug = moduleConfig.plug || packageName
-            let image = registryImage(packageName,variant)
-            const name = containerName(packageName)
-            const host = hostOverride || detectHostIp()
-            const key = ensurePluginKey(plug)
-            await persistPluginKeys()
-            s.closeJsonResponse(res,{ ok: true })
-            // remove any existing container under this name first (covers both a
-            // stale exited container and a currently-running one being redeployed
-            // with a different variant/host/etc)
-            await new Promise((resolve) => execFile('docker',['rm','-f',name],{timeout:15000},() => resolve()))
-            let pullResult = await runDockerStreamed(packageName,['pull',image],false)
-            if(!pullResult.ok && DL_PREFIX.test(packageName)){
-                // first attempt used the local `dl_`-prefixed folder name verbatim -
-                // retry against the real (unprefixed) published image name before
-                // giving up.
-                const fallbackImage = registryImage(stripDlPrefix(packageName),variant)
-                const fallbackPull = await runDockerStreamed(packageName,['pull',fallbackImage],false)
-                if(fallbackPull.ok){
-                    image = fallbackImage
-                    pullResult = fallbackPull
-                }
-            }
-            if(!pullResult.ok){
-                return
-            }
-            // Host-side setup that has to happen regardless of Docker vs native
-            // (e.g. installing/updating the Face Manager panel, which lives in
-            // Shinobi's own installation directory, not the container) - see
-            // setUpFaceManagerIfNeeded above.
-            const faceManagerPaths = setUpFaceManagerIfNeeded(packageName)
-            const runArgs = [
-                'run','-d',
-                '--name', name,
-                '--restart', 'unless-stopped',
-                ...(ACCELERATION_DOCKER_FLAGS[variant] || []),
-                ...(faceManagerPaths ? [
-                    '-e', `FACES_FOLDER=${faceManagerPaths.facesFolder}`,
-                    '-e', `UNKNOWN_FACES_FOLDER=${faceManagerPaths.unknownFacesFolder}`,
-                    '-v', `${faceManagerPaths.facesFolder}:${faceManagerPaths.facesFolder}`,
-                    '-v', `${faceManagerPaths.unknownFacesFolder}:${faceManagerPaths.unknownFacesFolder}`,
-                ] : []),
-                '-e', `HOST=${host}`,
-                '-e', `PORT=${config.port}`,
-                '-e', `PLUGIN_KEY=${key}`,
-                '-e', `PLUGIN_NAME=${plug}`,
-                '-e', `ACCELERATION=${variant}`,
-                image,
-            ]
-            await runDockerStreamed(packageName,runArgs)
-        },res,req)
+        }
+        if(!pullResult.ok){
+            return
+        }
+        // Host-side setup that has to happen regardless of Docker vs native
+        // (e.g. installing/updating the Face Manager panel, which lives in
+        // Shinobi's own installation directory, not the container) - see
+        // setUpFaceManagerIfNeeded above.
+        const faceManagerPaths = setUpFaceManagerIfNeeded(packageName)
+        const runArgs = [
+            'run','-d',
+            '--name', name,
+            '--restart', 'unless-stopped',
+            ...(ACCELERATION_DOCKER_FLAGS[variant] || []),
+            ...(faceManagerPaths ? [
+                '-e', `FACES_FOLDER=${faceManagerPaths.facesFolder}`,
+                '-e', `UNKNOWN_FACES_FOLDER=${faceManagerPaths.unknownFacesFolder}`,
+                '-v', `${faceManagerPaths.facesFolder}:${faceManagerPaths.facesFolder}`,
+                '-v', `${faceManagerPaths.unknownFacesFolder}:${faceManagerPaths.unknownFacesFolder}`,
+            ] : []),
+            '-e', `HOST=${host}`,
+            '-e', `PORT=${config.port}`,
+            '-e', `PLUGIN_KEY=${key}`,
+            '-e', `PLUGIN_NAME=${plug}`,
+            '-e', `ACCELERATION=${variant}`,
+            image,
+        ]
+        await runDockerStreamed(packageName,runArgs)
     })
     /**
     * API : Superuser : Stop a running plugin Docker container (kept, not removed).
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/docker/stop', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            if(!isSafeToken(packageName)){
-                s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
-                return
-            }
-            execFile('docker',['stop',containerName(packageName)],{timeout:20000},(err) => {
-                s.closeJsonResponse(res,{ ok: !err })
-            })
-        },res,req)
+    addPluginManagerRoute('post','/docker/stop', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        if(!isSafeToken(packageName)){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        execFile('docker',['stop',containerName(packageName)],{timeout:20000},(err) => {
+            s.closeJsonResponse(res,{ ok: !err })
+        })
     })
     /**
     * API : Superuser : Start a previously-stopped plugin Docker container.
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/docker/start', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            if(!isSafeToken(packageName)){
-                s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
-                return
-            }
-            execFile('docker',['start',containerName(packageName)],{timeout:20000},(err) => {
-                s.closeJsonResponse(res,{ ok: !err })
-            })
-        },res,req)
+    addPluginManagerRoute('post','/docker/start', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        if(!isSafeToken(packageName)){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        execFile('docker',['start',containerName(packageName)],{timeout:20000},(err) => {
+            s.closeJsonResponse(res,{ ok: !err })
+        })
     })
     /**
     * API : Superuser : Remove a plugin's Docker container entirely.
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/docker/remove', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            if(!isSafeToken(packageName)){
-                s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
-                return
-            }
-            execFile('docker',['rm','-f',containerName(packageName)],{timeout:20000},(err) => {
-                s.closeJsonResponse(res,{ ok: !err })
-            })
-        },res,req)
+    addPluginManagerRoute('post','/docker/remove', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        if(!isSafeToken(packageName)){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        execFile('docker',['rm','-f',containerName(packageName)],{timeout:20000},(err) => {
+            s.closeJsonResponse(res,{ ok: !err })
+        })
     })
     /**
     * API : Superuser : Fetch recent logs for a plugin's Docker container.
     */
-    app.get(config.webPaths.superApiPrefix+':auth/plugins/docker/logs', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.query.packageName
-            if(!isSafeToken(packageName)){
-                s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
-                return
-            }
-            execFile('docker',['logs','--tail','300',containerName(packageName)],{timeout:15000,maxBuffer:1024*1024*10},(err,stdout,stderr) => {
-                s.closeJsonResponse(res,{ ok: !err, logs: (stdout || '') + (stderr || '') })
-            })
-        },res,req)
+    addPluginManagerRoute('get','/docker/logs', async (req,res,resp) => {
+        const packageName = req.query.packageName
+        if(!isSafeToken(packageName)){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        execFile('docker',['logs','--tail','300',containerName(packageName)],{timeout:15000,maxBuffer:1024*1024*10},(err,stdout,stderr) => {
+            s.closeJsonResponse(res,{ ok: !err, logs: (stdout || '') + (stderr || '') })
+        })
     })
     return {
         isDockerAvailable,

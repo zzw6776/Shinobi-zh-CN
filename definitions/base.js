@@ -1649,6 +1649,14 @@ module.exports = function(s,config,lang){
                       //     pageOpen: 'eventListWithPics',
                       // },
                       {
+                          icon: 'plug',
+                          label: lang['Plugin Manager'],
+                          pageOpen: 'pluginManager',
+                          // menuSide.ejs runs this; the tab block itself is gated the same
+                          // way, so a link can never point at markup that was not rendered.
+                          eval: "$user.details.use_plugin_manager === '1'",
+                      },
+                      {
                           icon: 'sign-out',
                           label: `${lang['Logout']}`,
                           class: 'logout',
@@ -2466,6 +2474,26 @@ module.exports = function(s,config,lang){
                       // credentials" toggle without being listed here by hand. These two fields are
                       // Superuser only: beforeAccountSave resets them from stored details, so an
                       // Admin cannot change them from their own Account Settings.
+                      {
+                          "field": lang['Can use Plugin Manager'],
+                          "name": "detail=use_plugin_manager",
+                          // Default '0' on purpose: this is what an account with no stored
+                          // value shows, and no stored value means No at runtime. Account
+                          // creation sets it to Yes explicitly, see blocks/mainpermissions.ejs.
+                          "default":'0',
+                          "fieldType": "select",
+                          "description": lang.usePluginManagerText,
+                          possible: [
+                            {
+                                "name": lang.No,
+                               "value": "0"
+                            },
+                            {
+                               "name": lang.Yes,
+                               "value": "1"
+                            },
+                         ]
+                      },
                       {
                           "field": lang['Can see CPU and RAM usage'],
                           "name": "detail=show_system_usage",

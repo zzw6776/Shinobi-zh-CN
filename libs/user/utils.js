@@ -23,6 +23,9 @@ module.exports = (s,config,lang) => {
             "use_webdav":"1",
             "use_discordbot":"1",
             "use_ldap":"1",
+            // New accounts get the Plugin Manager; accounts that predate the option have no
+            // value stored and are treated as No.
+            "use_plugin_manager":"1",
             "aws_use_global":"0",
             "b2_use_global":"0",
             "webdav_use_global":"0"

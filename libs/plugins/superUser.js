@@ -10,6 +10,9 @@ const {
 } = require('worker_threads');
 module.exports = async (s,config,lang,app,io,currentUse) => {
     const { fetchDownloadAndWrite } = require('../basic/utils.js')(process.cwd(),config)
+    // Mounts each Plugin Manager route for the Superuser API and, for accounts granted
+    // `use_plugin_manager`, the dashboard API as well.
+    const { addPluginManagerRoute } = require('./access.js')(s,config,lang,app)
     const {
         currentPluginCpuUsage,
         currentPluginGpuUsage,
@@ -165,7 +168,7 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
                             process: 'install-' + channel,
                             data: data,
                         }
-                        s.tx(clientData,'$')
+                        s.tx(clientData,'PLUGINMANAGER')
                         s.debugLog(clientData)
                     }
                     installProcess.stderr.on('data',(data) => {
@@ -206,7 +209,7 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
                             process: 'install-' + channel,
                             data: data,
                         }
-                        s.tx(clientData,'$')
+                        s.tx(clientData,'PLUGINMANAGER')
                         s.debugLog(clientData)
                     }
                     installProcess.stderr.on('data',(data) => {
@@ -374,69 +377,65 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
     /**
     * API : Superuser : Custom Auto Load Package Download.
     */
-    app.get(config.webPaths.superApiPrefix+':auth/plugins/list', async (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const modules = getModules()
-            const dockerAvailable = await isDockerAvailable()
-            if(dockerAvailable){
-                // note: getModule() returns undefined for non-directory entries in the
-                // plugins/ folder (e.g. pluginBase.js, .gitignore) - must skip those or
-                // this throws inside the map and the response never gets sent (the
-                // request just hangs, since nothing downstream ever catches it)
-                await Promise.all(Object.values(modules).filter(Boolean).map(async (shinobiModule) => {
-                    try{
-                        shinobiModule.docker = await getDockerInfoForModule(shinobiModule.name)
-                    }catch(err){
-                        s.debugLog('Failed to get Docker info for plugin',shinobiModule.name,err)
-                    }
-                }))
-            }
-            s.closeJsonResponse(res,{
-                ok: true,
-                modules: modules,
-                dockerAvailable: dockerAvailable,
-                detectedHostIp: dockerAvailable ? detectHostIp() : null,
-                connectedPlugins: s.connectedDetectorPlugins,
-            })
-        },res,req)
+    addPluginManagerRoute('get','/list', async (req,res,resp) => {
+        const modules = getModules()
+        const dockerAvailable = await isDockerAvailable()
+        if(dockerAvailable){
+            // note: getModule() returns undefined for non-directory entries in the
+            // plugins/ folder (e.g. pluginBase.js, .gitignore) - must skip those or
+            // this throws inside the map and the response never gets sent (the
+            // request just hangs, since nothing downstream ever catches it)
+            await Promise.all(Object.values(modules).filter(Boolean).map(async (shinobiModule) => {
+                try{
+                    shinobiModule.docker = await getDockerInfoForModule(shinobiModule.name)
+                }catch(err){
+                    s.debugLog('Failed to get Docker info for plugin',shinobiModule.name,err)
+                }
+            }))
+        }
+        s.closeJsonResponse(res,{
+            ok: true,
+            modules: modules,
+            dockerAvailable: dockerAvailable,
+            detectedHostIp: dockerAvailable ? detectHostIp() : null,
+            connectedPlugins: s.connectedDetectorPlugins,
+        })
     })
     /**
     * API : Superuser : Custom Auto Load Package Download.
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/download', async (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            try{
-                const url = req.body.downloadUrl
-                const packageRoot = req.body.packageRoot || ''
-                const packageName = req.body.packageName || extractNameFromPackage(url)
-                const modulePath = getModulePath(packageName)
-                await downloadModule(url,packageName)
-                s.debugLog('Downloaded',packageName,url)
-                const newName = await moveModuleToNameInProperties(modulePath,packageRoot)
-                const properties = getModuleProperties(newName)
-                s.debugLog('properties',properties)
-                s.debugLog('moveModuleToNameInProperties',newName)
-                const chosenName = newName ? newName : packageName
-                enableModule(chosenName,false)
-                s.debugLog('Plugin Ready to Use!',newName,url)
-                s.closeJsonResponse(res,{
-                    ok: true,
-                    moduleName: chosenName,
-                    newModule: getModule(chosenName)
-                })
-            }catch(err){
-                console.error(err)
-                s.closeJsonResponse(res,{
-                    ok: false,
-                    error: err
-                })
-            }
-        },res,req)
+    addPluginManagerRoute('post','/download', async (req,res,resp) => {
+        try{
+            const url = req.body.downloadUrl
+            const packageRoot = req.body.packageRoot || ''
+            const packageName = req.body.packageName || extractNameFromPackage(url)
+            const modulePath = getModulePath(packageName)
+            await downloadModule(url,packageName)
+            s.debugLog('Downloaded',packageName,url)
+            const newName = await moveModuleToNameInProperties(modulePath,packageRoot)
+            const properties = getModuleProperties(newName)
+            s.debugLog('properties',properties)
+            s.debugLog('moveModuleToNameInProperties',newName)
+            const chosenName = newName ? newName : packageName
+            enableModule(chosenName,false)
+            s.debugLog('Plugin Ready to Use!',newName,url)
+            s.closeJsonResponse(res,{
+                ok: true,
+                moduleName: chosenName,
+                newModule: getModule(chosenName)
+            })
+        }catch(err){
+            console.error(err)
+            s.closeJsonResponse(res,{
+                ok: false,
+                error: err
+            })
+        }
     })
     // /**
     // * API : Superuser : Custom Auto Load Package Update.
     // */
-    // app.post(config.webPaths.superApiPrefix+':auth/plugins/update', async (req,res) => {
+    // addPluginManagerRoute('post','/update', async (req,res) => {
     //     s.superAuth(req.params, async (resp) => {
     //         try{
     //             const url = req.body.downloadUrl
@@ -465,146 +464,128 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
     /**
     * API : Superuser : Custom Auto Load Package Install.
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/install', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            const cancelInstall = req.body.cancelInstall === 'true' ? true : false
-            const response = {ok: true}
-            if(runningInstallProcesses[packageName] && cancelInstall){
-                treekill(runningInstallProcesses[packageName].pid)
-            }else if(cancelInstall){
-                // response.msg = ''
-            }else{
-                const error = await installModule(packageName)
-                if(error){
-                    response.ok = false
-                    response.msg = error
-                }
+    addPluginManagerRoute('post','/install', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        const cancelInstall = req.body.cancelInstall === 'true' ? true : false
+        const response = {ok: true}
+        if(runningInstallProcesses[packageName] && cancelInstall){
+            treekill(runningInstallProcesses[packageName].pid)
+        }else if(cancelInstall){
+            // response.msg = ''
+        }else{
+            const error = await installModule(packageName)
+            if(error){
+                response.ok = false
+                response.msg = error
             }
-            s.closeJsonResponse(res,response)
-        },res,req)
+        }
+        s.closeJsonResponse(res,response)
     })
     /**
     * API : Superuser : Custom Auto Load Package Install.
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/run', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            const scriptName = req.body.scriptName
-            const response = {ok: true}
-            if(runningInstallProcesses[packageName]){
-                treekill(runningInstallProcesses[packageName].pid)
-            }else{
-                const error = await runModuleCommand(packageName,scriptName)
-                if(error){
-                    response.ok = false
-                    response.msg = error
-                }
+    addPluginManagerRoute('post','/run', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        const scriptName = req.body.scriptName
+        const response = {ok: true}
+        if(runningInstallProcesses[packageName]){
+            treekill(runningInstallProcesses[packageName].pid)
+        }else{
+            const error = await runModuleCommand(packageName,scriptName)
+            if(error){
+                response.ok = false
+                response.msg = error
             }
-            s.closeJsonResponse(res,response)
-        },res,req)
+        }
+        s.closeJsonResponse(res,response)
     })
     /**
     * API : Superuser : Interact with Installer
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/command', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            const command = req.body.command || ''
-            const response = {ok: true}
-            try{
-                runningInstallProcesses[packageName].stdin.write(`${command}\n`)
-            }catch(err){
-                response.ok = false
-                response.msg = err
-            }
-            s.closeJsonResponse(res,response)
-        },res,req)
+    addPluginManagerRoute('post','/command', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        const command = req.body.command || ''
+        const response = {ok: true}
+        try{
+            runningInstallProcesses[packageName].stdin.write(`${command}\n`)
+        }catch(err){
+            response.ok = false
+            response.msg = err
+        }
+        s.closeJsonResponse(res,response)
     })
     /**
     * API : Superuser : Update Plugin conf.json
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/configuration/update', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const response = {ok: true}
-            const packageName = req.body.packageName
-            const configPath = modulesBasePath + packageName + '/conf.json'
-            const newPluginConfig = s.parseJSON(req.body.config) || {}
-            try{
-                await fs.promises.writeFile(configPath,s.prettyPrint(newPluginConfig))
-            }catch(err){
-                response.ok = false
-                response.msg = err
-            }
-            s.closeJsonResponse(res,response)
-        },res,req)
+    addPluginManagerRoute('post','/configuration/update', async (req,res,resp) => {
+        const response = {ok: true}
+        const packageName = req.body.packageName
+        const configPath = modulesBasePath + packageName + '/conf.json'
+        const newPluginConfig = s.parseJSON(req.body.config) || {}
+        try{
+            await fs.promises.writeFile(configPath,s.prettyPrint(newPluginConfig))
+        }catch(err){
+            response.ok = false
+            response.msg = err
+        }
+        s.closeJsonResponse(res,response)
     })
     /**
     * API : Superuser : Get Plugin conf.json
     */
-    app.get(config.webPaths.superApiPrefix+':auth/plugins/configuration', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const response = {ok: true}
-            const packageName = req.query.packageName
-            const modulePath = modulesBasePath + packageName
-            try{
-                const shinobiModule = getModule(packageName)
-                response.config = shinobiModule.config
-            }catch(err){
-                response.ok = false
-                response.msg = err
-            }
-            s.closeJsonResponse(res,response)
-        },res,req)
+    addPluginManagerRoute('get','/configuration', async (req,res,resp) => {
+        const response = {ok: true}
+        const packageName = req.query.packageName
+        const modulePath = modulesBasePath + packageName
+        try{
+            const shinobiModule = getModule(packageName)
+            response.config = shinobiModule.config
+        }catch(err){
+            response.ok = false
+            response.msg = err
+        }
+        s.closeJsonResponse(res,response)
     })
     /**
     * API : Superuser : Custom Auto Load Package set Status (Enabled or Disabled).
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/status', (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const status = req.body.status
-            const packageName = req.body.packageName
-            const selection = status == 'true' ? true : false
-            const theModule = getModule(packageName)
-            enableModule(packageName,selection)
-            if(theModule.config.hotLoadable === true){
-                if(!selection){
-                    loadModule(theModule)
-                }else{
-                    unloadModule(packageName)
-                }
+    addPluginManagerRoute('post','/status', async (req,res,resp) => {
+        const status = req.body.status
+        const packageName = req.body.packageName
+        const selection = status == 'true' ? true : false
+        const theModule = getModule(packageName)
+        enableModule(packageName,selection)
+        if(theModule.config.hotLoadable === true){
+            if(!selection){
+                loadModule(theModule)
+            }else{
+                unloadModule(packageName)
             }
-            s.closeJsonResponse(res,{ok: true, status: selection})
-        },res,req)
+        }
+        s.closeJsonResponse(res,{ok: true, status: selection})
     })
     /**
     * API : Superuser : Custom Auto Load Package Delete
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/delete', async (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const packageName = req.body.packageName
-            const response = deleteModule(packageName)
-            s.closeJsonResponse(res,{ok: response})
-        },res,req)
+    addPluginManagerRoute('post','/delete', async (req,res,resp) => {
+        const packageName = req.body.packageName
+        const response = deleteModule(packageName)
+        s.closeJsonResponse(res,{ok: response})
     })
     /**
     * API : Superuser : Custom Auto Load Package Reload All
     */
-    app.post(config.webPaths.superApiPrefix+':auth/plugins/reloadAll', async (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            await initializeAllModules();
-            s.closeJsonResponse(res,{ok: true})
-        },res,req)
+    addPluginManagerRoute('post','/reloadAll', async (req,res,resp) => {
+        await initializeAllModules();
+        s.closeJsonResponse(res,{ok: true})
     })
     /**
     * API : Superuser : Get Plugin README
     */
-    app.get(config.webPaths.superApiPrefix+':auth/plugins/readme/:pluginName', async (req,res) => {
-        s.superAuth(req.params, async (resp) => {
-            const name = req.params.pluginName
-            const readme = await getPluginReadme(name,true);
-            s.closeJsonResponse(res,{ok: true, readme: readme})
-        },res,req)
+    addPluginManagerRoute('get','/readme/:pluginName', async (req,res,resp) => {
+        const name = req.params.pluginName
+        const readme = await getPluginReadme(name,true);
+        s.closeJsonResponse(res,{ok: true, readme: readme})
     })
     s.beforeMonitorsLoadedOnStartup(async () => {
         // Initialize Modules on Start

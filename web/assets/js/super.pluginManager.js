@@ -15,7 +15,7 @@ $(document).ready(function(){
     var pluginCommandLine = $('#pluginCommandLine')
     var pluginDownloadableSearch = $('#pluginManagerDownloadbleListSearch')
     var getModules = function(callback) {
-        $.get(superApiPrefix + $user.sessionKey + '/plugins/list',callback)
+        $.get(pluginManagerApiPrefix + '/list',callback)
     }
     function getDlPluginId(plugin){
         return `${plugin.name}_${plugin.link}_${plugin.dir}`
@@ -212,7 +212,7 @@ $(document).ready(function(){
                     text: lang['Please Wait...'],
                     type: 'info'
                 });
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/download',{
+                $.post(pluginManagerApiPrefix + '/download',{
                     downloadUrl: url,
                     packageRoot: packageRoot,
                 },function(data){
@@ -239,7 +239,7 @@ $(document).ready(function(){
             clickCallback: function(){
                 loadedBlocks[packageName].stdout.empty()
                 loadedBlocks[packageName].stderr.empty()
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/install',{
+                $.post(pluginManagerApiPrefix + '/install',{
                     packageName: packageName,
                 },callback)
             }
@@ -256,7 +256,7 @@ $(document).ready(function(){
             clickCallback: function(){
                 loadedBlocks[packageName].stdout.empty()
                 loadedBlocks[packageName].stderr.empty()
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/run',{
+                $.post(pluginManagerApiPrefix + '/run',{
                     packageName: packageName,
                     scriptName: scriptName,
                 },callback)
@@ -272,20 +272,20 @@ $(document).ready(function(){
                 title: lang.Delete,
             },
             clickCallback: function(){
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/delete',{
+                $.post(pluginManagerApiPrefix + '/delete',{
                     packageName: packageName,
                 },callback)
             }
         })
     }
     var setModuleStatus = function(packageName,status,callback){
-        $.post(superApiPrefix + $user.sessionKey + '/plugins/status',{
+        $.post(pluginManagerApiPrefix + '/status',{
             status: status,
             packageName: packageName,
         },callback)
     }
     var sendInstallerCommand = function(packageName,command,callback){
-        $.post(superApiPrefix + $user.sessionKey + '/plugins/command',{
+        $.post(pluginManagerApiPrefix + '/command',{
             command: command,
             packageName: packageName,
         },callback)
@@ -316,7 +316,7 @@ $(document).ready(function(){
     }
     function getReadme(packageName){
         return new Promise(function(resolve){
-            $.get(`${superApiPrefix}${$user.sessionKey}/plugins/readme/${packageName}`,function(data){
+            $.get(`${pluginManagerApiPrefix}/readme/${packageName}`,function(data){
                 if(!data.ok)console.error(data);
                 resolve(data.readme || '')
             })
@@ -387,7 +387,7 @@ $(document).ready(function(){
                 })
             break;
             case'cancelInstall':
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/install',{
+                $.post(pluginManagerApiPrefix + '/install',{
                     packageName: packageName,
                     cancelInstall: 'true'
                 },function(data){
@@ -431,7 +431,7 @@ $(document).ready(function(){
                 })
             break;
             case'editConfig':
-                $.get(superApiPrefix + $user.sessionKey + '/plugins/configuration?packageName=' + packageName,function(data){
+                $.get(pluginManagerApiPrefix + '/configuration?packageName=' + packageName,function(data){
                     $.confirm.create({
                         title: lang[`Edit Configuration`],
                         body: `<textarea id="pluginConfigEditContents" class="form-control" style="height:400px;font-family: monospace;border:1px solid #eee; border-radius: 15px;padding: 10px;">${JSON.stringify(data.config,null,3) || {}}</textarea>`,
@@ -441,7 +441,7 @@ $(document).ready(function(){
                         },
                         clickCallback: function(){
                             var newPluginConfigStringed = $('#pluginConfigEditContents').val()
-                            $.post(superApiPrefix + $user.sessionKey + '/plugins/configuration/update',{
+                            $.post(pluginManagerApiPrefix + '/configuration/update',{
                                 packageName: packageName,
                                 config: newPluginConfigStringed,
                             },function(data){
@@ -465,7 +465,7 @@ $(document).ready(function(){
                         loadedBlocks[packageName].stdout.empty()
                         loadedBlocks[packageName].stderr.empty()
                         dockerActionInProgress[packageName] = true
-                        $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/deploy',{
+                        $.post(pluginManagerApiPrefix + '/docker/deploy',{
                             packageName: packageName,
                             variant: variant,
                             host: hostField,
@@ -476,14 +476,14 @@ $(document).ready(function(){
                 })
             break;
             case'docker-stop':
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/stop',{
+                $.post(pluginManagerApiPrefix + '/docker/stop',{
                     packageName: packageName,
                 },function(data){
                     refreshModuleList()
                 })
             break;
             case'docker-start':
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/start',{
+                $.post(pluginManagerApiPrefix + '/docker/start',{
                     packageName: packageName,
                 },function(data){
                     refreshModuleList()
@@ -498,7 +498,7 @@ $(document).ready(function(){
                         title: lang.Delete,
                     },
                     clickCallback: function(){
-                        $.post(superApiPrefix + $user.sessionKey + '/plugins/docker/remove',{
+                        $.post(pluginManagerApiPrefix + '/docker/remove',{
                             packageName: packageName,
                         },function(data){
                             refreshModuleList()
@@ -510,7 +510,7 @@ $(document).ready(function(){
                 var logsView = card.find('.docker-logs-view')
                 var isHidden = logsView.hasClass('d-none')
                 if(isHidden){
-                    $.get(superApiPrefix + $user.sessionKey + '/plugins/docker/logs?packageName=' + packageName,function(data){
+                    $.get(pluginManagerApiPrefix + '/docker/logs?packageName=' + packageName,function(data){
                         logsView.removeClass('d-none').find('pre').text(data.logs || '')
                     })
                 }else{
@@ -597,7 +597,17 @@ $(document).ready(function(){
     }
     renderConnectedPlugins()
     setTimeout(refreshModuleList,2000)
-    $.ccio.ws.on('f',function(data){
+    // The two pages hosting this panel have different sockets: the dashboard exposes
+    // onWebSocketEvent, the Superuser panel has $.ccio.ws. Both are fed the same
+    // 'plugin-info' events from the PLUGINMANAGER room.
+    function onPluginManagerEvent(handler){
+        if(typeof onWebSocketEvent === 'function'){
+            onWebSocketEvent(handler)
+        }else if($.ccio && $.ccio.ws){
+            $.ccio.ws.on('f',handler)
+        }
+    }
+    onPluginManagerEvent(function(data){
         switch(data.f){
             case'plugin-info':
                 var name = data.module
