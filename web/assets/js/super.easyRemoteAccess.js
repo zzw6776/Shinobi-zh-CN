@@ -119,7 +119,7 @@ $(document).ready(function(){
         // formValues.p2pHostSelected = currentlySelectedP2PServerId
         formValues.p2pHostMultiSelected = getSelectedServers()
         console.log(formValues)
-        $.post(superApiPrefix + $user.sessionKey + '/p2p/save',{
+        $.post(remoteAccessApiPrefix + '/save',{
             data: JSON.stringify(formValues)
         },function(data){
             console.log(data)

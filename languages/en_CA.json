@@ -1,6 +1,8 @@
 {
    "Shinobi": "Shinobi",
    "Can use": "Can use",
+   "Can use Easy Remote Access": "Can use Easy Remote Access",
+   "useRemoteAccessText": "Lets this account open Easy Remote Access (P2P) from the normal dashboard and change the P2P settings for this server. Accounts created before this option existed default to No.",
    "Can use Plugin Manager": "Can use Plugin Manager",
    "usePluginManagerText": "Lets this account open the Plugin Manager from the normal dashboard, where it can install, configure and remove plugins. Accounts created before this option existed default to No.",
    "GPU": "GPU",

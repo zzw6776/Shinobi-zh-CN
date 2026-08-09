@@ -1635,6 +1635,28 @@ module.exports = function(s,config,lang){
                           addUl: true,
                           eval: `!$user.details.sub || $user.details.monitor_create != 0`,
                       },
+                      // Superuser granted admin tools, kept in a section of their own rather
+                      // than mixed in with Help and Logout. The divider carries the same
+                      // condition as the links so an account with neither permission does not
+                      // get a stray rule floating above Help.
+                      {
+                          divider: true,
+                          eval: "$user.details.use_plugin_manager === '1' || $user.details.use_remote_access === '1'",
+                      },
+                      {
+                          icon: 'plug',
+                          label: lang['Plugin Manager'],
+                          pageOpen: 'pluginManager',
+                          // menuSide.ejs runs this; the tab block itself is gated the same
+                          // way, so a link can never point at markup that was not rendered.
+                          eval: "$user.details.use_plugin_manager === '1'",
+                      },
+                      {
+                          icon: 'globe',
+                          label: lang['Easy Remote Access (P2P)'],
+                          pageOpen: 'easyRemoteAccess',
+                          eval: "$user.details.use_remote_access === '1'",
+                      },
                       {
                           divider: true,
                       },
@@ -1648,14 +1670,6 @@ module.exports = function(s,config,lang){
                       //     label: `${lang['Events']}`,
                       //     pageOpen: 'eventListWithPics',
                       // },
-                      {
-                          icon: 'plug',
-                          label: lang['Plugin Manager'],
-                          pageOpen: 'pluginManager',
-                          // menuSide.ejs runs this; the tab block itself is gated the same
-                          // way, so a link can never point at markup that was not rendered.
-                          eval: "$user.details.use_plugin_manager === '1'",
-                      },
                       {
                           icon: 'sign-out',
                           label: `${lang['Logout']}`,
@@ -2483,6 +2497,25 @@ module.exports = function(s,config,lang){
                           "default":'0',
                           "fieldType": "select",
                           "description": lang.usePluginManagerText,
+                          possible: [
+                            {
+                                "name": lang.No,
+                               "value": "0"
+                            },
+                            {
+                               "name": lang.Yes,
+                               "value": "1"
+                            },
+                         ]
+                      },
+                      {
+                          "field": lang['Can use Easy Remote Access'],
+                          "name": "detail=use_remote_access",
+                          // Same rule as the Plugin Manager: '0' is what an account with no
+                          // stored value shows, and no stored value means No at runtime.
+                          "default":'0',
+                          "fieldType": "select",
+                          "description": lang.useRemoteAccessText,
                           possible: [
                             {
                                 "name": lang.No,

@@ -146,6 +146,7 @@ $.aC.e.on('click','.add',function(e){
     // set does not. The field's own default is the "No" that editing a pre-existing account
     // must show, so creation opts in here rather than the other way round.
     $.aN.e.find('[detail="use_plugin_manager"]').val('1')
+    $.aN.e.find('[detail="use_remote_access"]').val('1')
 })
 $.aC.e.on('click','.delete',function(e){
     e.e=$(this).parents('.user-row');

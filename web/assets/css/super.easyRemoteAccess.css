@@ -66,3 +66,17 @@
 #easyRemoteAccess .active .activate-remote-selection .fa-check:before {
     content: "\f00d"!important;
 }
+
+/* --- Hosted by two different pages -------------------------------------------------
+   Rendered both in the Superuser panel and in the dashboard's Easy Remote Access tab. The
+   Superuser page carries `dark` on <body> plus a page-level white from super-page.css; the
+   dashboard has neither, so the same markup would come out near-black on near-black there.
+   The block sets its own colours rather than depending on whichever page hosts it. */
+#easyRemoteAccess,
+#easyRemoteAccess .card-header {
+    color: #fff;
+}
+#easyRemoteAccess .table-striped > tbody > tr > td {
+    color: #fff;
+    border-color: #222;
+}
