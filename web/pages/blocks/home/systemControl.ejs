@@ -1,0 +1,18 @@
+<%# Dashboard System Control -- the Superuser panel calls this same block "Controls and Logs".
+    Only rendered for accounts a Superuser granted the permission; the #system enclosure id is
+    the one the shared script scopes itself to. %>
+<% if($user.details.use_system_control === '1'){ %>
+    <main class="container page-tab pt-3" id="tab-systemControl">
+        <div id="system">
+            <script>
+                $(document).ready(function(){
+                    window.systemControlApiPrefixes = {
+                        logs: getApiPrefix('system') + '/logs',
+                        system: getApiPrefix('system'),
+                    }
+                })
+            </script>
+            <%- include('../superSystemTab'); %>
+        </div>
+    </main>
+<% } %>

@@ -205,7 +205,9 @@ module.exports = function(s,config){
                         info: s.s({type:q,msg:w}),
                     }
                 })
-                s.tx({f:'log',log:{time:s.timeObject(),ke:'$',mid:'$SYSTEM',time:s.timeObject(),info:s.s({type:q,msg:w})}},'$');
+                // 'SYSTEMLOGS' rather than the Superuser only '$' room, so accounts granted
+                // System Control on the dashboard get the same live feed.
+                s.tx({f:'log',log:{time:s.timeObject(),ke:'$',mid:'$SYSTEM',time:s.timeObject(),info:s.s({type:q,msg:w})}},'SYSTEMLOGS');
                 s.runExtensionsForArray('onSystemLog', null, [
                     {
                         ke: '$',

@@ -106,6 +106,14 @@ module.exports = (s,config,lang) => {
                     "default": "0",
                     "fieldType": "select",
                     "possible": yesNoPossibility
+                 },
+                 {
+                    "name": "detail=use_system_control",
+                    "field": lang['Can use System Control'],
+                    "description": lang.subAccountToolAccessText,
+                    "default": "0",
+                    "fieldType": "select",
+                    "possible": yesNoPossibility
                  }
              ]
           },

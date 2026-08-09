@@ -117,6 +117,7 @@ module.exports = function(s,config,lang,io){
             'home/logViewer',
             'home/pluginManager',
             'home/easyRemoteAccess',
+            'home/systemControl',
             'home/calendar',
             'home/fileBin',
             'home/videosTable',

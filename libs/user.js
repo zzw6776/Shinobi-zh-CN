@@ -403,6 +403,7 @@ module.exports = function(s,config,lang){
                     formDetails.show_system_usage = details.show_system_usage
                     formDetails.use_plugin_manager = details.use_plugin_manager
                     formDetails.use_remote_access = details.use_remote_access
+                    formDetails.use_system_control = details.use_system_control
                     //check
                     if(details.edit_days == "0"){
                         formDetails.days = details.days;

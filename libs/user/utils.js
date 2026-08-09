@@ -27,6 +27,7 @@ module.exports = (s,config,lang) => {
             // value stored and are treated as No.
             "use_plugin_manager":"1",
             "use_remote_access":"1",
+            "use_system_control":"1",
             "aws_use_global":"0",
             "b2_use_global":"0",
             "webdav_use_global":"0"

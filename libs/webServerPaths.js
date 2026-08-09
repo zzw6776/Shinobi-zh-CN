@@ -458,7 +458,7 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
                 // account is capped by its group's Admin, so rendering straight from the sub
                 // account's own flag would leave a menu link and a tab pointing at an API
                 // that answers Not Authorized.
-                ;['use_plugin_manager','use_remote_access'].forEach(function(permission){
+                ;['use_plugin_manager','use_remote_access','use_system_control'].forEach(function(permission){
                     userInfo.details[permission] = s.userHasPermission(userInfo,permission) ? '1' : '0'
                 })
             }

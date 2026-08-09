@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="<%-window.libURL%>assets/css/bootstrap5-theme.css">
     <link rel="stylesheet" href="<%-window.libURL%>assets/vendor/pnotify.custom.min.css">
     <link rel="stylesheet" href="<%-window.libURL%>assets/css/bs5.forms.css">
+    <link rel="stylesheet" href="<%-window.libURL%>assets/vendor/daterangepicker.css">
     <link rel="stylesheet" href="<%-window.libURL%>assets/css/gradients.css" />
     <link rel="stylesheet" href="<%-window.libURL%>assets/css/super-page.css" />
     <link rel="stylesheet" href="<%-window.libURL%>assets/css/dashboard.css">
@@ -41,6 +42,10 @@
     <% }) %>
 </head>
 <script>$user=<%-JSON.stringify($user)%></script>
+<%# Log searches send a wall clock time that the server parses in its own timezone, so
+    the page needs to know what that is. config.timezone is always set at runtime --
+    libs/config.js falls back to the machine's resolved zone when conf.json omits it. %>
+<script>serverTimezone = `<%- config.timezone %>`</script>
 
 <body class="bg-darker dark">
     <!-- Mobile-only top bar, mirrors blocks/home/menuFirst.ejs -->
@@ -131,6 +136,8 @@
 <script src="<%-window.libURL%>assets/vendor/js/pnotify.custom.min.js" type="text/javascript"></script>
 <script src="<%-window.libURL%>assets/vendor/moment-with-locales.js"></script>
 <script src="<%-window.libURL%>assets/vendor/js/livestamp.min.js" type="text/javascript"></script>
+<%# System Control's Search Settings uses the same date range picker the dashboard does. %>
+<script src="<%-window.libURL%>assets/vendor/js/daterangepicker.js" type="text/javascript"></script>
 <script src="<%-window.libURL%>assets/vendor/js/socket.io.min.js" type="text/javascript"></script>
 <script src="<%-window.libURL%>assets/vendor/js/placeholder.js" type="text/javascript"></script>
 <script src="<%-window.libURL%>assets/js/bs5.tabEngine.js" type="text/javascript"></script>
@@ -165,26 +172,8 @@ function drawUserList(){
         })
     })
 }
-function drawSystemLogs(){
-    $('#logs-list').empty()
-    $.get(superApiPrefix + $user.sessionKey + '/logs',function(data){
-        if(data.ok){
-            $.each(data.logs.reverse(),function(n,v){
-                $.ccio.tm(4,v,'#logs-list')
-            })
-        }else{
-            var html = `<div class="mt-3 mb-4 text-center text-white"><p><i class="fa fa-4x fa-exclamation-circle text-danger"></i></p><h3>Database is not running or unreachable</h3><p>Please ensure it is started then restart Shinobi.</p><p>By default Shinobi uses <b>MariaDB</b>, an SQL server, as the database engine.</p><p>If you need to install the database files again you may follow <a target="_blank" href="https://shinobi.video/articles/2019-02-22-how-to-install-the-shinobi-database-manually">this article.</a></p></div>`
-            pageTabContainer.html(html)
-        }
-    })
-}
-function drawSystemInfo(){
-    $.get(superApiPrefix + $user.sessionKey + '/system/info',function(data){
-        if(data.ok){
-            $('.super-system-info').html($.ccio.init('jsontoblock',data.info))
-        }
-    })
-}
+// drawSystemLogs and drawSystemInfo are defined by assets/js/super.systemTab.js, which
+// draws the same log table on this page and on the dashboard's System Control tab.
 
 $.ccio={accounts:{}};$.ls=localStorage;
 if(!$user.lang||$user.lang==''){
@@ -229,9 +218,6 @@ $.ccio.ws.on('f',function(d){
                 theAction()
             })
         break;
-        case'log':
-            $.ccio.tm(4,d.log,'#logs-list')
-        break;
         case'save_configuration':
             d.msg = 'Saved, Restart Shinobi to apply changes.'
         break;
@@ -273,27 +259,9 @@ $.ccio.tm=function(x,d,z,k){
                 </div>
             </div>`;
         break;
-        case 4://log row, draw to global and monitor
-            if(!d.time){d.time=$.ccio.init('t')}
-            tmp += `<div class="card bg-dark search-row d-flex flex-row flex-padding mb-3">
-                <div>
-                    <span title="${d.time}" class="livestamp"></span><br>
-                    <small>${d.time}</small><br>
-                    <small class="badge badge-primary">${d.mid}</small>
-                </div>
-                <div class="flex-grow-1">
-                    <pre class="pre-inline text-white mb-0">${$.ccio.init('jsontoblock',d.info)}</pre>
-                </div>
-            </div>`
-        break;
     }
     if(z){
         $(z).prepend(tmp)
-    }
-    switch(x){
-        case 4:
-            $.ccio.init('ls')
-        break;
     }
     return tmp;
 }

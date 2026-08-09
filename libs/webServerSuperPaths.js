@@ -10,6 +10,9 @@ module.exports = function(s,config,lang,app){
         updateSystem,
         getSystemInfo,
      } = require('./system/utils.js')(config)
+    // System Control is reachable from the dashboard by accounts granted
+    // `use_system_control`, and from the Superuser panel as before.
+    const { addSharedRoute } = require('./sharedRoutes.js')(s,config,lang,app)
      const {
          checkSubscription
      } = require('./checker/actCheck.js')(s,config)
@@ -21,9 +24,9 @@ module.exports = function(s,config,lang,app){
     /**
     * API : Superuser : Get Logs
     */
-    app.all([config.webPaths.superApiPrefix+':auth/logs'], function (req,res){
+    addSharedRoute('all','system','/logs','use_system_control', function (req,res,resp){
         req.ret={ok:false};
-        s.superAuth(req.params,function(resp){
+        {
             s.getDatabaseRows({
                 table: 'Logs',
                 groupKey: '$',
@@ -42,13 +45,13 @@ module.exports = function(s,config,lang,app){
                     logs: response.rows
                 })
             })
-        },res,req)
+        }
     })
     /**
     * API : Superuser : Log delete.
     */
-    app.all(config.webPaths.superApiPrefix+':auth/logs/delete', function (req,res){
-        s.superAuth(req.params,function(resp){
+    addSharedRoute('all','system','/logs/delete','use_system_control', function (req,res,resp){
+        {
             s.knexQuery({
                 action: "delete",
                 table: "Logs",
@@ -60,13 +63,13 @@ module.exports = function(s,config,lang,app){
                     ok : true
                 })
             })
-        },res,req)
+        }
     })
     /**
     * API : Superuser : Update Shinobi
     */
-    app.all(config.webPaths.superApiPrefix+':auth/system/update', function (req,res){
-        s.superAuth(req.params,async (resp) => {
+    addSharedRoute('all','system','/update','use_system_control', async function (req,res,resp){
+        {
             s.systemLog(lang['Shinobi Ordered to Update'],{
                 by: resp.$user.mail,
                 ip: resp.ip
@@ -80,13 +83,13 @@ module.exports = function(s,config,lang,app){
                 ok : true
             }
             s.closeJsonResponse(res,endData)
-        },res,req)
+        }
     })
     /**
     * API : Superuser : Restart Shinobi
     */
-    app.all(config.webPaths.superApiPrefix+':auth/system/restart/:script', function (req,res){
-        s.superAuth(req.params,function(resp){
+    addSharedRoute('all','system','/restart/:script','use_system_control', function (req,res,resp){
+        {
             var check = function(x){return req.params.script.indexOf(x)>-1}
             var endData = {
                 ok : true
@@ -105,7 +108,7 @@ module.exports = function(s,config,lang,app){
                 endData.logsOuput = execSync('pm2 flush')
             }
             s.closeJsonResponse(res,endData)
-        },res,req)
+        }
     })
     /**
     * API : Superuser : Get Configuration (conf.json)
@@ -672,12 +675,12 @@ module.exports = function(s,config,lang,app){
     /**
     * API : Superuser : Get System Info
     */
-    app.get(config.webPaths.superApiPrefix+':auth/system/info', function (req,res){
-        s.superAuth(req.params,async (resp) => {
+    addSharedRoute('get','system','/info','use_system_control', async function (req,res,resp){
+        {
             s.closeJsonResponse(res,{
                 ok: true,
                 info: getSystemInfo(s)
             })
-        },res,req)
+        }
     })
 }

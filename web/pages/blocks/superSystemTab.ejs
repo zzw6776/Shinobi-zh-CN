@@ -1,27 +1,98 @@
-<div class="mb-4 btn-group btn-group-justified">
-    <a href="#" class="btn btn-default" system="deleteLogs">
-        <i class="fa fa-trash-o"></i> <%-lang['Delete']%> <%-lang['Logs']%>
-    </a>
-    <a href="#" class="btn btn-default" restart="system">
-        <i class="fa fa-retweet"></i> <%- lang['Restart Core'] %>
-    </a>
-    <% if(!config.thisIsDocker){ %>
-        <a href="#" class="btn btn-default" system="update">
-            <i class="fa fa-retweet"></i> <%- lang['Update'] %>
-        </a>
-    <% } %>
-    <a href="#" class="btn btn-default" restart="logs">
-        <i class="fa fa-retweet"></i> <%- lang['Flush PM2 Logs'] %>
-    </a>
-</div>
 <div class="row">
-    <div class="col-md-5">
+    <div class="col-md-12">
         <%- include('systemInfoBlock'); %>
     </div>
-    <div id="logs" class="col-md-7">
-        <div class="form-group-group red" style="height:400px;overflow:auto">
-            <div id="logs-list""></div>
+</div>
+<div class="mb-3 mx-0 row">
+    <div class="col ps-0">
+        <a href="#" class="btn btn-default d-block" system="deleteLogs">
+            <i class="fa fa-trash-o"></i> <%-lang['Delete']%> <%-lang['Logs']%>
+        </a>
+    </div>
+    <div class="col">
+        <a href="#" class="btn btn-default d-block" restart="system">
+            <i class="fa fa-retweet"></i> <%- lang['Restart Core'] %>
+        </a>
+    </div>
+    <% if(!config.thisIsDocker){ %>
+        <div class="col">
+            <a href="#" class="btn btn-default d-block" system="update">
+                <i class="fa fa-retweet"></i> <%- lang['Update'] %>
+            </a>
+        </div>
+    <% } %>
+    <!-- <div class="col pe-0">
+        <a href="#" class="btn btn-default d-block" restart="logs">
+            <i class="fa fa-retweet"></i> <%- lang['Flush PM2 Logs'] %>
+        </a>
+    </div> -->
+</div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card bg-dark text-white mb-3">
+            <div class="card-header"><%- lang['Search Settings'] %></div>
+            <div class="card-body">
+                <div class="d-flex flex-row flex-wrap align-items-end">
+                    <div class="form-group mb-0 me-3 col">
+                        <label><%- lang['Date'] %></label>
+                        <input id="systemControl_daterange" class="form-control" type="text">
+                    </div>
+                    <div class="form-group mb-0 me-3">
+                        <a class="btn btn-success fill systemControl-refresh"><i class="fa fa-search"></i> <%- lang['Search'] %></a>
+                    </div>
+                    <div class="form-group mb-0">
+                        <div class="dropdown d-inline-block">
+                            <button type="button" class="btn btn-default dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fa fa-clock-o"></i> <%- lang['Quick Range'] %>
+                            </button>
+                            <ul class="dropdown-menu <%- define.Theme.isDark ? 'dropdown-menu-dark bg-dark' : '' %> shadow-lg">
+                                <li><a class="dropdown-item systemControl_quick_daterange" href="#" data-hours="1"><%- lang.Last %> 1 <%- lang.hours %></a></li>
+                                <li><a class="dropdown-item systemControl_quick_daterange" href="#" data-hours="6"><%- lang.Last %> 6 <%- lang.hours %></a></li>
+                                <li><a class="dropdown-item systemControl_quick_daterange" href="#" data-hours="12"><%- lang.Last %> 12 <%- lang.hours %></a></li>
+                                <li><a class="dropdown-item systemControl_quick_daterange" href="#" data-hours="24"><%- lang.Last %> 24 <%- lang.hours %></a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item systemControl_quick_daterange" href="#" data-days="7"><%- lang.Last %> 7 <%- lang.Days %></a></li>
+                                <li><a class="dropdown-item systemControl_quick_daterange" href="#" data-days="30"><%- lang.Last %> 30 <%- lang.Days %></a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card bg-dark text-white mb-3">
+            <div class="card-header"><%- lang['Logs'] %></div>
+            <div class="card-body">
+                <div id="logs" style="max-height:500px;overflow:auto">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th style="white-space:nowrap"><%- lang['Time'] %></th>
+                                <th style="white-space:nowrap"><%- lang['Type'] %></th>
+                                <th class="w-100"><%- lang['Log'] %></th>
+                            </tr>
+                        </thead>
+                        <%# tbody keeps the #logs-list id the rest of the code targets %>
+                        <tbody id="logs-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// Shared by the Superuser panel and the dashboard's System Control tab. The dashboard sets
+// these itself (it needs getApiPrefix, which only exists once the footer scripts have run),
+// so only fall back to the Superuser session form when nothing set them.
+$(document).ready(function(){
+    if(window.systemControlApiPrefixes)return;
+    window.systemControlApiPrefixes = {
+        logs: `${superApiPrefix}${$user.sessionKey}/system/logs`,
+        system: `${superApiPrefix}${$user.sessionKey}/system`,
+    }
+})
+</script>
 <script src="<%-window.libURL%>assets/js/super.systemTab.js" type="text/javascript"></script>

@@ -1,6 +1,12 @@
 {
    "Shinobi": "Shinobi",
    "Can use": "Can use",
+   "databaseNotRunningTitle": "Database is not running or unreachable",
+   "databaseNotRunningText": "Please ensure it is started, then restart Shinobi.",
+   "Log": "Log",
+   "System Control": "System Control",
+   "Can use System Control": "Can use System Control",
+   "useSystemControlText": "Lets this account open System Control from the normal dashboard, where it can restart Shinobi, run the updater, and read or delete the system logs. Accounts created before this option existed default to No.",
    "Connect": "Connect",
    "Disconnect": "Disconnect",
    "p2pCheckingServers": "Checking which servers are online...",

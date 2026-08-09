@@ -1641,7 +1641,7 @@ module.exports = function(s,config,lang){
                       // get a stray rule floating above Help.
                       {
                           divider: true,
-                          eval: "$user.details.use_plugin_manager === '1' || $user.details.use_remote_access === '1'",
+                          eval: "$user.details.use_plugin_manager === '1' || $user.details.use_remote_access === '1' || $user.details.use_system_control === '1'",
                       },
                       {
                           icon: 'plug',
@@ -1656,6 +1656,14 @@ module.exports = function(s,config,lang){
                           label: lang['Easy Remote Access (P2P)'],
                           pageOpen: 'easyRemoteAccess',
                           eval: "$user.details.use_remote_access === '1'",
+                      },
+                      {
+                          icon: 'terminal',
+                          // Called "Controls and Logs" in the Superuser panel; the dashboard
+                          // shows it as System Control.
+                          label: lang['System Control'],
+                          pageOpen: 'systemControl',
+                          eval: "$user.details.use_system_control === '1'",
                       },
                       {
                           divider: true,
@@ -2506,6 +2514,17 @@ module.exports = function(s,config,lang){
                                "name": lang.Yes,
                                "value": "1"
                             },
+                         ]
+                      },
+                      {
+                          "field": lang['Can use System Control'],
+                          "name": "detail=use_system_control",
+                          "default":'0',
+                          "fieldType": "select",
+                          "description": lang.useSystemControlText,
+                          possible: [
+                            { "name": lang.No, "value": "0" },
+                            { "name": lang.Yes, "value": "1" },
                          ]
                       },
                       {
