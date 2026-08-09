@@ -8,7 +8,18 @@ module.exports = function(s,config,lang,app){
     // `=== '1'` rather than `!== '0'`. Accounts that predate a permission have no value
     // stored for it, and those must come out denied.
     s.userHasPermission = function(user,permission){
-        return !!user && !!user.details && user.details[permission] === '1'
+        if(!user || !user.details)return false
+        if(user.details[permission] !== '1')return false
+        // A sub account is capped by the Admin account of its group. Sub accounts are
+        // managed by the Admin, so without this an Admin who was never granted one of these
+        // tools could create a sub account, tick the box, sign in as it and have the tool --
+        // granting themselves access a Superuser withheld. `s.group[ke].init` holds the
+        // group's Admin details.
+        if(user.details.sub){
+            const groupInit = s.group[user.ke] && s.group[user.ke].init
+            return !!groupInit && groupInit[permission] === '1'
+        }
+        return true
     }
     /**
      * @param method   express method, 'get' | 'post' | 'all'

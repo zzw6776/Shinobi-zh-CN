@@ -437,13 +437,30 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
                 })
             }
         }
-        function checkRoute(pageTarget,userInfo){
+        async function checkRoute(pageTarget,userInfo){
             // Resolve the group's effective setting onto the user being rendered. A sub
             // account carries its own details and has no copy of this Superuser permission,
             // so without this the sidebar bars would still be drawn for them even though the
             // readings are never sent.
             if(userInfo && userInfo.details){
+                // A sub account can also get these from a Permission Group rather than from
+                // its own details. The socket and API paths already merge a group's details
+                // in, so do the same before rendering -- otherwise a permission granted
+                // through a group works at the API while its menu entry and tab are never
+                // drawn, leaving the feature switched on but unreachable.
+                try{
+                    await applyPermissionsToUser(userInfo)
+                }catch(err){
+                    s.debugLog(err)
+                }
                 userInfo.details.show_system_usage = s.groupCanSeeSystemUsage(userInfo.ke) ? '1' : '0'
+                // Resolve the effective value of the Superuser granted tools too. A sub
+                // account is capped by its group's Admin, so rendering straight from the sub
+                // account's own flag would leave a menu link and a tab pointing at an API
+                // that answers Not Authorized.
+                ;['use_plugin_manager','use_remote_access'].forEach(function(permission){
+                    userInfo.details[permission] = s.userHasPermission(userInfo,permission) ? '1' : '0'
+                })
             }
             switch(pageTarget){
                 case'cam':

@@ -81,6 +81,8 @@ $(document).ready(function(){
             server.key = key
             if(window.useBetterP2P && !server.v2)return;
             if(!window.useBetterP2P && server.v2)return;
+            // Reopening the tab must not stack a second socket per server.
+            if(statusConnections[key])return;
             beginStatusConnectionForServer(key,server)
         })
     }
@@ -90,15 +92,46 @@ $(document).ready(function(){
             delete(statusConnections[key])
         })
     }
+    // Each listed P2P server gets its own websocket that streams stats continuously, so they
+    // are only held open while someone is actually looking at this tab. Being switched on is
+    // not enough on its own -- this block is part of the page whether or not the tab is
+    // showing, so without this the sockets opened at load and stayed open for the session.
+    var tabIsOpen = false
+    function refreshStatusConnections(){
+        var isOn = p2pEnabledSwitch.val() === '1'
+        if(isOn && tabIsOpen){
+            beginAllStatusConnections()
+        }else{
+            closeAllStatusConnections()
+        }
+    }
     function setVisibilityForList(){
         var isOn = p2pEnabledSwitch.val() === '1'
         if(isOn){
-            beginAllStatusConnections()
             toggleAffected.show()
         }else{
-            closeAllStatusConnections()
             toggleAffected.hide()
         }
+        refreshStatusConnections()
+    }
+    // The tab engine is shared by the dashboard and the Superuser panel, and the tab is named
+    // the same on both, so one set of hooks covers each.
+    if(typeof addOnTabOpen === 'function'){
+        var onEasyRemoteAccessShown = function(){
+            tabIsOpen = true
+            refreshStatusConnections()
+        }
+        var onEasyRemoteAccessHidden = function(){
+            tabIsOpen = false
+            closeAllStatusConnections()
+        }
+        addOnTabOpen('easyRemoteAccess',onEasyRemoteAccessShown)
+        addOnTabReopen('easyRemoteAccess',onEasyRemoteAccessShown)
+        addOnTabAway('easyRemoteAccess',onEasyRemoteAccessHidden)
+        addOnTabClose('easyRemoteAccess',onEasyRemoteAccessHidden)
+    }else{
+        // No tab engine on this page: keep the old behaviour rather than never connecting.
+        tabIsOpen = true
     }
     function getSelectedServers(){
         var theArray = [];

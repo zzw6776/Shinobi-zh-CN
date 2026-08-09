@@ -149,6 +149,22 @@ module.exports = (s,config,lang) => {
                      "default": "0",
                      "fieldType": "select",
                      "possible": yesNoPossibility
+                  },
+                  {
+                     "name": "detail=use_plugin_manager",
+                     "field": lang['Can use Plugin Manager'],
+                     "description": lang.subAccountToolAccessText,
+                     "default": "0",
+                     "fieldType": "select",
+                     "possible": yesNoPossibility
+                  },
+                  {
+                     "name": "detail=use_remote_access",
+                     "field": lang['Can use Easy Remote Access'],
+                     "description": lang.subAccountToolAccessText,
+                     "default": "0",
+                     "fieldType": "select",
+                     "possible": yesNoPossibility
                   }
               ]
            },

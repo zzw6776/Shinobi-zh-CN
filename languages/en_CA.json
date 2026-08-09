@@ -1,6 +1,7 @@
 {
    "Shinobi": "Shinobi",
    "Can use": "Can use",
+   "subAccountToolAccessText": "Only takes effect if the Admin account for this group has the same access. Off for new sub-accounts and for sub-accounts created before this option existed.",
    "Can use Easy Remote Access": "Can use Easy Remote Access",
    "useRemoteAccessText": "Lets this account open Easy Remote Access (P2P) from the normal dashboard and change the P2P settings for this server. Accounts created before this option existed default to No.",
    "Can use Plugin Manager": "Can use Plugin Manager",

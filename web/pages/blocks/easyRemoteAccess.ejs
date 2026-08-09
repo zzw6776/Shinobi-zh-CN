@@ -4,12 +4,16 @@
     const multipleSelected = selectedServers instanceof Array && selectedServers.length > 0;
  %>
  <style>
-     .epic-text-filter {
+     /* Scoped to this block. These were bare `blockquote` / `.epic-text-filter` rules, which
+        was harmless while the block only ever rendered on the Superuser panel -- but it now
+        also renders in the dashboard, where drawBlock emits a <blockquote> for any definition
+        block that declares one, so the unscoped rule restyled boxes all over the dashboard. */
+     #easyRemoteAccess .epic-text-filter {
          text-transform: none;
         letter-spacing: 0.5pt;
         font-size: 9pt;
      }
-     blockquote {
+     #easyRemoteAccess blockquote {
          background: #073c3e;
         height: 100%;
         border-radius: 15px;
