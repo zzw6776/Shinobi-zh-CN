@@ -198,8 +198,8 @@ module.exports = function(s,config,lang,app){
     /**
     * API : Superuser : Activate Key
     */
-    app.post(config.webPaths.superApiPrefix+':auth/system/activate', function (req,res){
-        s.superAuth(req.params,async (resp) => {
+    addSharedRoute('post','system','/activate','use_system_control', async function (req,res,resp){
+        {
             var endData = {
                 ok : true
             }
@@ -222,17 +222,19 @@ module.exports = function(s,config,lang,app){
                 s.tx({f:'save_configuration'},'$')
             }
             checkSubscription(subscriptionId,function(hasSubcribed){
-                endData.ok = hasSubcribed
-                config.userHasSubscribed = hasSubcribed
+                // The licensing module owns userHasSubscribed and the camera limit, and has
+                // already rolled both back if it refused the key. Only report them here.
+                endData.ok = !!hasSubcribed
+                endData.maxCameras = s.cameraCount
                 s.closeJsonResponse(res,endData)
             })
-        },res,req)
+        }
     })
     /**
     * API : Superuser : Remove the License Key and return to an unactivated state
     */
-    app.post(config.webPaths.superApiPrefix+':auth/system/deactivate', function (req,res){
-        s.superAuth(req.params,async (resp) => {
+    addSharedRoute('post','system','/deactivate','use_system_control', async function (req,res,resp){
+        {
             const endData = { ok: true }
             const currentConfig = JSON.parse(fs.readFileSync(s.location.config))
             const hadSubscriptionId = !!currentConfig.subscriptionId
@@ -255,14 +257,15 @@ module.exports = function(s,config,lang,app){
                 config.peerConnectKey ? 'peerConnectKey' : null,
                 config.p2pApiKey ? 'p2pApiKey' : null,
             ].filter(Boolean)
-            // Re-run the check with nothing, so the licensing module resets the state it
-            // derives (userHasSubscribed, camera count, expiry) instead of us guessing at it.
+            // Re-running the check with nothing is what returns this install to its
+            // unactivated state: the licensing module clears userHasSubscribed and drops the
+            // camera limit back to the unlicensed one itself.
             checkSubscription('',function(hasSubscribed){
-                config.userHasSubscribed = hasSubscribed
                 endData.userHasSubscribed = hasSubscribed
+                endData.maxCameras = s.cameraCount
                 s.closeJsonResponse(res,endData)
             })
-        },res,req)
+        }
     })
     /**
     * API : Superuser : Get users in system

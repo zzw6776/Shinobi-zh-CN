@@ -30,10 +30,21 @@
     }
 </style> -->
 <script>
+    // This card lives in the System Control block, which is hosted by the Superuser panel and
+    // by the dashboard. That block publishes the right API prefix for whichever page it is on.
+    function systemApiPrefix(){
+        return (window.systemControlApiPrefixes || {}).system
+    }
     $(document).ready(function(){
         var heyActivateCard = $('#hey-activate')
         var heyActivateCardSubmit = heyActivateCard.find('[type="submit"]')
         var removeLicenseHolder = heyActivateCard.find('.remove-license-holder')
+        // Called once an activation attempt has finished, whatever the outcome. The panel
+        // reports camera limit, expiry and isActivated, all of which the attempt can change,
+        // so a failed or refused attempt needs the refresh just as much as a successful one.
+        function reloadSystemInfo(){
+            if(typeof drawSystemInfo === 'function')drawSystemInfo()
+        }
         function setActivatedState(isActivated,hasKeyStored){
             heyActivateCard.find('.card-header').html(isActivated ? lang.Activated : lang['Not Activated'])
             removeLicenseHolder.toggle(!!(isActivated || hasKeyStored))
@@ -42,7 +53,7 @@
             e.preventDefault()
             var formValues = $(this).serializeObject()
             heyActivateCardSubmit.html(`<i class="fa fa-spinner fa-pulse"></i>`)
-            $.post(superApiPrefix + $user.sessionKey + '/system/activate',{
+            $.post(systemApiPrefix() + '/activate',{
                 subscriptionId: formValues.subscriptionId
             },function(data){
                 var noticeTitle = lang['Not Activated']
@@ -62,7 +73,17 @@
                     text: noticeText,
                     type: noticeType
                 })
-                drawSystemInfo()
+                reloadSystemInfo()
+            }).fail(function(){
+                // The request itself failed, so the button would otherwise spin forever and
+                // the panel would keep showing pre-attempt values.
+                heyActivateCardSubmit.html(lang.Save)
+                new PNotify({
+                    title: lang['Not Activated'],
+                    text: lang['Action Failed'],
+                    type: 'error'
+                })
+                reloadSystemInfo()
             })
             return false
         })
@@ -76,13 +97,14 @@
                     title: lang['Remove License'],
                 },
                 clickCallback: function(){
-                    $.post(superApiPrefix + $user.sessionKey + '/system/deactivate',{},function(data){
+                    $.post(systemApiPrefix() + '/deactivate',{},function(data){
                         if(!data || !data.ok){
                             new PNotify({
                                 title: lang['Action Failed'],
                                 text: (data && data.msg) || lang['Action Failed'],
                                 type: 'error'
                             })
+                            reloadSystemInfo()
                             return
                         }
                         heyActivateCard.find('[name="subscriptionId"]').val('')
@@ -97,7 +119,14 @@
                             type: 'warning',
                             hide: false,
                         })
-                        drawSystemInfo()
+                        reloadSystemInfo()
+                    }).fail(function(){
+                        new PNotify({
+                            title: lang['Action Failed'],
+                            text: lang['Action Failed'],
+                            type: 'error'
+                        })
+                        reloadSystemInfo()
                     })
                 }
             })
