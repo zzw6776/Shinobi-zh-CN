@@ -1,4 +1,5 @@
 var socketIOclient = require('socket.io-client');
+var fs = require('fs');
 module.exports = function(s,config,lang,app,io){
     const currentPluginCpuUsage = {}
     const currentPluginGpuUsage = {}
@@ -329,7 +330,33 @@ module.exports = function(s,config,lang,app,io){
             currentPluginFrameProcessingCount[pluginName] = count
         })
     }
+    // config.pluginKeys is the copy loaded at startup, so a key added to conf.json by hand
+    // used to need a restart before the plugin could connect. conf.json is re-read here
+    // instead, at the one point it matters: a plugin connecting. That is once per plugin,
+    // not per frame, so it is a single read of a small, page cached file with nothing held
+    // open in between.
+    const readPluginKeysFromDisk = function(){
+        // A key generated for a Docker plugin lives in memory until it is written. Reading
+        // over it in that window would leave the plugin unable to ever authenticate.
+        if(s.pluginKeysArePendingWrite)return false
+        try{
+            const onDisk = JSON.parse(fs.readFileSync(s.location.config,'utf8'))
+            const keysOnDisk = onDisk.pluginKeys
+            if(!keysOnDisk || !(keysOnDisk instanceof Object))return false
+            // Replaced rather than merged, so a key deleted from conf.json stops working
+            // just as promptly as an added one starts.
+            const changed = JSON.stringify(config.pluginKeys) !== JSON.stringify(keysOnDisk)
+            config.pluginKeys = keysOnDisk
+            return changed
+        }catch(err){
+            // A half written or malformed conf.json must not take the keys already in memory
+            // down with it - connected plugins would start failing on the next message.
+            return false
+        }
+    }
+    // Only called for a plugin that is connecting.
     const hasValidPluginKey = function(d){
+        readPluginKeysFromDisk()
         const expectedKey = config.pluginKeys[d.plug]
         const hasExpectedKey = expectedKey !== undefined && expectedKey !== null && expectedKey !== ''
         const hasSentKey = d.pluginKey !== undefined && d.pluginKey !== null && d.pluginKey !== ''
@@ -355,7 +382,7 @@ module.exports = function(s,config,lang,app,io){
                     s.pluginInitiatorFail("client",d,cn)
                 }
             }else{
-                if(hasValidPluginKey(d)){
+                if(cn.pluginEngine){
                     s.pluginEventController(d)
                     if(config.detectorPluginsCluster)addCpuUsageHandler(cn,d.plug)
                 }else{

@@ -117,14 +117,22 @@ module.exports = (s,config,lang,app,io,helpers) => {
     const ensurePluginKey = (plug) => {
         if(!config.pluginKeys)config.pluginKeys = {}
         if(!config.pluginKeys[plug]){
+            // Newly generated and not on disk yet. libs/plugins.js reloads pluginKeys from
+            // conf.json so hand added keys work without a restart, and that reload would
+            // otherwise drop this one in the gap before it is written.
+            s.pluginKeysArePendingWrite = true
             config.pluginKeys[plug] = s.gid(24)
         }
         return config.pluginKeys[plug]
     }
-    const persistPluginKeys = () => {
+    const persistPluginKeys = async () => {
         // security: config.pluginKeys must never be empty/falsy for a real plugin -
         // an empty value there is exactly the unauthenticated-plugin hole from #567.
-        return modifyConfiguration({ pluginKeys: config.pluginKeys }, true)
+        try{
+            return await modifyConfiguration({ pluginKeys: config.pluginKeys }, true)
+        }finally{
+            s.pluginKeysArePendingWrite = false
+        }
     }
     // Runs `docker <args>`, streaming stdout/stderr to the superuser's socket over
     // the same 'plugin-info' channel the (non-Docker) installer already uses, so
