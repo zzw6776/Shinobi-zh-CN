@@ -456,10 +456,22 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
             const chosenName = newName ? newName : packageName
             enableModule(chosenName,false)
             s.debugLog('Plugin Ready to Use!',newName,url)
+            const downloadedModule = getModule(chosenName)
+            // The card drawn from this response is the first thing the user sees after
+            // downloading - which is exactly when they would look for the Docker option.
+            // Without this the Docker panel stays hidden until the next /list refresh,
+            // because the client only draws it when the module carries `docker`.
+            try{
+                if(await isDockerAvailable()){
+                    downloadedModule.docker = await getDockerInfoForModule(chosenName)
+                }
+            }catch(err){
+                s.debugLog('Failed to get Docker info for freshly downloaded plugin',chosenName,err)
+            }
             s.closeJsonResponse(res,{
                 ok: true,
                 moduleName: chosenName,
-                newModule: getModule(chosenName)
+                newModule: downloadedModule
             })
         }catch(err){
             console.error(err)

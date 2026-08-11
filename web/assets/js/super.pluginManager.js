@@ -99,9 +99,20 @@ $(document).ready(function(){
         }).join('')
         connectedPluginsListElement.html(html)
     }
+    // Docker reports raw states ("running", "exited", "absent"). On their own those
+    // read as jargon in the plugin list, and "exited" in particular looks like an
+    // error rather than "stopped on purpose" - so they get spelled out.
+    function dockerStatusLabel(status){
+        switch(status){
+            case'running': return lang['Running in Docker'] || 'Running in Docker'
+            case'exited': return lang['Stopped (Docker)'] || 'Stopped (Docker)'
+            case'absent': return lang['Not Installed'] || 'Not Installed'
+            default: return status
+        }
+    }
     function dockerStatusBadge(status){
-        var badgeClass = status === 'running' ? 'badge-success' : (status === 'exited' ? 'badge-warning' : 'badge-secondary')
-        return `<span class="badge ${badgeClass}">${status}</span>`
+        var badgeClass = status === 'running' ? 'badge-success' : (status === 'absent' ? 'badge-secondary' : 'badge-warning')
+        return `<span class="badge ${badgeClass}">${dockerStatusLabel(status)}</span>`
     }
     function buildDockerSectionHtml(module){
         var docker = module.docker || {}
@@ -115,6 +126,7 @@ $(document).ready(function(){
             <div class="docker-plugin-install mt-2 mb-0 p-2">
                 <div class="mb-1"><b><i class="fa fa-cube"></i> ${lang['Docker'] || 'Docker'}</b> ${dockerStatusBadge(container.status)} ${container.image ? `<small>${container.image}</small>` : ''}</div>
                 ${isAbsent ? `
+                    <div class="mb-1"><small class="text-muted">${lang['dockerPluginHint'] || 'Run this plugin in a container instead of installing it on this machine. The image brings its own dependencies (including CUDA, where applicable), so there is nothing to install here.'}</small></div>
                     <div class="form-inline">
                         <select class="form-control form-control-sm d-inline-block w-auto mr-1" docker-field="variant">${variantOptions}</select>
                         <input type="text" class="form-control form-control-sm d-inline-block w-auto mr-1" docker-field="host" placeholder="${lang['Host'] || 'Host'}" value="${detectedHostIp}">
@@ -155,10 +167,55 @@ $(document).ready(function(){
     var getPluginRows = function(packageName){
         return listElement.find(`[package-name="${packageName}"]`)
     }
+    // A plugin can be running in one of two completely independent ways, and the old
+    // single Enabled/Disabled badge only described the first of them:
+    //
+    //   1. As a WORKER - Shinobi spawns it itself as a child process. This is what
+    //      conf.json's `enabled` flag controls, and what the Enable/Disable button
+    //      toggles. Nothing else.
+    //   2. Over a WEBSOCKET - the plugin runs as its own process and connects in as a
+    //      client. That covers a Docker container and an ordinary bare-metal install
+    //      configured with mode "client", possibly on a different machine entirely.
+    //
+    // A plugin connected over a websocket is working perfectly while still being
+    // "Disabled" as a worker, which read as broken before these were separated.
     var buildStatusBadge = function(module){
-        return module.config.enabled
-            ? `<span class="badge badge-success">${lang['Enabled'] || 'Enabled'}</span>`
-            : `<span class="badge badge-secondary">${lang['Disabled'] || 'Disabled'}</span>`
+        var moduleConfig = module.config || {}
+        var plug = moduleConfig.plug || module.name
+        var connection = connectedPluginsStatus[plug] || {}
+        var isConnected = connection.status === 'connected'
+        var docker = module.docker || {}
+        var container = docker.container || {}
+        var workerTitle = lang['workerStatusHint'] || 'Whether Shinobi runs this plugin itself as a worker (child process). It does not affect plugins that connect over a websocket.'
+        var badges = [moduleConfig.enabled
+            ? `<span class="badge badge-success" title="${workerTitle}">${lang['Enabled (Worker)'] || 'Enabled (Worker)'}</span>`
+            : `<span class="badge badge-secondary" title="${workerTitle}">${lang['Disabled (Worker)'] || 'Disabled (Worker)'}</span>`]
+        if(isConnected){
+            var websocketTitle = lang['websocketStatusHint'] || 'This plugin is connected to Shinobi over a websocket - from a Docker container, or from its own process on this or another machine.'
+            badges.push(`<span class="badge badge-info d-block mt-1" title="${websocketTitle}">${lang['Enabled by Websocket'] || 'Enabled by Websocket'}</span>`)
+        }
+        if(container.status && container.status !== 'absent'){
+            // Shown even when connected: a container that is running but NOT connected
+            // means the image is fine and the key/host is wrong, which is worth seeing.
+            badges.push(`<span class="badge ${container.status === 'running' ? 'badge-primary' : 'badge-warning'} d-block mt-1">
+                    <i class="fa fa-cube"></i> ${dockerStatusLabel(container.status)}
+                </span>`)
+        }else if(dockerAvailable && (docker.variants || []).length > 0){
+            // Nothing deployed yet, but this plugin ships images - advertise that, since
+            // the alternative is the user never realising Docker is an option.
+            badges.push(`<small class="d-block mt-1 text-muted"><i class="fa fa-cube"></i> ${lang['Docker available'] || 'Docker available'}</small>`)
+        }
+        return badges.join('\n')
+    }
+    // Connection state arrives on its own socket events, independently of the module
+    // list, so the affected plugin's Status cell has to be repainted when it changes -
+    // otherwise "Enabled by Websocket" only appears after a full refresh.
+    var refreshStatusBadgeForPlug = function(plug){
+        $.each(loadedModules || {},function(name,module){
+            if(!module)return
+            if(((module.config || {}).plug || name) !== plug)return
+            getPluginRows(name).find('.plugin-status-badge').html(buildStatusBadge(module))
+        })
     }
     // Output and README live in the details row, which stays collapsed until there is
     // something to look at - otherwise every plugin would push the table rows far apart.
@@ -173,7 +230,12 @@ $(document).ready(function(){
             existingElement.find('.title').text(humanName)
             existingElement.find('[plugin-manager-action="status"]').text(!module.config.enabled ? lang.Enable : lang.Disable)
             existingElement.find('.plugin-status-badge').html(buildStatusBadge(module))
-            existingElement.find('.docker-section').html(buildDockerSectionHtml(module))
+            var refreshedDockerHtml = buildDockerSectionHtml(module)
+            existingElement.find('.docker-section').html(refreshedDockerHtml)
+            // Docker may have become available (or the plugin may have gained/lost
+            // images) since this row was drawn, so the row's visibility is re-evaluated
+            // on every refresh rather than only at creation.
+            existingElement.filter('.plugin-docker-row').toggle(!!refreshedDockerHtml)
             loadedModules[module.name] = module;
             loadedBlocks[module.name] = Object.assign(loadedBlocks[module.name] || {},module)
         }else{
@@ -187,6 +249,11 @@ $(document).ready(function(){
                 }).join('')}
               </ul>
             </div>` : ''
+            // The Docker panel lives in its own row that is visible without expanding
+            // the details toggle - it is an install method, not debug output, so hiding
+            // it behind a terminal icon meant nobody found it. The row collapses itself
+            // when this plugin has no images (or Docker is not installed on the host).
+            var dockerSectionHtml = buildDockerSectionHtml(module)
             getPluginTableBody().prepend(`
                     <tr class="plugin-summary-row" package-name="${module.name}">
                         <td>
@@ -209,9 +276,13 @@ $(document).ready(function(){
                             <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
                         </td>
                     </tr>
+                    <tr class="plugin-docker-row" package-name="${module.name}"${dockerSectionHtml ? '' : ' style="display:none"'}>
+                        <td colspan="5" class="pt-0">
+                            <div class="docker-section">${dockerSectionHtml}</div>
+                        </td>
+                    </tr>
                     <tr class="plugin-detail-row" package-name="${module.name}" style="display:none">
                         <td colspan="5">
-                            <div class="docker-section">${buildDockerSectionHtml(module)}</div>
                             <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
                                 <div class="input-group">
                                   <input name="cmd" type="text" class="form-control form-control-sm" placeholder="Type and Press Enter to Send Command">
@@ -589,6 +660,10 @@ $(document).ready(function(){
                 $('[data-bs-target="#pluginManagerDownloadbleList"],#pluginManagerDownloadbleList').removeClass('active')
                 var theModule = data.newModule
                 theModule.config.enabled = false
+                // The download response only carries `docker` when the server found
+                // Docker on this host, so its presence is proof enough - without this the
+                // panel would stay hidden until the next /list call reset the flag.
+                if(theModule.docker)dockerAvailable = true
                 drawModuleBlock(theModule)
                 if(theModule.installerRunning){
                     toggleCardButtons(card,[
@@ -645,12 +720,15 @@ $(document).ready(function(){
             dockerAvailable = !!data.dockerAvailable
             detectedHostIp = data.detectedHostIp || ''
             loadedModules = data.modules
-            $.each(getObjectAlphabetically(data.modules,'created'),function(n,module){
-                drawModuleBlock(module)
-            })
+            // Populated BEFORE drawing: each row's Status cell reports whether that
+            // plugin is connected over a websocket, so drawing first would paint every
+            // row with last refresh's connection state.
             connectedPluginsStatus = {}
             $.each(data.connectedPlugins || {},function(plug,info){
                 connectedPluginsStatus[plug] = Object.assign({},info,{status:'connected'})
+            })
+            $.each(getObjectAlphabetically(data.modules,'created'),function(n,module){
+                drawModuleBlock(module)
             })
             renderConnectedPlugins()
         })
@@ -710,6 +788,7 @@ $(document).ready(function(){
                     case'connection-status':
                         connectedPluginsStatus[name] = Object.assign({},data.plugin,{status:data.status})
                         renderConnectedPlugins()
+                        refreshStatusBadgeForPlug(name)
                     break;
                 }
             break;
