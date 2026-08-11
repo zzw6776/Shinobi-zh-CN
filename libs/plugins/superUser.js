@@ -259,7 +259,7 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         const worker = runningPluginWorkers[moduleName]
         if(worker){
             worker.terminate()
-            runningPluginWorkers[moduleName] = null
+            delete runningPluginWorkers[moduleName]
         }
     }
     const onWorkerMessage = (pluginName,type,data) => {
@@ -299,6 +299,10 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         const moduleConfig = shinobiModule.config
         const modulePlugName = moduleConfig.plug
         const customModulePath = modulesBasePath + '/' + moduleName
+        if(runningPluginWorkers[moduleName]){
+            s.debugLog(`Plugin "${moduleName}" is already running, not starting a second worker.`)
+            return
+        }
         const worker = new Worker(customModulePath + '/' + shinobiModule.properties.main,{
             workerData: {ok: true}
         });
@@ -315,6 +319,9 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         worker.on('exit', (code) => {
             if (code !== 0){
                 s.debugLog(`Worker (Plugin) stopped with exit code ${code}`);
+            }
+            if(runningPluginWorkers[moduleName] === worker){
+                delete runningPluginWorkers[moduleName]
             }
             deactivateClientPlugin(modulePlugName)
         });
@@ -381,10 +388,6 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         const modules = getModules()
         const dockerAvailable = await isDockerAvailable()
         if(dockerAvailable){
-            // note: getModule() returns undefined for non-directory entries in the
-            // plugins/ folder (e.g. pluginBase.js, .gitignore) - must skip those or
-            // this throws inside the map and the response never gets sent (the
-            // request just hangs, since nothing downstream ever catches it)
             await Promise.all(Object.values(modules).filter(Boolean).map(async (shinobiModule) => {
                 try{
                     shinobiModule.docker = await getDockerInfoForModule(shinobiModule.name)
@@ -553,14 +556,17 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         const status = req.body.status
         const packageName = req.body.packageName
         const selection = status == 'true' ? true : false
-        const theModule = getModule(packageName)
         enableModule(packageName,selection)
-        if(theModule.config.hotLoadable === true){
-            if(!selection){
-                loadModule(theModule)
+        try{
+            if(selection){
+                loadModule(getModule(packageName))
             }else{
                 unloadModule(packageName)
             }
+        }catch(err){
+            s.debugLog(`Failed to apply plugin status change for ${packageName}`,err)
+            s.closeJsonResponse(res,{ok: false, status: selection, msg: `${err}`})
+            return
         }
         s.closeJsonResponse(res,{ok: true, status: selection})
     })
