@@ -128,6 +128,43 @@ $(document).ready(function(){
                 <div class="docker-logs-view d-none mt-2"><pre class="text-white mb-0"></pre></div>
             </div>`
     }
+    // The Downloaded list is a table. Each plugin is two rows sharing one `package-name`:
+    // a summary row, and a details row holding the output panels, installer prompt, Docker
+    // section and README. Everything that acts on a plugin selects by `[package-name]` and
+    // then `.find()`s inside, so spanning two rows keeps all of that working - see
+    // getPluginRows(), which is what those lookups go through.
+    var getPluginTableBody = function(){
+        var tableBody = listElement.find('.plugin-manager-table tbody')
+        if(tableBody.length === 0){
+            listElement.html(`<table class="table table-striped mb-0 plugin-manager-table">
+                <thead>
+                    <tr>
+                        <th>${lang['Name'] || 'Name'}</th>
+                        <th>${lang['Time Created']}</th>
+                        <th>${lang['Last Modified']}</th>
+                        <th>${lang['Status'] || 'Status'}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>`)
+            tableBody = listElement.find('.plugin-manager-table tbody')
+        }
+        return tableBody
+    }
+    var getPluginRows = function(packageName){
+        return listElement.find(`[package-name="${packageName}"]`)
+    }
+    var buildStatusBadge = function(module){
+        return module.config.enabled
+            ? `<span class="badge badge-success">${lang['Enabled'] || 'Enabled'}</span>`
+            : `<span class="badge badge-secondary">${lang['Disabled'] || 'Disabled'}</span>`
+    }
+    // Output and README live in the details row, which stays collapsed until there is
+    // something to look at - otherwise every plugin would push the table rows far apart.
+    var showPluginDetails = function(packageName){
+        getPluginRows(packageName).filter('.plugin-detail-row').show()
+    }
     var drawModuleBlock = function(module){
         var humanName = module.properties.name ? module.properties.name : module.name
         var additionalCommands = module.properties.addCmd ? Object.values(module.properties.addCmd) : [];
@@ -135,6 +172,7 @@ $(document).ready(function(){
             var existingElement = listElement.find(`[package-name="${module.name}"]`)
             existingElement.find('.title').text(humanName)
             existingElement.find('[plugin-manager-action="status"]').text(!module.config.enabled ? lang.Enable : lang.Disable)
+            existingElement.find('.plugin-status-badge').html(buildStatusBadge(module))
             existingElement.find('.docker-section').html(buildDockerSectionHtml(module))
             loadedModules[module.name] = module;
             loadedBlocks[module.name] = Object.assign(loadedBlocks[module.name] || {},module)
@@ -149,24 +187,30 @@ $(document).ready(function(){
                 }).join('')}
               </ul>
             </div>` : ''
-            listElement.prepend(`
-                    <div class="card bg-dark text-white border-info" package-name="${module.name}">
-                        <div class="card-body pb-3">
-                            <div><h4 class="title my-0">${humanName}</h4></div>
-                            <div clas="mb-2"><small>${module.name}</small></div>
-                            <div class="pb-2"><b>${lang['Time Created']} :</b> ${module.created}</div>
-                            <div class="pb-2"><b>${lang['Last Modified']} :</b> ${module.lastModified}</div>
-                            <div class="mb-2">
-                                <a class="btn btn-sm btn-default" plugin-manager-action="readmeToggle">${lang.Notes}</a>
-                                ${module.hasInstaller ? `
-                                    <a class="btn btn-sm btn-info" plugin-manager-action="install">${lang['Run Installer']}</a>
-                                    <a class="btn btn-sm btn-danger" style="display:none" plugin-manager-action="cancelInstall">${lang['Stop']}</a>
-                                ` : ''}
-                                ${addCmdButtons}
-                                <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
-                                <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
-                                <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
-                            </div>
+            getPluginTableBody().prepend(`
+                    <tr class="plugin-summary-row" package-name="${module.name}">
+                        <td>
+                            <div class="title">${humanName}</div>
+                            <small class="text-muted">${module.name}</small>
+                        </td>
+                        <td><small>${module.created}</small></td>
+                        <td><small>${module.lastModified}</small></td>
+                        <td class="plugin-status-badge">${buildStatusBadge(module)}</td>
+                        <td class="text-end plugin-actions">
+                            <a class="btn btn-sm btn-default" plugin-manager-action="detailsToggle" title="${lang['Output'] || 'Output'}"><i class="fa fa-terminal"></i></a>
+                            <a class="btn btn-sm btn-default" plugin-manager-action="readmeToggle">${lang.Notes}</a>
+                            ${module.hasInstaller ? `
+                                <a class="btn btn-sm btn-info" plugin-manager-action="install">${lang['Run Installer']}</a>
+                                <a class="btn btn-sm btn-danger" style="display:none" plugin-manager-action="cancelInstall">${lang['Stop']}</a>
+                            ` : ''}
+                            ${addCmdButtons}
+                            <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
+                            <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
+                            <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
+                        </td>
+                    </tr>
+                    <tr class="plugin-detail-row" package-name="${module.name}" style="display:none">
+                        <td colspan="5">
                             <div class="docker-section">${buildDockerSectionHtml(module)}</div>
                             <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
                                 <div class="input-group">
@@ -187,9 +231,10 @@ $(document).ready(function(){
                                 </div>
                             </div>
                             <div class="readme-view d-none"></div>
-                        </div>
-                    </div>`)
-            var newBlock = $(`.card[package-name="${module.name}"]`)
+                        </td>
+                    </tr>`)
+            // Both rows, so `.find()` from here reaches the details row's elements.
+            var newBlock = getPluginRows(module.name)
             loadedBlocks[module.name] = Object.assign({
                 block: newBlock,
                 stdout: newBlock.find('.install-output-stdout'),
@@ -349,10 +394,17 @@ $(document).ready(function(){
         e.preventDefault()
         var el = $(this)
         var action = el.attr('plugin-manager-action')
-        var card = el.parents('[package-name]')
-        var packageName = card.attr('package-name')
+        var packageName = el.parents('[package-name]').attr('package-name')
+        // Both rows for this plugin, not just the one the button sits in - the buttons are
+        // in the summary row while .command-line, .command-installer and the output panels
+        // they toggle are in the details row.
+        var card = getPluginRows(packageName)
         switch(action){
+            case'detailsToggle':
+                card.filter('.plugin-detail-row').toggle()
+            break;
             case'readmeToggle':
+                showPluginDetails(packageName)
                 toggleReadme(packageName)
             break;
             case'run':
@@ -408,10 +460,18 @@ $(document).ready(function(){
             case'status':
                 var currentStatus = !!loadedModules[packageName].config.enabled
                 var newStatus = !currentStatus
+                // Enabling starts the plugin's worker and its output streams into these same
+                // panels, so whatever an earlier install or run left behind is cleared first
+                // - otherwise the new plugin's first lines land under stale text.
+                if(newStatus){
+                    loadedBlocks[packageName].stdout.empty()
+                    loadedBlocks[packageName].stderr.empty()
+                }
                 setModuleStatus(packageName,newStatus,function(data){
                     if(data.ok){
                         loadedModules[packageName].config.enabled = newStatus
                         el.text(currentStatus ? lang.Enable : lang.Disable)
+                        card.find('.plugin-status-badge').html(buildStatusBadge(loadedModules[packageName]))
                     }
                 })
             break;
@@ -611,6 +671,16 @@ $(document).ready(function(){
         switch(data.f){
             case'plugin-info':
                 var name = data.module
+                // A running plugin streams output continuously, so frames can arrive before
+                // this page has drawn that plugin's card (or after it was deleted). The
+                // output panels only exist on the card, so without this every line would
+                // throw. connection-status is still handled - it does not need the card.
+                if(!loadedBlocks[name] && data.process !== 'connection-status')return;
+                // Output is worth nothing behind a collapsed row, so anything arriving on
+                // either stream opens the details for that plugin.
+                if(data.process === 'install-stdout' || data.process === 'install-stderr'){
+                    showPluginDetails(name)
+                }
                 switch(data.process){
                     case'install-stdout':
                         appendLoggerData(data.data,loadedBlocks[name].stdout)
@@ -644,6 +714,17 @@ $(document).ready(function(){
                 }
             break;
         }
+    })
+    // The Downloaded / Download Plugins switch is a pair of buttons rather than nav-tabs.
+    // Bootstrap still does the switching (the container carries `nav` so its Tab plugin can
+    // resolve a parent); it only moves its own `active` class, so the colour swap is done
+    // here. Delegated from body because the panel is injected by the page hosting it.
+    $('body').on('shown.bs.tab','.plugin-manager-tab-btn',function(){
+        $('.plugin-manager-tab-btn').each(function(){
+            var btn = $(this)
+            var isActive = btn.hasClass('active')
+            btn.toggleClass('btn-success',isActive).toggleClass('btn-default',!isActive)
+        })
     })
     getDownloadableModules()
 })

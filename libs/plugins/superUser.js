@@ -304,7 +304,35 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
             return
         }
         const worker = new Worker(customModulePath + '/' + shinobiModule.properties.main,{
-            workerData: {ok: true}
+            workerData: {ok: true},
+            // Node pipes a worker's output straight to the parent's stdout/stderr and gives
+            // nothing to attach to. Setting these to true hands over the streams instead, so
+            // a running plugin's output can be shown in the Plugin Manager the same way an
+            // install's is. forwardWorkerStream writes it on to the console itself, so the
+            // pm2 log keeps everything it had before.
+            stdout: true,
+            stderr: true,
+        });
+        // Same frames the installer sends, so the panel that already renders install output
+        // renders a running plugin's output with no changes of its own.
+        const postPluginOutput = (text,channel) => {
+            s.tx({
+                f: 'plugin-info',
+                module: moduleName,
+                process: 'install-' + channel,
+                data: `${text}`,
+            },'PLUGINMANAGER')
+        }
+        const forwardWorkerStream = (data,channel) => {
+            const text = `${data}`
+            ;(channel === 'stderr' ? process.stderr : process.stdout).write(text)
+            postPluginOutput(text,channel)
+        }
+        worker.stdout.on('data',(data) => {
+            forwardWorkerStream(data,'stdout')
+        });
+        worker.stderr.on('data',(data) => {
+            forwardWorkerStream(data,'stderr')
         });
         initializeClientPlugin(moduleConfig)
         activateClientPlugin(moduleConfig,(data) => {
@@ -315,6 +343,9 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         });
         worker.on('error', (err) =>{
             console.error(err)
+            // A worker that throws on startup never writes to stderr itself, so without this
+            // the panel would just sit empty on the most important failure there is.
+            postPluginOutput(`${err && err.stack ? err.stack : err}\n`,'stderr')
         });
         worker.on('exit', (code) => {
             if (code !== 0){
@@ -323,6 +354,9 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
             if(runningPluginWorkers[moduleName] === worker){
                 delete runningPluginWorkers[moduleName]
             }
+            // Reported on stdout even for a non-zero code: terminate() exits non-zero, so a
+            // deliberate disable would otherwise always look like an error.
+            postPluginOutput(`Plugin stopped (exit code ${code})\n`,'stdout')
             deactivateClientPlugin(modulePlugName)
         });
         runningPluginWorkers[moduleName] = worker

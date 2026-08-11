@@ -54,8 +54,22 @@
     background-color: #888;
 }
 
-#pluginManagerList [package-name]:not(:last-child){
-    margin-bottom: 1rem !important;
+/* The Downloaded list is a table: each plugin is a summary row plus a details row, so the
+   per-card spacing the old card layout needed no longer applies. */
+#pluginManagerList .plugin-manager-table > tbody > tr > td {
+    vertical-align: middle;
+}
+#pluginManagerList .plugin-detail-row > td {
+    border-top: 0;
+}
+/* The details row is only opened when there is something in it, so its cell should not add
+   height when the panels inside are empty. */
+#pluginManagerList .plugin-detail-row .install-output:empty,
+#pluginManagerList .plugin-detail-row .docker-section:empty {
+    display: none;
+}
+#pluginManagerList .plugin-actions {
+    white-space: nowrap;
 }
 
 /* --- Hosted by two different pages -------------------------------------------------
@@ -68,7 +82,9 @@
 #superPluginManager .card-header {
     color: #fff;
 }
-#superPluginManager .table-striped > tbody > tr > td {
+#superPluginManager .table-striped > tbody > tr > td,
+#superPluginManager .plugin-manager-table > thead > tr > th,
+#superPluginManager .plugin-manager-table > tbody > tr > td {
     color: #fff;
     border-color: #222;
 }
