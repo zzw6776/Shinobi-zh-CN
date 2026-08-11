@@ -153,6 +153,30 @@ module.exports = function(s,config,lang,app,io){
         }
     });
     /**
+    * API : Activation Status (Localhost Only)
+    * No auth key, so the check is deliberately made against the socket's own remote
+    * address rather than s.getClientIp : proxy headers are client supplied and would
+    * let anyone claim to be 127.0.0.1.
+    */
+    app.get(s.checkCorrectPathEnding(config.webPaths.home)+'activationStatus', function (req,res){
+        const remoteAddress = (req.socket && req.socket.remoteAddress) || ''
+        // 127.0.0.0/8 in either plain IPv4 or IPv4 mapped IPv6 form, plus the IPv6 loopback.
+        const isLocalhost = remoteAddress === '::1' || /^(::ffff:)?127\./.test(remoteAddress)
+        if(!isLocalhost){
+            res.status(403)
+            return s.closeJsonResponse(res,{
+                ok: false,
+                msg: 'This endpoint is only accessible from localhost.'
+            })
+        }
+        s.closeJsonResponse(res,{
+            ok: true,
+            activated: !!config.userHasSubscribed,
+            hasKey: !!config.subscriptionId,
+            maxCameras: s.cameraCount,
+        })
+    });
+    /**
     * Page : Login Screen
     */
     app.get(config.webPaths.home, function (req,res){
