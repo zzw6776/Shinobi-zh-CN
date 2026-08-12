@@ -4,188 +4,132 @@ var helpingHandShows = {
         targetMonitor: true,
         playlist: [
             {
-                text: 'Select the <b>Monitor States</b> tab in the Main Menu.',
-                time: 0,
+                text: 'Presets are made from <b>Monitor Settings</b>. Open the Monitor you want the preset to control.',
+                time: 1,
                 handPos: {
-                    el: `[page-open="monitorStates"]`
+                    el: `[page-open="monitorSettings"]`
                 },
                 cmd: () => {
-                    var sideMenu = $('#menu-side')
-                    var theButton = sideMenu.find('[page-open="monitorStates"]')
-                    sideMenu.animate({scrollTop: sideMenu.position().top},1000);
+                    var monitorId = getSelectedHelpingHandMonitorTarget();
+                    openMonitorEditorPage(monitorId)
                 }
             },
             {
-                time: 1,
+                text: `Change the settings the preset should apply. Here we turn the <b>Detector</b> on.`,
+                time: 2,
+                handPos: {
+                    el: `#tab-monitorSettings [detail="detector"]`
+                },
+                cmd: () => {
+                    $('#tab-monitorSettings [detail="detector"]').val('1').change();
+                }
+            },
+            {
+                text: `Open the menu beside the Save button.`,
+                time: 1.5,
+                handPos: {
+                    el: `#monitorsListOptions`
+                },
+                cmd: () => {
+                    $('#monitorsListOptions').dropdown('show');
+                }
+            },
+            {
+                text: `Choose <b>Create new Preset</b>.`,
+                time: 1.5,
+                handPos: {
+                    el: `#tab-monitorSettings .create-monitor-state-preset`
+                },
+                cmd: () => {
+                    $('#tab-monitorSettings .create-monitor-state-preset').click();
+                }
+            },
+            {
+                text: `Every setting you changed is listed and ticked. Untick anything you do not want, then name the preset.`,
+                time: 2,
+                handPos: {
+                    el: `#confirm_window .monitor-state-preset-name`
+                },
+                cmd: async () => {
+                    await typeWriteInField('Motion Detection On','#confirm_window .monitor-state-preset-name');
+                }
+            },
+            {
+                text: `Save the Preset.`,
+                time: 1.5,
+                handPos: {
+                    el: `#confirm_window .confirmaction0`
+                },
+                cmd: () => {
+                    $('#confirm_window .confirmaction0').click();
+                }
+            },
+            /// Motion Off
+            {
+                text: `A preset only stores what differs from the Monitor's saved settings, so we save the Monitor with the Detector on before making the opposite preset.`,
+                time: 2.5,
+                handPos: {
+                    el: `#tab-monitorSettings .sticky-bar [type="submit"]`
+                },
+                cmd: () => {
+                    $('#tab-monitorSettings form').submit();
+                }
+            },
+            {
+                text: `Now turn the <b>Detector</b> off for the second preset.`,
+                time: 2,
+                handPos: {
+                    el: `#tab-monitorSettings [detail="detector"]`
+                },
+                cmd: () => {
+                    $('#tab-monitorSettings [detail="detector"]').val('0').change();
+                }
+            },
+            {
+                time: 1.5,
+                handPos: {
+                    el: `#monitorsListOptions`
+                },
+                cmd: () => {
+                    $('#monitorsListOptions').dropdown('show');
+                }
+            },
+            {
+                text: `Create the second Preset the same way. <b>Add to Preset</b> would put this Monitor into a preset you already have.`,
+                time: 2,
+                handPos: {
+                    el: `#tab-monitorSettings .create-monitor-state-preset`
+                },
+                cmd: () => {
+                    $('#tab-monitorSettings .create-monitor-state-preset').click();
+                }
+            },
+            {
+                time: 2,
+                handPos: {
+                    el: `#confirm_window .monitor-state-preset-name`
+                },
+                cmd: async () => {
+                    await typeWriteInField('Motion Detection Off','#confirm_window .monitor-state-preset-name');
+                }
+            },
+            {
+                time: 1.5,
+                handPos: {
+                    el: `#confirm_window .confirmaction0`
+                },
+                cmd: () => {
+                    $('#confirm_window .confirmaction0').click();
+                }
+            },
+            {
+                text: `Saved presets are listed under the <b>Monitor States</b> tab, where they can also be deleted.`,
+                time: 2,
                 handPos: {
                     el: `[page-open="monitorStates"]`
                 },
                 cmd: () => {
                     openTab('monitorStates',{})
-                }
-            },
-            {
-                text: 'Select <b>Add New</b> under Monitor States.',
-                time: 1,
-                handPos: {
-                    el: `#monitorStatesSelector`
-                },
-                cmd: () => {
-                    $('#monitorStatesSelector option').prop('selected',false);
-                    $('#monitorStatesSelector').val('').change();
-                }
-            },
-            {
-                text: `Set the name for the new Preset.`,
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates [name="name"]`
-                },
-                cmd: async () => {
-                    await typeWriteInField('Motion Detection On','#tab-monitorStates [name="name"]');
-                }
-            },
-            {
-                text: `Add a Monitor to this new Preset.`,
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .add-monitor`
-                },
-                cmd: () => {
-                    $('#tab-monitorStates .add-monitor').click();
-                }
-            },
-            {
-                text: `Select the target Monitor.`,
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row .state-monitor-row-select`
-                },
-                cmd: () => {
-                    var monitorId = getSelectedHelpingHandMonitorTarget();
-                    $(`#tab-monitorStates .state-monitor-row .state-monitor-row-select`).val(monitorId)
-                }
-            },
-            {
-                text: `Select the options to activate for when this Preset becomes active.`,
-                time: 0.2,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row-fields-container`
-                },
-                cmd: () => {
-                    var optionsSelected = $('#tab-monitorStates .state-monitor-row-fields-container')
-                    var scrollBodyHeight = optionsSelected.height()
-                    var detectorOption = optionsSelected.find('[data-name="detail=detector"]');
-                    optionsSelected.animate({scrollTop: detectorOption.position().top - scrollBodyHeight},1000);
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row-fields-container [data-name="detail=detector"]`
-                },
-                cmd: () => {
-                    var optionsSelected = $('#tab-monitorStates .state-monitor-row-fields-container')
-                    var detectorOption = optionsSelected.find('[data-name="detail=detector"]').click();
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row-fields-container [data-name="detail=detector"] select`
-                },
-                cmd: () => {
-                    $('#tab-monitorStates .state-monitor-row-fields-container [data-name="detail=detector"] select').val('1');
-                }
-            },
-            {
-                text: `Save the Preset.`,
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .sticky-bar [type="submit"]`
-                },
-                cmd: () => {
-                    $('#tab-monitorStates form').submit();
-                }
-            },
-            /// Motion Off
-            {
-                text: `For this tutorial we're going to add another one for <b>Motion Detection Off</b>.`,
-                time: 1,
-                handPos: {
-                    el: `#monitorStatesSelector`
-                },
-                cmd: () => {
-                    $('#monitorStatesSelector option').prop('selected',false);
-                    $('#monitorStatesSelector').val('').change();
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates [name="name"]`
-                },
-                cmd: async () => {
-                    await typeWriteInField('Motion Detection Off','#tab-monitorStates [name="name"]');
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .add-monitor`
-                },
-                cmd: () => {
-                    $('#tab-monitorStates .add-monitor').click();
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row .state-monitor-row-select`
-                },
-                cmd: () => {
-                    var monitorId = getSelectedHelpingHandMonitorTarget();
-                    $(`#tab-monitorStates .state-monitor-row .state-monitor-row-select`).val(monitorId)
-                }
-            },
-            {
-                time: 0.2,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row-fields-container`
-                },
-                cmd: () => {
-                    var optionsSelected = $('#tab-monitorStates .state-monitor-row-fields-container')
-                    var scrollBodyHeight = optionsSelected.height()
-                    var detectorOption = optionsSelected.find('[data-name="detail=detector"]');
-                    optionsSelected.animate({scrollTop: detectorOption.position().top - scrollBodyHeight},1000);
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row-fields-container [data-name="detail=detector"]`
-                },
-                cmd: () => {
-                    var optionsSelected = $('#tab-monitorStates .state-monitor-row-fields-container')
-                    var detectorOption = optionsSelected.find('[data-name="detail=detector"]').click();
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .state-monitor-row-fields-container [data-name="detail=detector"] select`
-                },
-                cmd: () => {
-                    $('#tab-monitorStates .state-monitor-row-fields-container [data-name="detail=detector"] select').val('0');
-                }
-            },
-            {
-                time: 1,
-                handPos: {
-                    el: `#tab-monitorStates .sticky-bar [type="submit"]`
-                },
-                cmd: () => {
-                    $('#tab-monitorStates form').submit();
                 }
             },
             /// set schedule, motion ON

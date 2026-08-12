@@ -1,0 +1,10 @@
+<%# Floating save bar for the Superuser tabs, mirroring blocks/home/stickySubmitBar.ejs
+    (the one Monitor Settings uses). `.sticky-bar` is position:fixed, and because it sits
+    inside the tab's own `.page-tab` it disappears with the tab like the rest of the content.
+    An anchor rather than a submit button on purpose: every super tab binds
+    `enclosure.find('.submit').click(...)` and calls form.submit() itself, so a native submit
+    button here would fire the save twice. The spacer keeps the last field clear of the bar. %>
+<div style="margin-bottom: 50px;"></div>
+<div class="sticky-bar p-3">
+    <a href="#" class="submit btn btn-sm btn-success" style="min-width: 150px"><i class="fa fa-check"></i> <%- lang.Save %></a>
+</div>

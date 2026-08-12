@@ -6,6 +6,7 @@ module.exports = function (s, config, lang, getSnapshot) {
     } = require('../events/utils.js')(s,config,lang)
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
 
     if (config.pushover === true) {
@@ -36,6 +37,10 @@ module.exports = function (s, config, lang, getSnapshot) {
                             //	device: 'devicename',
                             priority: 1,
                         };
+                        if (sendBody.url) {
+                            msg.url = sendBody.url;
+                            msg.url_title = sendBody.url_title || 'Open in Shinobi Go';
+                        }
                         if (files.length > 0) {
                             // sadly pushover allows only ONE single attachment
                             msg.file = {
@@ -157,6 +162,8 @@ module.exports = function (s, config, lang, getSnapshot) {
                             {
                                 title: notifyText,
                                 description: lang.EventText1 + ' ' + d.currentTimestamp,
+                                // Link that opens the Shinobi Go mobile app.
+                                url: getAppDeepLink(d),
                             },
                             [
                                 {
@@ -292,7 +299,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                     isFormGroupGroup: true,
                     name: 'Pushover',
                     color: 'blue',
-                    'section-class': 'h_det_pushover_input h_det_pushover_1',
+                    'section-visibleWhen': { "h_det_pushover": "1" },
                     info: [
                         {
                             name: 'detail=detector_pushover_timeout',
@@ -355,7 +362,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                         fieldType: 'password',
                         placeholder: 'azGDORePK8gMaC0QOYAMyEEuzJnyUi',
                         field: lang.Token,
-                        'form-group-class': 'u_pushover_input u_pushover_1',
+                        'form-group-visibleWhen': { "u_pushover": "1" },
                         description: '',
                         default: '',
                         example: '',
@@ -366,7 +373,7 @@ module.exports = function (s, config, lang, getSnapshot) {
                         name: 'detail=pushover_recipient_identifier',
                         placeholder: 'uQiRzpo4DXghDmr9QzzfQu27cmVRsG',
                         field: lang['Recipient ID'],
-                        'form-group-class': 'u_pushover_input u_pushover_1',
+                        'form-group-visibleWhen': { "u_pushover": "1" },
                         description: '',
                         default: '',
                         example: '',

@@ -133,7 +133,12 @@ module.exports = function(s,config,lang,io){
                     }catch(err){
                         s.debugLog(err)
                     }
-                    const { orphanedFilesCount } = await scanForOrphanedVideos(monitor,{forceCheck: true})
+                    // full sweep at boot, otherwise orphans older than the newest few
+                    // are never adopted and go missing from disk use forever
+                    const { orphanedFilesCount } = await scanForOrphanedVideos(monitor,{
+                        forceCheck: true,
+                        checkMax: config.orphanedVideoCheckMaxAtStartup || 'unlimited'
+                    })
                     if(orphanedFilesCount){
                         orphanedVideosForMonitors[monitor.ke][monitor.mid] += orphanedFilesCount
                     }

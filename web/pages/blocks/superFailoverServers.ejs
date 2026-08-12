@@ -1,4 +1,6 @@
-<div class="tab-pane text-left" id="failoverServers" role="tabpanel">
+<main class="container page-tab pt-3 text-left" id="tab-failoverServers">
+<%# inner id kept: super.failoverServers.isNormal.js scopes itself to $('#failoverServers') %>
+<div id="failoverServers">
     <form>
         <div class="row" style="display:flex">
             <div class="col-md-12">
@@ -24,9 +26,6 @@
                             <div class="form-group">
                                 <input placeholder="<%-lang['Server Key']%>" class="form-control btn btn-dark text-left text-white" type="text" name="peerConnectKey" value="" placeholder="API Key from https://licenses.shinobi.video">
                             </div>
-                            <div class="btn-group d-flex flex-row">
-                                <a href="#" class="submit flex-grow-1 btn btn-success"><i class="fa fa-check"></i> <%- lang.Save %></a>
-                            </div>
                         </div>
                     </div>
                     <div class="card bg-dark text-white">
@@ -39,6 +38,8 @@
                 <% } %>
             </div>
         </div>
+    <%- include('super/stickySubmitBar'); %>
     </form>
     <script src="<%-window.libURL%>assets/js/super.failoverServers.isNormal.js" type="text/javascript"></script>
 </div>
+</main>

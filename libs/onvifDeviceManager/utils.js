@@ -194,6 +194,7 @@ module.exports = function(s,config,lang){
         // const saveSet = {
         //     "HTTP": "80",
         //     "RTSP": "554",
+        //     "RTSPS": "332",
         // }
         const response = {
             ok: false
@@ -204,7 +205,7 @@ module.exports = function(s,config,lang){
             protocols.forEach((item) => {
                 saveKeys.forEach((key) => {
                     if(item.Name === key.toUpperCase()){
-                        const port = saveSet[key] && !isNaN(saveSet[key]) ? parseInt(saveSet[key]) : item.Name === 'RTSP' ? 554 : 80
+                        const port = saveSet[key] && !isNaN(saveSet[key]) ? parseInt(saveSet[key]) : item.Name === 'RTSP' ? 554 : (item.Name === 'RTSPS' ? 332 : 80)
                         console.log('PORT',port)
                         item.Port = port
                         item.Enabled = true

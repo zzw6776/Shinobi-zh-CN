@@ -365,12 +365,19 @@ module.exports = function(s,config,lang){
             if(r&&r[0]){
                 r = r[0]
                 var details = s.parseJSON(r.details) || {}
+                const storageType = details.type || r.type || 's3'
                 s.knexQuery({
                     action: "delete",
                     table: "Cloud Videos",
                     where: whereQuery
                 },(err) => {
-                    s.deleteVideoFromCloudExtensionsRunner(e,details.type || r.type || 's3',r)
+                    // decrement the in-memory cloud disk usage (bytes -> MB) so a manual
+                    // per-video delete keeps the counter balanced like the purge/cron paths
+                    const sizeMB = parseFloat(r.size) / 1048576
+                    if(isFinite(sizeMB) && sizeMB > 0){
+                        s.setCloudDiskUsedForGroup(e.ke, { amount: -sizeMB, storageType })
+                    }
+                    s.deleteVideoFromCloudExtensionsRunner(e,storageType,r)
                 })
             }else{
 //                    console.log('Delete Failed',e)

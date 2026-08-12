@@ -7,6 +7,10 @@ $(document).ready(function(){
     var remoteDashboardLinkButton = easyRemoteAccessTab.find('.remote-dashboard-link')
     var loadingRegistration = false
     var statusConnections = {}
+    var loadingElement = easyRemoteAccessTab.find('#p2pServerListLoading')
+    var emptyElement = easyRemoteAccessTab.find('#p2pServerListEmpty')
+    var serverTable = easyRemoteAccessTab.find('#p2pServerTable')
+    var serverTableBody = serverTable.find('tbody')
     function copyToClipboard(str) {
         const el = document.createElement('textarea');
         el.value = str;
@@ -15,52 +19,140 @@ $(document).ready(function(){
         document.execCommand('copy');
         document.body.removeChild(el);
     };
-    function bytesToSize(bytes) {
-       var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-       if (bytes == 0) return '0 Byte';
-       var i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-       return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+    // Servers are probed, not monitored. We open the stats socket only long enough to learn
+    // whether it answers, then drop it -- a server that does not connect within the timeout is
+    // treated as offline and left out of the list entirely.
+    var ONLINE_CHECK_TIMEOUT_MS = 10000
+    function checkServerOnline(key,server){
+        return new Promise(function(resolve){
+            var chartPort = server.v2 ? server.chartPort || parseInt(server.webPort) + 2 : server.p2pPort
+            var socketConnection = null
+            var settled = false
+            function finish(isOnline){
+                if(settled)return;
+                settled = true
+                clearTimeout(timer)
+                try{
+                    if(socketConnection)socketConnection.disconnect()
+                }catch(err){}
+                delete statusConnections[key]
+                resolve(isOnline)
+            }
+            var timer = setTimeout(function(){
+                finish(false)
+            },ONLINE_CHECK_TIMEOUT_MS)
+            try{
+                socketConnection = io(`wss://${server.host}:${chartPort == 80 ? 443 : chartPort}`,{
+                    transports: ['websocket'],
+                    query: {
+                        charts: '1'
+                    },
+                    // No retrying: a server that did not answer is simply reported offline,
+                    // and retries would keep a socket alive to a host we are dropping anyway.
+                    reconnection: false,
+                    reconnect: false,
+                })
+            }catch(err){
+                finish(false)
+                return
+            }
+            statusConnections[key] = socketConnection
+            socketConnection.on('connect',function(){ finish(true) })
+            socketConnection.on('connect_error',function(){ finish(false) })
+            socketConnection.on('connect_timeout',function(){ finish(false) })
+            socketConnection.on('error',function(){ finish(false) })
+        })
     }
-    function bitsToSize(bytes) {
-       var sizes = ['Bits', 'Kbits', 'Mbits', 'GBits', 'TBits'];
-       if (bytes == 0) return '0 Bits';
-       var i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-       return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+    function serversToCheck(){
+        var list = []
+        $.each(p2pServerList,function(key,server){
+            server.key = key
+            if(window.useBetterP2P && !server.v2)return;
+            if(!window.useBetterP2P && server.v2)return;
+            list.push({ key: key, server: server })
+        })
+        return list
     }
-    function beginStatusConnectionForServer(key,server){
-        var cardEl = easyRemoteAccessTab.find(`[drawn-id="${key}"]`)
-        var cpuUsageEl = cardEl.find('.cpuUsage')
-        var ramPercentEl = cardEl.find('.ramPercent')
-        var ramUsedEl = cardEl.find('.ramUsed')
-        var cpuCoresEl = cardEl.find('.cpuCores')
-        var networkUseDownEl = cardEl.find('.networkUseDown')
-        var networkUseUpEl = cardEl.find('.networkUseUp')
-        var chartViewerCount = cardEl.find('.chartViewerCount')
-        var connectedUsers = cardEl.find('.connectedUsers')
-        var registeredServers = cardEl.find('.registeredServers')
-        var chartPort = server.v2 ? server.chartPort || parseInt(server.webPort)  + 2 : server.p2pPort
-        var socketConnection = io(`wss://${server.host}:${chartPort == 80 ? 443 : chartPort}`,{
-            transports: ['websocket'],
-            query: {
-                charts: '1'
-            },
-            reconnect: false,
+    // What the server currently has saved. Rows selected on top of this are pending until
+    // Save is pressed, which is what the highlight below communicates.
+    var savedSelection = (function(){
+        if(window.multipleSelected)return (window.selectedServers || []).slice()
+        return window.p2pHostSelected ? [window.p2pHostSelected] : []
+    })()
+    function isServerSelected(key){
+        return savedSelection.indexOf(key) > -1
+    }
+    // Connect/Disconnect label and the pending highlight both follow the row's state.
+    function refreshRowState(rowElement){
+        var key = rowElement.attr('drawn-id')
+        var isActive = rowElement.hasClass('active')
+        var isPending = isActive !== (savedSelection.indexOf(key) > -1)
+        rowElement.toggleClass('pending',isPending)
+        var button = rowElement.find('.activate-remote-selection')
+        button.html(isActive
+            ? `<i class="fa fa-times"></i> ${lang['Disconnect']}`
+            : `<i class="fa fa-check"></i> ${lang['Connect']}`)
+    }
+    function refreshAllRowStates(){
+        serverTableBody.find('[drawn-id]').each(function(){
+            refreshRowState($(this))
         })
-        socketConnection.on('initUI',function(data){
-            cardEl.find('.ramTotal').text(bytesToSize(data.ram))
-            cpuCoresEl.text(data.cpuCores)
+    }
+    function drawServerRows(onlineservers){
+        var html = ''
+        onlineservers.forEach(function({ key, server }){
+            var speed = server.maxNetworkSpeed || {}
+            html += `<tr drawn-id="${key}" class="${isServerSelected(key) ? 'active' : ''}">
+                <td>
+                    <span class="badge badge-sm badge-info name-badge">${`${server.name}`.toUpperCase()}</span>
+                    <span class="badge badge-sm badge-danger selected-badge">${lang.Selected}</span>
+                </td>
+                <td><span class="info-badge badge badge-sm badge-default">${server.host}</span></td>
+                <td><i class="fa fa-download"></i> ${speed.down || ''}</td>
+                <td><i class="fa fa-upload"></i> ${speed.up || ''}</td>
+                <td class="text-right" style="white-space:nowrap">
+                    <a href="#" class="btn btn-sm btn-default activate-remote-selection"></a>
+                    <a href="#" class="btn btn-sm btn-default remote-dashboard-link-copy"><i class="fa fa-copy"></i> ${lang['Copy Remote Link']}</a>
+                    <a href="#" target="_blank" class="btn btn-sm btn-info remote-dashboard-link"><i class="fa fa-external-link"></i> ${lang['Open Remote Dashboard']}</a>
+                </td>
+            </tr>`
         })
-        socketConnection.on('charts',function(data){
-            networkUseUpEl.text(bitsToSize(data.network.up))
-            networkUseDownEl.text(bitsToSize(data.network.down))
-            cpuUsageEl.text(data.cpu)
-            ramUsedEl.text(data.ram.used)
-            ramPercentEl.text(data.ram.percent)
-            registeredServers.text(data.servers)
-            connectedUsers.text(data.users)
-            chartViewerCount.text(data.statViewers)
+        serverTableBody.html(html)
+        refreshAllRowStates()
+        loadingElement.hide()
+        if(onlineservers.length > 0){
+            serverTable.show()
+            emptyElement.hide()
+        }else{
+            serverTable.hide()
+            emptyElement.show()
+        }
+    }
+    var checkInProgress = false
+    function checkAllServersThenDraw(){
+        if(checkInProgress)return;
+        checkInProgress = true
+        // Nothing is drawn until every server has reported, so the list does not shuffle
+        // about as slower servers answer.
+        loadingElement.show()
+        serverTable.hide()
+        emptyElement.hide()
+        serverTableBody.empty()
+        var toCheck = serversToCheck()
+        Promise.all(toCheck.map(function(entry){
+            return checkServerOnline(entry.key,entry.server).then(function(isOnline){
+                return isOnline ? entry : null
+            })
+        })).then(function(results){
+            checkInProgress = false
+            // The tab may have been left while the checks were running.
+            if(!tabIsOpen)return;
+            drawServerRows(results.filter(function(entry){ return !!entry }))
+        }).catch(function(err){
+            checkInProgress = false
+            console.log(err)
+            drawServerRows([])
         })
-        statusConnections[key] = socketConnection
     }
     function disableForm(){
         loadingRegistration = true
@@ -76,29 +168,54 @@ $(document).ready(function(){
         var href = `https://${selectedServer.host}:${selectedServer.webPort == 80 ? 443 : selectedServer.webPort}/s/${apiKey}/`
         return href
     }
-    function beginAllStatusConnections(){
-        $.each(p2pServerList,function(key,server){
-            server.key = key
-            if(window.useBetterP2P && !server.v2)return;
-            if(!window.useBetterP2P && server.v2)return;
-            beginStatusConnectionForServer(key,server)
-        })
-    }
     function closeAllStatusConnections(){
         $.each(statusConnections,function(key,server){
-            server.disconnect()
+            try{
+                server.disconnect()
+            }catch(err){}
             delete(statusConnections[key])
         })
+    }
+    // Each listed P2P server gets its own websocket that streams stats continuously, so they
+    // are only held open while someone is actually looking at this tab. Being switched on is
+    // not enough on its own -- this block is part of the page whether or not the tab is
+    // showing, so without this the sockets opened at load and stayed open for the session.
+    var tabIsOpen = false
+    function refreshStatusConnections(){
+        var isOn = p2pEnabledSwitch.val() === '1'
+        if(isOn && tabIsOpen){
+            checkAllServersThenDraw()
+        }else{
+            closeAllStatusConnections()
+        }
     }
     function setVisibilityForList(){
         var isOn = p2pEnabledSwitch.val() === '1'
         if(isOn){
-            beginAllStatusConnections()
             toggleAffected.show()
         }else{
-            closeAllStatusConnections()
             toggleAffected.hide()
         }
+        refreshStatusConnections()
+    }
+    // The tab engine is shared by the dashboard and the Superuser panel, and the tab is named
+    // the same on both, so one set of hooks covers each.
+    if(typeof addOnTabOpen === 'function'){
+        var onEasyRemoteAccessShown = function(){
+            tabIsOpen = true
+            refreshStatusConnections()
+        }
+        var onEasyRemoteAccessHidden = function(){
+            tabIsOpen = false
+            closeAllStatusConnections()
+        }
+        addOnTabOpen('easyRemoteAccess',onEasyRemoteAccessShown)
+        addOnTabReopen('easyRemoteAccess',onEasyRemoteAccessShown)
+        addOnTabAway('easyRemoteAccess',onEasyRemoteAccessHidden)
+        addOnTabClose('easyRemoteAccess',onEasyRemoteAccessHidden)
+    }else{
+        // No tab engine on this page: keep the old behaviour rather than never connecting.
+        tabIsOpen = true
     }
     function getSelectedServers(){
         var theArray = [];
@@ -119,11 +236,14 @@ $(document).ready(function(){
         // formValues.p2pHostSelected = currentlySelectedP2PServerId
         formValues.p2pHostMultiSelected = getSelectedServers()
         console.log(formValues)
-        $.post(superApiPrefix + $user.sessionKey + '/p2p/save',{
+        $.post(remoteAccessApiPrefix + '/save',{
             data: JSON.stringify(formValues)
         },function(data){
             console.log(data)
             if(data.ok){
+                // What was pending is now what the server has, so clear the highlight.
+                savedSelection = formValues.p2pHostMultiSelected.slice()
+                refreshAllRowStates()
                 new PNotify({
                     type: 'success',
                     title: lang['P2P Settings Applied'],
@@ -145,11 +265,18 @@ $(document).ready(function(){
         console.log(selectedServer)
         if(alreadyActive){
             parent.removeClass('active')
+            refreshRowState(parent)
         }else{
             parent.addClass('active')
+            refreshRowState(parent)
+            // Selecting one of an ssl/non-ssl pair drops the other, so that row has to be
+            // brought back in step too.
             const drawnIdToDisable = isWss ? drawnId.replace('-ssl','') : `${drawnId}-ssl`
-            console.log(drawnIdToDisable)
-            easyRemoteAccessTab.find(`[drawn-id="${drawnIdToDisable}"]`).removeClass('active')
+            var counterpart = easyRemoteAccessTab.find(`[drawn-id="${drawnIdToDisable}"]`)
+            if(counterpart.length > 0){
+                counterpart.removeClass('active')
+                refreshRowState(counterpart)
+            }
         }
         return false;
     })

@@ -140,9 +140,54 @@ $(document).ready(async function(){
     function parseDiskUsePercent(diskUsed,diskLimit){
         return parseFloat((diskUsed/diskLimit)*100).toFixed(1)+'%'
     }
+    var gpuIndicators = {}
+    function setGpuIndicators(gpus){
+        gpus.forEach(function(gpu){
+            var indicator = gpuIndicators[gpu.id]
+            if(!indicator){
+                // Markup mirrors the indicatorBar drawBlock emits for CPU and RAM so the new
+                // rows sit in the same card without looking bolted on. Inserted after the last
+                // compute row, which keeps vendor order stable as they arrive.
+                var deviceNote = gpu.deviceCount > 1 ? ` <small class="text-muted">x${gpu.deviceCount}</small>` : ''
+                var html = `<div id="indicator-gpu-${gpu.id}" class="mb-2">
+                    <div class="d-flex flex-row text-white mb-1">
+                        <div class="pr-2"><i class="fa fa-tachometer"></i></div>
+                        <div class="flex-grow-1"><small>${lang.GPU} (${gpu.label})${deviceNote}</small></div>
+                        <div><small class="indicator-percent">0%</small></div>
+                    </div>
+                    <div>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-warning" role="progressbar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>`
+                var insertAfter = lastComputeIndicator()
+                if(insertAfter.length === 0)return;
+                insertAfter.after(html)
+                var element = $(`#indicator-gpu-${gpu.id}`)
+                indicator = gpuIndicators[gpu.id] = {
+                    bar: element.find('.progress-bar'),
+                    percentText: element.find('.indicator-percent'),
+                }
+            }
+            var percent = parseFloat(gpu.percent).toFixed(1) + '%'
+            indicator.bar.css('width',percent)
+            indicator.percentText.html(percent)
+        })
+    }
+    function lastComputeIndicator(){
+        var existing = Object.keys(gpuIndicators)
+        if(existing.length > 0){
+            return $(`#indicator-gpu-${existing[existing.length - 1]}`)
+        }
+        return ramIndicator.length > 0 ? ramIndicator : cpuIndicator
+    }
     onWebSocketEvent(function (d){
         switch(d.f){
             case'init_success':
+                // Absent when the group is not permitted to see system usage; the CPU and RAM
+                // bars are not rendered in that case either.
+                if(!d.os)break;
                 var coreCount = d.os.cpuCount
                 var operatingSystem = d.os.platform
                 var totalRAM = d.os.totalmem
@@ -154,6 +199,11 @@ $(document).ready(async function(){
                 }
             break;
             case'os':
+                // One bar per GPU vendor the server detected. They are built here rather than
+                // in the sidebar definition because which vendors exist is only known after
+                // the server has probed the machine, and a group that is not permitted to see
+                // system usage never receives this event, so the bars are never created.
+                if(d.gpus && d.gpus.length > 0)setGpuIndicators(d.gpus);
                 var cpuPercent = parseFloat(d.cpu).toFixed(1) + '%'
                 cpuIndicatorBar.css('width',cpuPercent)
                 cpuIndicatorPercentText.html(cpuPercent)

@@ -24,10 +24,9 @@ $(document).ready(function(e){
         return regionEditorRegionsList.val()
     }
     var regionViewerDetails = {}
-    function createBlankCoorindateObject(name){
-        var streamElement = regionEditorLiveView.find('iframe,img')
-        var width = streamElement.width() || 200
-        var height = streamElement.height() || 200
+    function createBlankCoorindateObject(name, width, height){
+        width = parseInt(width) || 200
+        height = parseInt(height) || 200
         return {
             name: name,
             sensitivity: 10,
@@ -36,9 +35,9 @@ $(document).ready(function(e){
             color_threshold: 9,
             points: [
                 [0, 0],
-                [0, height * 0.6],
-                [width * 0.6, height * 0.6],
-                [width * 0.6, 0]
+                [0, Math.round(height * 0.6)],
+                [Math.round(width * 0.6), Math.round(height * 0.6)],
+                [Math.round(width * 0.6), 0]
             ]
         }
     }
@@ -59,7 +58,7 @@ $(document).ready(function(e){
         if(Object.keys(monitorDetails.cords).length === 0){
             const regionName = lang['Region Name']
             monitorDetails.cords = {}
-            monitorDetails.cords[regionName] = createBlankCoorindateObject(regionName)
+            monitorDetails.cords[regionName] = createBlankCoorindateObject(regionName, imageWidth, imageHeight)
         }
         regionViewerDetails = monitorDetails;
         initiateRegionList()
@@ -330,9 +329,28 @@ $(document).ready(function(e){
             }
         })
         regionViewerDetails.cords = newCoordinates
-        regionViewerDetails.cords[regionName] = createBlankCoorindateObject(regionName)
+        regionViewerDetails.cords[regionName] = createBlankCoorindateObject(
+            regionName,
+            parseInt(regionViewerDetails.detector_scale_x) || 640,
+            parseInt(regionViewerDetails.detector_scale_y) || 480
+        )
         regionEditorRegionsList.append(`<option value="${regionName}">${lang['Region Name']}</option>`)
         regionEditorRegionsList.val(regionName)
+        regionEditorRegionsList.change()
+        return false;
+    })
+    regionEditorWindow.on('click','.reset-region',function(e){
+        e.stopPropagation()
+        var currentRegionId = getCurrentlySelectedRegionId()
+        var cord = currentRegionId ? regionViewerDetails.cords[currentRegionId] : null
+        if(!cord)return false;
+        if(!confirm(lang['Reset the points for this region?'] || 'Reset the points for this region?'))return false;
+        cord.points = createBlankCoorindateObject(
+            currentRegionId,
+            parseInt(regionViewerDetails.detector_scale_x) || 640,
+            parseInt(regionViewerDetails.detector_scale_y) || 480
+        ).points
+        regionEditorRegionsList.val(currentRegionId)
         regionEditorRegionsList.change()
         return false;
     })

@@ -1,6 +1,12 @@
 $(document).ready(function(){
     var loadedModules = {}
     var downloadablePlugins = {}
+    var dockerAvailable = false
+    var detectedHostIp = ''
+    var dockerActionInProgress = {}
+    var connectedPluginsStatus = {}
+    var connectedPluginsListElement = $('#connectedPluginsList')
+    var connectedPluginsCardElement = $('#connectedPluginsCard')
     var theEnclosure = $('#superPluginManager')
     var listElement = $('#pluginManagerList')
     var downloadListElement = $('#pluginManagerDownloadble tbody')
@@ -9,7 +15,7 @@ $(document).ready(function(){
     var pluginCommandLine = $('#pluginCommandLine')
     var pluginDownloadableSearch = $('#pluginManagerDownloadbleListSearch')
     var getModules = function(callback) {
-        $.get(superApiPrefix + $user.sessionKey + '/plugins/list',callback)
+        $.get(pluginManagerApiPrefix + '/list',callback)
     }
     function getDlPluginId(plugin){
         return `${plugin.name}_${plugin.link}_${plugin.dir}`
@@ -76,6 +82,146 @@ $(document).ready(function(){
         })
     }
     var loadedBlocks = {}
+    function renderConnectedPlugins(){
+        var plugNames = Object.keys(connectedPluginsStatus)
+        if(plugNames.length === 0){
+            connectedPluginsListElement.html(`<div class="text-muted">${lang['No Plugins Connected']}</div>`)
+            return
+        }
+        var html = plugNames.sort().map(function(plug){
+            var info = connectedPluginsStatus[plug]
+            var isConnected = info.status === 'connected'
+            return `
+                <div class="connected-plugin-row d-flex justify-content-between align-items-center py-1" connected-plugin="${plug}">
+                    <div><span class="status-dot ${isConnected ? 'status-dot-connected' : 'status-dot-disconnected'}"></span> <b>${plug}</b> ${info.connectionType ? `<small class="text-muted">${info.connectionType}</small>` : ''}</div>
+                    <span class="badge ${isConnected ? 'badge-success' : 'badge-secondary'}">${isConnected ? lang.Connected : lang.Disconnected}</span>
+                </div>`
+        }).join('')
+        connectedPluginsListElement.html(html)
+    }
+    // Docker reports raw states ("running", "exited", "absent"). On their own those
+    // read as jargon in the plugin list, and "exited" in particular looks like an
+    // error rather than "stopped on purpose" - so they get spelled out.
+    function dockerStatusLabel(status){
+        switch(status){
+            case'running': return lang['Running in Docker'] || 'Running in Docker'
+            case'exited': return lang['Stopped (Docker)'] || 'Stopped (Docker)'
+            case'absent': return lang['Not Installed'] || 'Not Installed'
+            default: return status
+        }
+    }
+    function dockerStatusBadge(status){
+        var badgeClass = status === 'running' ? 'badge-success' : (status === 'absent' ? 'badge-secondary' : 'badge-warning')
+        return `<span class="badge ${badgeClass}">${dockerStatusLabel(status)}</span>`
+    }
+    function buildDockerSectionHtml(module){
+        var docker = module.docker || {}
+        var variants = docker.variants || []
+        if(!dockerAvailable || variants.length === 0)return ''
+        var container = docker.container || { status: 'absent' }
+        var isRunning = container.status === 'running'
+        var isAbsent = container.status === 'absent'
+        var variantOptions = variants.map((v) => `<option value="${v}">${v}</option>`).join('')
+        return `
+            <div class="docker-plugin-install mt-2 mb-0 p-2">
+                <div class="mb-1"><b><i class="fa fa-cube"></i> ${lang['Docker'] || 'Docker'}</b> ${dockerStatusBadge(container.status)} ${container.image ? `<small>${container.image}</small>` : ''}</div>
+                ${isAbsent ? `
+                    <div class="mb-1"><small class="text-muted">${lang['dockerPluginHint'] || 'Run this plugin in a container instead of installing it on this machine. The image brings its own dependencies (including CUDA, where applicable), so there is nothing to install here.'}</small></div>
+                    <div class="form-inline">
+                        <select class="form-control form-control-sm d-inline-block w-auto mr-1" docker-field="variant">${variantOptions}</select>
+                        <input type="text" class="form-control form-control-sm d-inline-block w-auto mr-1" docker-field="host" placeholder="${lang['Host'] || 'Host'}" value="${detectedHostIp}">
+                        <a class="btn btn-sm btn-primary" plugin-manager-action="docker-deploy">${lang['Pull & Run (Docker)'] || 'Pull & Run (Docker)'}</a>
+                    </div>
+                ` : `
+                    <a class="btn btn-sm btn-default" plugin-manager-action="docker-logs">${lang['View Logs'] || 'View Logs'}</a>
+                    ${isRunning ? `<a class="btn btn-sm btn-warning" plugin-manager-action="docker-stop">${lang['Stop'] || 'Stop'}</a>` : `<a class="btn btn-sm btn-success" plugin-manager-action="docker-start">${lang['Start'] || 'Start'}</a>`}
+                    <a class="btn btn-sm btn-danger" plugin-manager-action="docker-remove">${lang['Remove Container'] || 'Remove Container'}</a>
+                `}
+                <div class="docker-logs-view d-none mt-2"><pre class="text-white mb-0"></pre></div>
+            </div>`
+    }
+    // The Downloaded list is a table. Each plugin is two rows sharing one `package-name`:
+    // a summary row, and a details row holding the output panels, installer prompt, Docker
+    // section and README. Everything that acts on a plugin selects by `[package-name]` and
+    // then `.find()`s inside, so spanning two rows keeps all of that working - see
+    // getPluginRows(), which is what those lookups go through.
+    var getPluginTableBody = function(){
+        var tableBody = listElement.find('.plugin-manager-table tbody')
+        if(tableBody.length === 0){
+            listElement.html(`<table class="table table-striped mb-0 plugin-manager-table">
+                <thead>
+                    <tr>
+                        <th>${lang['Name'] || 'Name'}</th>
+                        <th>${lang['Time Created']}</th>
+                        <th>${lang['Last Modified']}</th>
+                        <th>${lang['Status'] || 'Status'}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>`)
+            tableBody = listElement.find('.plugin-manager-table tbody')
+        }
+        return tableBody
+    }
+    var getPluginRows = function(packageName){
+        return listElement.find(`[package-name="${packageName}"]`)
+    }
+    // A plugin can be running in one of two completely independent ways, and the old
+    // single Enabled/Disabled badge only described the first of them:
+    //
+    //   1. As a WORKER - Shinobi spawns it itself as a child process. This is what
+    //      conf.json's `enabled` flag controls, and what the Enable/Disable button
+    //      toggles. Nothing else.
+    //   2. Over a WEBSOCKET - the plugin runs as its own process and connects in as a
+    //      client. That covers a Docker container and an ordinary bare-metal install
+    //      configured with mode "client", possibly on a different machine entirely.
+    //
+    // A plugin connected over a websocket is working perfectly while still being
+    // "Disabled" as a worker, which read as broken before these were separated.
+    var buildStatusBadge = function(module){
+        var moduleConfig = module.config || {}
+        var plug = moduleConfig.plug || module.name
+        var connection = connectedPluginsStatus[plug] || {}
+        var isConnected = connection.status === 'connected'
+        var docker = module.docker || {}
+        var container = docker.container || {}
+        var workerTitle = lang['workerStatusHint'] || 'Whether Shinobi runs this plugin itself as a worker (child process). It does not affect plugins that connect over a websocket.'
+        var badges = [moduleConfig.enabled
+            ? `<span class="badge badge-success" title="${workerTitle}">${lang['Enabled (Worker)'] || 'Enabled (Worker)'}</span>`
+            : `<span class="badge badge-secondary" title="${workerTitle}">${lang['Disabled (Worker)'] || 'Disabled (Worker)'}</span>`]
+        if(isConnected){
+            var websocketTitle = lang['websocketStatusHint'] || 'This plugin is connected to Shinobi over a websocket - from a Docker container, or from its own process on this or another machine.'
+            badges.push(`<span class="badge badge-info d-block mt-1" title="${websocketTitle}">${lang['Enabled by Websocket'] || 'Enabled by Websocket'}</span>`)
+        }
+        if(container.status && container.status !== 'absent'){
+            // Shown even when connected: a container that is running but NOT connected
+            // means the image is fine and the key/host is wrong, which is worth seeing.
+            badges.push(`<span class="badge ${container.status === 'running' ? 'badge-primary' : 'badge-warning'} d-block mt-1">
+                    <i class="fa fa-cube"></i> ${dockerStatusLabel(container.status)}
+                </span>`)
+        }else if(dockerAvailable && (docker.variants || []).length > 0){
+            // Nothing deployed yet, but this plugin ships images - advertise that, since
+            // the alternative is the user never realising Docker is an option.
+            badges.push(`<small class="d-block mt-1 text-muted"><i class="fa fa-cube"></i> ${lang['Docker available'] || 'Docker available'}</small>`)
+        }
+        return badges.join('\n')
+    }
+    // Connection state arrives on its own socket events, independently of the module
+    // list, so the affected plugin's Status cell has to be repainted when it changes -
+    // otherwise "Enabled by Websocket" only appears after a full refresh.
+    var refreshStatusBadgeForPlug = function(plug){
+        $.each(loadedModules || {},function(name,module){
+            if(!module)return
+            if(((module.config || {}).plug || name) !== plug)return
+            getPluginRows(name).find('.plugin-status-badge').html(buildStatusBadge(module))
+        })
+    }
+    // Output and README live in the details row, which stays collapsed until there is
+    // something to look at - otherwise every plugin would push the table rows far apart.
+    var showPluginDetails = function(packageName){
+        getPluginRows(packageName).filter('.plugin-detail-row').show()
+    }
     var drawModuleBlock = function(module){
         var humanName = module.properties.name ? module.properties.name : module.name
         var additionalCommands = module.properties.addCmd ? Object.values(module.properties.addCmd) : [];
@@ -83,6 +229,15 @@ $(document).ready(function(){
             var existingElement = listElement.find(`[package-name="${module.name}"]`)
             existingElement.find('.title').text(humanName)
             existingElement.find('[plugin-manager-action="status"]').text(!module.config.enabled ? lang.Enable : lang.Disable)
+            existingElement.find('.plugin-status-badge').html(buildStatusBadge(module))
+            var refreshedDockerHtml = buildDockerSectionHtml(module)
+            existingElement.find('.docker-section').html(refreshedDockerHtml)
+            // Docker may have become available (or the plugin may have gained/lost
+            // images) since this row was drawn, so the row's visibility is re-evaluated
+            // on every refresh rather than only at creation.
+            existingElement.filter('.plugin-docker-row').toggle(!!refreshedDockerHtml)
+            loadedModules[module.name] = module;
+            loadedBlocks[module.name] = Object.assign(loadedBlocks[module.name] || {},module)
         }else{
             var addCmdButtons = additionalCommands.length > 0 ? `<div class="dropdown d-inline-block command-buttons">
               <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="dmb-${module.name}" data-bs-toggle="dropdown" aria-expanded="false">
@@ -94,30 +249,46 @@ $(document).ready(function(){
                 }).join('')}
               </ul>
             </div>` : ''
-            listElement.prepend(`
-                    <div class="card bg-dark text-white mb-3" package-name="${module.name}">
-                        <div class="card-body pb-3">
-                            <div><h4 class="title my-0">${humanName}</h4></div>
-                            <div clas="mb-2"><small>${module.name}</small></div>
-                            <div class="pb-2"><b>${lang['Time Created']} :</b> ${module.created}</div>
-                            <div class="pb-2"><b>${lang['Last Modified']} :</b> ${module.lastModified}</div>
-                            <div class="mb-2">
-                                <a class="btn btn-sm btn-default" plugin-manager-action="readmeToggle">${lang.Notes}</a>
-                                ${module.hasInstaller ? `
-                                    <a class="btn btn-sm btn-info" plugin-manager-action="install">${lang['Run Installer']}</a>
-                                    <a class="btn btn-sm btn-danger" style="display:none" plugin-manager-action="cancelInstall">${lang['Stop']}</a>
-                                ` : ''}
-                                ${addCmdButtons}
-                                <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
-                                <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
-                                <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
-                                <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
-                                    <div class="input-group">
-                                      <input name="cmd" type="text" class="form-control form-control-sm" placeholder="Type and Press Enter to Send Command">
-                                      <button type="submit" class="btn btn-sm btn-primary m-0">${lang.Run}</button>
-                                    </div>
-                                </form>
-                            </div>
+            // The Docker panel lives in its own row that is visible without expanding
+            // the details toggle - it is an install method, not debug output, so hiding
+            // it behind a terminal icon meant nobody found it. The row collapses itself
+            // when this plugin has no images (or Docker is not installed on the host).
+            var dockerSectionHtml = buildDockerSectionHtml(module)
+            getPluginTableBody().prepend(`
+                    <tr class="plugin-summary-row" package-name="${module.name}">
+                        <td>
+                            <div class="title">${humanName}</div>
+                            <small class="text-muted">${module.name}</small>
+                        </td>
+                        <td><small>${module.created}</small></td>
+                        <td><small>${module.lastModified}</small></td>
+                        <td class="plugin-status-badge">${buildStatusBadge(module)}</td>
+                        <td class="text-end plugin-actions">
+                            <a class="btn btn-sm btn-default" plugin-manager-action="detailsToggle" title="${lang['Output'] || 'Output'}"><i class="fa fa-terminal"></i></a>
+                            <a class="btn btn-sm btn-default" plugin-manager-action="readmeToggle">${lang.Notes}</a>
+                            ${module.hasInstaller ? `
+                                <a class="btn btn-sm btn-info" plugin-manager-action="install">${lang['Run Installer']}</a>
+                                <a class="btn btn-sm btn-danger" style="display:none" plugin-manager-action="cancelInstall">${lang['Stop']}</a>
+                            ` : ''}
+                            ${addCmdButtons}
+                            <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
+                            <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
+                            <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
+                        </td>
+                    </tr>
+                    <tr class="plugin-docker-row" package-name="${module.name}"${dockerSectionHtml ? '' : ' style="display:none"'}>
+                        <td colspan="5" class="pt-0">
+                            <div class="docker-section">${dockerSectionHtml}</div>
+                        </td>
+                    </tr>
+                    <tr class="plugin-detail-row" package-name="${module.name}" style="display:none">
+                        <td colspan="5">
+                            <form style="display:none" class="command-line row mb-3" plugin-manager-command-line>
+                                <div class="input-group">
+                                  <input name="cmd" type="text" class="form-control form-control-sm" placeholder="Type and Press Enter to Send Command">
+                                  <button type="submit" class="btn btn-sm btn-primary m-0">${lang.Run}</button>
+                                </div>
+                            </form>
                             <div class="install-output row">
                                 <div class="col-md-6 pr-2 mb-2"><pre class="install-output-stdout text-white mb-0"></pre></div>
                                 <div class="col-md-6 pl-2 mb-2"><pre class="install-output-stderr text-white mb-0"></pre></div>
@@ -131,9 +302,10 @@ $(document).ready(function(){
                                 </div>
                             </div>
                             <div class="readme-view d-none"></div>
-                        </div>
-                    </div>`)
-            var newBlock = $(`.card[package-name="${module.name}"]`)
+                        </td>
+                    </tr>`)
+            // Both rows, so `.find()` from here reaches the details row's elements.
+            var newBlock = getPluginRows(module.name)
             loadedBlocks[module.name] = Object.assign({
                 block: newBlock,
                 stdout: newBlock.find('.install-output-stdout'),
@@ -156,7 +328,7 @@ $(document).ready(function(){
                     text: lang['Please Wait...'],
                     type: 'info'
                 });
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/download',{
+                $.post(pluginManagerApiPrefix + '/download',{
                     downloadUrl: url,
                     packageRoot: packageRoot,
                 },function(data){
@@ -183,7 +355,7 @@ $(document).ready(function(){
             clickCallback: function(){
                 loadedBlocks[packageName].stdout.empty()
                 loadedBlocks[packageName].stderr.empty()
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/install',{
+                $.post(pluginManagerApiPrefix + '/install',{
                     packageName: packageName,
                 },callback)
             }
@@ -200,7 +372,7 @@ $(document).ready(function(){
             clickCallback: function(){
                 loadedBlocks[packageName].stdout.empty()
                 loadedBlocks[packageName].stderr.empty()
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/run',{
+                $.post(pluginManagerApiPrefix + '/run',{
                     packageName: packageName,
                     scriptName: scriptName,
                 },callback)
@@ -216,20 +388,20 @@ $(document).ready(function(){
                 title: lang.Delete,
             },
             clickCallback: function(){
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/delete',{
+                $.post(pluginManagerApiPrefix + '/delete',{
                     packageName: packageName,
                 },callback)
             }
         })
     }
     var setModuleStatus = function(packageName,status,callback){
-        $.post(superApiPrefix + $user.sessionKey + '/plugins/status',{
+        $.post(pluginManagerApiPrefix + '/status',{
             status: status,
             packageName: packageName,
         },callback)
     }
     var sendInstallerCommand = function(packageName,command,callback){
-        $.post(superApiPrefix + $user.sessionKey + '/plugins/command',{
+        $.post(pluginManagerApiPrefix + '/command',{
             command: command,
             packageName: packageName,
         },callback)
@@ -260,7 +432,7 @@ $(document).ready(function(){
     }
     function getReadme(packageName){
         return new Promise(function(resolve){
-            $.get(`${superApiPrefix}${$user.sessionKey}/plugins/readme/${packageName}`,function(data){
+            $.get(`${pluginManagerApiPrefix}/readme/${packageName}`,function(data){
                 if(!data.ok)console.error(data);
                 resolve(data.readme || '')
             })
@@ -293,10 +465,17 @@ $(document).ready(function(){
         e.preventDefault()
         var el = $(this)
         var action = el.attr('plugin-manager-action')
-        var card = el.parents('[package-name]')
-        var packageName = card.attr('package-name')
+        var packageName = el.parents('[package-name]').attr('package-name')
+        // Both rows for this plugin, not just the one the button sits in - the buttons are
+        // in the summary row while .command-line, .command-installer and the output panels
+        // they toggle are in the details row.
+        var card = getPluginRows(packageName)
         switch(action){
+            case'detailsToggle':
+                card.filter('.plugin-detail-row').toggle()
+            break;
             case'readmeToggle':
+                showPluginDetails(packageName)
                 toggleReadme(packageName)
             break;
             case'run':
@@ -331,7 +510,7 @@ $(document).ready(function(){
                 })
             break;
             case'cancelInstall':
-                $.post(superApiPrefix + $user.sessionKey + '/plugins/install',{
+                $.post(pluginManagerApiPrefix + '/install',{
                     packageName: packageName,
                     cancelInstall: 'true'
                 },function(data){
@@ -352,10 +531,18 @@ $(document).ready(function(){
             case'status':
                 var currentStatus = !!loadedModules[packageName].config.enabled
                 var newStatus = !currentStatus
+                // Enabling starts the plugin's worker and its output streams into these same
+                // panels, so whatever an earlier install or run left behind is cleared first
+                // - otherwise the new plugin's first lines land under stale text.
+                if(newStatus){
+                    loadedBlocks[packageName].stdout.empty()
+                    loadedBlocks[packageName].stderr.empty()
+                }
                 setModuleStatus(packageName,newStatus,function(data){
                     if(data.ok){
                         loadedModules[packageName].config.enabled = newStatus
                         el.text(currentStatus ? lang.Enable : lang.Disable)
+                        card.find('.plugin-status-badge').html(buildStatusBadge(loadedModules[packageName]))
                     }
                 })
             break;
@@ -375,7 +562,7 @@ $(document).ready(function(){
                 })
             break;
             case'editConfig':
-                $.get(superApiPrefix + $user.sessionKey + '/plugins/configuration?packageName=' + packageName,function(data){
+                $.get(pluginManagerApiPrefix + '/configuration?packageName=' + packageName,function(data){
                     $.confirm.create({
                         title: lang[`Edit Configuration`],
                         body: `<textarea id="pluginConfigEditContents" class="form-control" style="height:400px;font-family: monospace;border:1px solid #eee; border-radius: 15px;padding: 10px;">${JSON.stringify(data.config,null,3) || {}}</textarea>`,
@@ -385,7 +572,7 @@ $(document).ready(function(){
                         },
                         clickCallback: function(){
                             var newPluginConfigStringed = $('#pluginConfigEditContents').val()
-                            $.post(superApiPrefix + $user.sessionKey + '/plugins/configuration/update',{
+                            $.post(pluginManagerApiPrefix + '/configuration/update',{
                                 packageName: packageName,
                                 config: newPluginConfigStringed,
                             },function(data){
@@ -394,6 +581,72 @@ $(document).ready(function(){
                         }
                     })
                 })
+            break;
+            case'docker-deploy':
+                var variant = card.find('[docker-field="variant"]').val()
+                var hostField = card.find('[docker-field="host"]').val()
+                $.confirm.create({
+                    title: lang['Pull & Run (Docker)'] || 'Pull & Run (Docker)',
+                    body: lang.superPluginDownloadText || 'This will pull the Docker image and run it, replacing any existing container for this plugin.',
+                    clickOptions: {
+                        class: 'btn-success',
+                        title: lang.Run,
+                    },
+                    clickCallback: function(){
+                        loadedBlocks[packageName].stdout.empty()
+                        loadedBlocks[packageName].stderr.empty()
+                        dockerActionInProgress[packageName] = true
+                        $.post(pluginManagerApiPrefix + '/docker/deploy',{
+                            packageName: packageName,
+                            variant: variant,
+                            host: hostField,
+                        },function(data){
+                            console.log(data)
+                        })
+                    }
+                })
+            break;
+            case'docker-stop':
+                $.post(pluginManagerApiPrefix + '/docker/stop',{
+                    packageName: packageName,
+                },function(data){
+                    refreshModuleList()
+                })
+            break;
+            case'docker-start':
+                $.post(pluginManagerApiPrefix + '/docker/start',{
+                    packageName: packageName,
+                },function(data){
+                    refreshModuleList()
+                })
+            break;
+            case'docker-remove':
+                $.confirm.create({
+                    title: lang['Remove Container'] || 'Remove Container',
+                    body: lang['confirmRemoveDockerContainer'] || 'Do you want to remove this plugin\'s Docker container?',
+                    clickOptions: {
+                        class: 'btn-danger',
+                        title: lang.Delete,
+                    },
+                    clickCallback: function(){
+                        $.post(pluginManagerApiPrefix + '/docker/remove',{
+                            packageName: packageName,
+                        },function(data){
+                            refreshModuleList()
+                        })
+                    }
+                })
+            break;
+            case'docker-logs':
+                var logsView = card.find('.docker-logs-view')
+                var isHidden = logsView.hasClass('d-none')
+                if(isHidden){
+                    $.get(pluginManagerApiPrefix + '/docker/logs?packageName=' + packageName,function(data){
+                        logsView.removeClass('d-none').find('pre').text(data.logs || '')
+                    })
+                }else{
+                    logsView.addClass('d-none').find('pre').empty()
+                }
             break;
         }
     })
@@ -407,6 +660,10 @@ $(document).ready(function(){
                 $('[data-bs-target="#pluginManagerDownloadbleList"],#pluginManagerDownloadbleList').removeClass('active')
                 var theModule = data.newModule
                 theModule.config.enabled = false
+                // The download response only carries `docker` when the server found
+                // Docker on this host, so its presence is proof enough - without this the
+                // panel would stay hidden until the next /list call reset the flag.
+                if(theModule.docker)dockerAvailable = true
                 drawModuleBlock(theModule)
                 if(theModule.installerRunning){
                     toggleCardButtons(card,[
@@ -421,6 +678,16 @@ $(document).ready(function(){
                 }
             }
         })
+    })
+    $('#tablist a[data-bs-toggle="tab"]').on('shown.bs.tab',function(e){
+        var target = $(e.target).attr('data-bs-target')
+        if(target === '#pluginManagerDownloadbleList'){
+            connectedPluginsCardElement.hide()
+            pluginDownloadForm.show()
+        }else if(target === '#pluginManagerList'){
+            pluginDownloadForm.hide()
+            connectedPluginsCardElement.show()
+        }
     })
     $('#pluginQuickSelectExec').click(function(){
         var currentVal = quickSelect.val()
@@ -448,43 +715,95 @@ $(document).ready(function(){
             return 0;
         });
     }
-    setTimeout(function(){
+    function refreshModuleList(){
         getModules(function(data){
+            dockerAvailable = !!data.dockerAvailable
+            detectedHostIp = data.detectedHostIp || ''
             loadedModules = data.modules
-            console.log(loadedModules)
+            // Populated BEFORE drawing: each row's Status cell reports whether that
+            // plugin is connected over a websocket, so drawing first would paint every
+            // row with last refresh's connection state.
+            connectedPluginsStatus = {}
+            $.each(data.connectedPlugins || {},function(plug,info){
+                connectedPluginsStatus[plug] = Object.assign({},info,{status:'connected'})
+            })
             $.each(getObjectAlphabetically(data.modules,'created'),function(n,module){
                 drawModuleBlock(module)
             })
+            renderConnectedPlugins()
         })
-    },2000)
-    $.ccio.ws.on('f',function(data){
+    }
+    renderConnectedPlugins()
+    setTimeout(refreshModuleList,2000)
+    // The two pages hosting this panel have different sockets: the dashboard exposes
+    // onWebSocketEvent, the Superuser panel has $.ccio.ws. Both are fed the same
+    // 'plugin-info' events from the PLUGINMANAGER room.
+    function onPluginManagerEvent(handler){
+        if(typeof onWebSocketEvent === 'function'){
+            onWebSocketEvent(handler)
+        }else if($.ccio && $.ccio.ws){
+            $.ccio.ws.on('f',handler)
+        }
+    }
+    onPluginManagerEvent(function(data){
         switch(data.f){
             case'plugin-info':
                 var name = data.module
+                // A running plugin streams output continuously, so frames can arrive before
+                // this page has drawn that plugin's card (or after it was deleted). The
+                // output panels only exist on the card, so without this every line would
+                // throw. connection-status is still handled - it does not need the card.
+                if(!loadedBlocks[name] && data.process !== 'connection-status')return;
+                // Output is worth nothing behind a collapsed row, so anything arriving on
+                // either stream opens the details for that plugin.
+                if(data.process === 'install-stdout' || data.process === 'install-stderr'){
+                    showPluginDetails(name)
+                }
                 switch(data.process){
                     case'install-stdout':
                         appendLoggerData(data.data,loadedBlocks[name].stdout)
                         if(data.data.indexOf('(y)es or (N)o') > -1 || data.data.indexOf('(Y)es or (n)o') > -1){
                             toggleUsabilityOfYesAndNoButtons(name,true)
                         }else if(data.data === '#END_PROCESS'){
-                            var card = $(`[package-name="${name}"]`)
-                            toggleCardButtons(card,[
-                                { action: 'install', show: true },
-                                { el: '.command-line', show: false },
-                                { el: '.command-buttons', show: true },
-                                { action: 'editConfig', show: true },
-                                { action: 'cancelInstall', show: false },
-                                { action: 'delete', show: true },
-                                { action: 'status', show: true },
-                            ])
+                            if(dockerActionInProgress[name]){
+                                delete dockerActionInProgress[name]
+                                refreshModuleList()
+                            }else{
+                                var card = $(`[package-name="${name}"]`)
+                                toggleCardButtons(card,[
+                                    { action: 'install', show: true },
+                                    { el: '.command-line', show: false },
+                                    { el: '.command-buttons', show: true },
+                                    { action: 'editConfig', show: true },
+                                    { action: 'cancelInstall', show: false },
+                                    { action: 'delete', show: true },
+                                    { action: 'status', show: true },
+                                ])
+                            }
                         }
                     break;
                     case'install-stderr':
                         appendLoggerData(data.data,loadedBlocks[name].stderr)
                     break;
+                    case'connection-status':
+                        connectedPluginsStatus[name] = Object.assign({},data.plugin,{status:data.status})
+                        renderConnectedPlugins()
+                        refreshStatusBadgeForPlug(name)
+                    break;
                 }
             break;
         }
+    })
+    // The Downloaded / Download Plugins switch is a pair of buttons rather than nav-tabs.
+    // Bootstrap still does the switching (the container carries `nav` so its Tab plugin can
+    // resolve a parent); it only moves its own `active` class, so the colour swap is done
+    // here. Delegated from body because the panel is injected by the page hosting it.
+    $('body').on('shown.bs.tab','.plugin-manager-tab-btn',function(){
+        $('.plugin-manager-tab-btn').each(function(){
+            var btn = $(this)
+            var isActive = btn.hasClass('active')
+            btn.toggleClass('btn-success',isActive).toggleClass('btn-default',!isActive)
+        })
     })
     getDownloadableModules()
 })

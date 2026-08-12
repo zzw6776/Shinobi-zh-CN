@@ -1,4 +1,5 @@
 const fs = require('fs')
+const path = require('path')
 const moment = require('moment')
 const express = require('express')
 const exec = require('child_process').exec;
@@ -177,6 +178,101 @@ module.exports = function(s,config,lang,app,io){
             }
         })
     }
+    // Registry of in-progress Timelapse video builds, keyed by group + monitor. It holds
+    // everything needed to narrate the build to the dashboard and to undo it if the user
+    // cancels : the ffmpeg process currently running, every temporary file written so far,
+    // and the final output path.
+    const activeTimelapseBuilds = {}
+    function getTimelapseBuildId(groupKey,monitorId){
+        return `${groupKey}${monitorId}`
+    }
+    function getTimelapseBuildJob(groupKey,monitorId){
+        return activeTimelapseBuilds[getTimelapseBuildId(groupKey,monitorId)]
+    }
+    function createTimelapseBuildJob(groupKey,monitorId){
+        const job = {
+            ke: groupKey,
+            mid: monitorId,
+            name: null,
+            cancelled: false,
+            currentProcess: null,
+            tempFiles: [],
+            outputFile: null,
+        }
+        activeTimelapseBuilds[getTimelapseBuildId(groupKey,monitorId)] = job
+        return job
+    }
+    function endTimelapseBuildJob(job){
+        if(!job)return;
+        const buildId = getTimelapseBuildId(job.ke,job.mid)
+        if(activeTimelapseBuilds[buildId] === job)delete activeTimelapseBuilds[buildId];
+    }
+    // The dashboard shows one line of text and a bar while a build runs. ffmpeg only starts
+    // reporting once it is actually encoding, so every step before that (database read, frame
+    // stat-ing, stitching, saving) sends its own stage instead of leaving the user with a
+    // button that looks like it did nothing.
+    function sendTimelapseBuildStage(job,stage,percent){
+        if(!job || job.cancelled)return;
+        s.tx({
+            f: 'timelapse_build_stage',
+            ke: job.ke,
+            mid: job.mid,
+            name: job.name,
+            stage: stage,
+            percent: percent === undefined || percent === null ? null : `${percent}`,
+        },'GRP_'+job.ke);
+    }
+    function trackTimelapseBuildTempFile(job,filePath){
+        if(!job || !filePath)return;
+        if(job.tempFiles.indexOf(filePath) === -1)job.tempFiles.push(filePath)
+    }
+    async function deleteTimelapseBuildFile(filePath){
+        if(!filePath)return;
+        try{
+            await fs.promises.rm(filePath,{ force: true })
+        }catch(err){
+            s.debugLog('Timelapse build cleanup failed',filePath,err)
+        }
+    }
+    // Removes every artifact the build produced so a cancel never leaves half-written
+    // segments, concat lists or an unplayable final mp4 behind.
+    async function cleanUpTimelapseBuildFiles(job){
+        if(!job)return;
+        const files = job.tempFiles.slice()
+        if(job.outputFile)files.push(job.outputFile)
+        job.tempFiles = []
+        for (let i = 0; i < files.length; i++) {
+            await deleteTimelapseBuildFile(files[i])
+        }
+    }
+    async function cancelTimelapseVideoBuild(groupKey,monitorId){
+        const job = getTimelapseBuildJob(groupKey,monitorId)
+        if(!job){
+            return { ok: false, msg: lang['Nothing to Cancel'] }
+        }
+        job.cancelled = true
+        if(job.currentProcess){
+            try{
+                processKill(job.currentProcess)
+            }catch(err){
+                s.debugLog('Timelapse build cancel, failed to kill process',err)
+            }
+            job.currentProcess = null
+        }
+        await cleanUpTimelapseBuildFiles(job)
+        endTimelapseBuildJob(job)
+        const theGroup = s.group[groupKey]
+        const activeMonitor = theGroup && theGroup.activeMonitors ? theGroup.activeMonitors[monitorId] : null
+        if(activeMonitor)delete(activeMonitor.buildingTimelapseVideo);
+        s.tx({
+            f: 'timelapse_build_cancelled',
+            ke: groupKey,
+            mid: monitorId,
+            name: job.name,
+            msg: lang['Build Cancelled'],
+        },'GRP_'+groupKey);
+        return { ok: true, msg: lang['Build Cancelled'] }
+    }
     function splitArrayIntoMultiple(bigarray,size){
         size = size || 80;
         var arrayOfArrays = [];
@@ -229,6 +325,7 @@ module.exports = function(s,config,lang,app,io){
     function buildVideoSegmentFromFrames(options){
         return new Promise((resolve,reject) => {
             const frames = options.frames
+            const job = options.job
             const ke = frames[0].ke
             const mid = frames[0].mid
             const concatListFile = options.listFile
@@ -237,7 +334,9 @@ module.exports = function(s,config,lang,app,io){
                 if(!resolved)resolve()
                 resolved = true
             }
+            if(job && job.cancelled)return doResolve();
             createTemporaryInputFile(frames,concatListFile).then((framesAccepted) => {
+                if(job && job.cancelled)return doResolve();
                 var completionTimeout
                 const framesPerSecond = options.fps
                 const finalMp4OutputLocation = options.output
@@ -246,6 +345,7 @@ module.exports = function(s,config,lang,app,io){
                 const commandString = `-y -threads 1 -re -f concat -safe 0 -r ${framesPerSecond} -i "${concatListFile}" -q:v 1 -c:v libx264 -preset ultrafast -r ${framesPerSecond} "${finalMp4OutputLocation}"`
                 // console.log("ffmpeg",commandString)
                 const videoBuildProcess = spawn(config.ffmpegDir,splitForFFMPEG(commandString))
+                if(job)job.currentProcess = videoBuildProcess;
                 videoBuildProcess.stdout.on('data',function(data){
                     s.debugLog('stdout',finalMp4OutputLocation,data.toString())
                 })
@@ -265,6 +365,7 @@ module.exports = function(s,config,lang,app,io){
                 })
                 videoBuildProcess.on('exit',function(data){
                     clearTimeout(completionTimeout)
+                    if(job && job.currentProcess === videoBuildProcess)job.currentProcess = null;
                     doResolve()
                     fs.promises.unlink(concatListFile).catch(function(){
 
@@ -278,6 +379,7 @@ module.exports = function(s,config,lang,app,io){
     async function chunkFramesAndBuildMultipleVideosThenSticth(options){
         // a single video with too many frames makes the video unplayable, this is the fix.
         const frames = options.frames
+        const job = options.job
         const ke = frames[0].ke
         const mid = frames[0].mid
         const finalFileName = options.finalFileName
@@ -288,18 +390,35 @@ module.exports = function(s,config,lang,app,io){
         const frameChunks = splitArrayIntoMultiple(frames,80)
         const numberOfSets = frameChunks.length
         const filePathsList = []
+        function isCancelled(){
+            return !!(job && job.cancelled)
+        }
+        trackTimelapseBuildTempFile(job,concatListFile)
         for (let i = 0; i < numberOfSets; i++) {
+            if(isCancelled())return;
             var frameSet = frameChunks[i]
             var numberOfFrames = frameSet.length
             var segmentFileOutput = `${s.dir.streams}${ke}/${mid}/${s.gid(10)}.mp4`
             filePathsList.push(segmentFileOutput)
+            trackTimelapseBuildTempFile(job,segmentFileOutput)
+            trackTimelapseBuildTempFile(job,`${concatListFile}${i}`)
+            // A set of 80 frames can take a while just to read off disk, so the set the build
+            // has reached is announced before ffmpeg is asked for anything.
+            sendTimelapseBuildStage(job,{
+                key: 'Encoding',
+                set: i + 1,
+                sets: numberOfSets,
+                frames: numberOfFrames,
+            },(i * (100 / numberOfSets)).toFixed(1))
             // console.log(`STARTED buildVideoSegmentFromFrames`, `${concatListFile}${i}`)
             await buildVideoSegmentFromFrames({
+                job: job,
                 frames: frameSet,
                 listFile: `${concatListFile}${i}`,
                 fps: framesPerSecond,
                 output: segmentFileOutput,
                 onPercentChange: (percent,currentFrame) => {
+                    if(isCancelled())return;
                     const overallPercent = ((percent / numberOfSets) + (i * (100 / numberOfSets))).toFixed(1);
                     s.tx({
                         f: 'timelapse_build_percent',
@@ -316,20 +435,31 @@ module.exports = function(s,config,lang,app,io){
             })
             // console.log(`ENDED buildVideoSegmentFromFrames`, `${concatListFile}${i}`)
         }
+        if(isCancelled())return;
         s.debugLog('videoBuildProcess Stitching...',finalMp4OutputLocation)
+        sendTimelapseBuildStage(job,{ key: 'Stitching' },'99.0')
         await createTemporaryInputFileForStitched(filePathsList,concatListFile)
+        if(isCancelled())return;
         await stitchMp4Files({
             listFile: concatListFile,
             output: finalMp4OutputLocation,
+            onProcess: (theProcess) => {
+                if(job)job.currentProcess = theProcess;
+            },
         })
-        await fs.promises.rm(concatListFile)
+        if(job)job.currentProcess = null;
+        if(isCancelled())return;
+        await deleteTimelapseBuildFile(concatListFile)
         for (let i = 0; i < filePathsList.length; i++) {
             var segmentFileOutput = filePathsList[i]
-            await fs.promises.rm(segmentFileOutput)
+            await deleteTimelapseBuildFile(segmentFileOutput)
         }
+        // Everything left over has been removed, so a cancel arriving from here on has
+        // nothing but the finished file to clean up.
+        if(job)job.tempFiles = [];
         s.debugLog('videoBuildProcess Stitching Complete!',finalMp4OutputLocation)
     }
-    async function createVideoFromTimelapse(timelapseFrames,framesPerSecond){
+    async function createVideoFromTimelapse(timelapseFrames,framesPerSecond,existingJob){
         s.debugLog("Building Timelapse Frames Video",timelapseFrames.length)
         framesPerSecond = !isNaN(framesPerSecond) ? framesPerSecond : parseInt(framesPerSecond) || 2
         const frames = timelapseFrames.reverse()
@@ -350,29 +480,48 @@ module.exports = function(s,config,lang,app,io){
         s.debugLog("activeMonitor.buildingTimelapseVideo",!!activeMonitor.buildingTimelapseVideo)
         if(activeMonitor.buildingTimelapseVideo){
             s.debugLog("Timelapse Frames Video Building Already",finalMp4OutputLocation)
+            // Don't discard the job of the build that is actually running - the caller's
+            // job never got attached to any work, so it goes away instead.
+            if(existingJob && getTimelapseBuildJob(ke,mid) !== existingJob)endTimelapseBuildJob(existingJob);
             return activeMonitor.buildingTimelapseVideo
         }
+        const job = existingJob || createTimelapseBuildJob(ke,mid)
+        job.name = finalFileName
         s.debugLog("finalFileAlreadyExist",finalFileAlreadyExist)
         if(finalFileAlreadyExist){
             s.debugLog("Timelapse Frames Video finalFileAlreadyExist",finalMp4OutputLocation)
             response.fileExists = true
             response.msg = lang['Already exists']
+            endTimelapseBuildJob(job)
             return response
         }
         if(frames.length < framesPerSecond){
             response.msg = lang.notEnoughFramesText1
+            endTimelapseBuildJob(job)
             return response
         }
+        if(job.cancelled){
+            response.msg = lang['Build Cancelled']
+            endTimelapseBuildJob(job)
+            return response
+        }
+        job.outputFile = finalMp4OutputLocation
         activeMonitor.buildingTimelapseVideo = response
         chunkFramesAndBuildMultipleVideosThenSticth({
+            job: job,
             frames: frames,
             listFile: concatListFile,
             fps: framesPerSecond,
             output: finalMp4OutputLocation,
             finalFileName: finalFileName
         }).then(async () => {
+            if(job.cancelled){
+                s.debugLog('videoBuildProcess cancelled',finalMp4OutputLocation)
+                return
+            }
             // videoBuildProcess exit
             s.debugLog('videoBuildProcess exit',finalMp4OutputLocation)
+            sendTimelapseBuildStage(job,{ key: 'Saving' },'100.0')
             const timeNow = new Date()
             const fileStats = await fs.promises.stat(finalMp4OutputLocation)
             const details = {
@@ -407,7 +556,12 @@ module.exports = function(s,config,lang,app,io){
                 timelapseVideo: true,
             },'GRP_'+ke);
             delete(activeMonitor.buildingTimelapseVideo)
+            endTimelapseBuildJob(job)
             s.debugLog("Timelapse Frames Video Done!",finalMp4OutputLocation)
+        }).catch((err) => {
+            console.error(err)
+            delete(activeMonitor.buildingTimelapseVideo)
+            endTimelapseBuildJob(job)
         })
         response.ok = true
         response.msg = `${lang.Building}... ${lang['Please Wait...']}`
@@ -424,27 +578,47 @@ module.exports = function(s,config,lang,app,io){
             if(!monitorId){
                 response.msg = lang['No Monitor Found, Ignoring Request']
                 resolve(response)
-            }else{
-                const frames = []
-                var n = 0
-                framesPosted.forEach((frame) => {
-                    var firstParam = [['ke','=',groupKey],['mid','=',monitorId],['filename','=',frame.filename]]
-                    if(n !== 0)firstParam[0] = (['or']).concat(firstParam[0])
-                    frames.push(...firstParam)
-                    ++n
-                })
-                s.knexQuery({
-                    action: "select",
-                    columns: "*",
-                    table: "Timelapse Frames",
-                    where: frames
-                },async (err,r) => {
-                    if(r.length > 0){
-                        response = await createVideoFromTimelapse(r.reverse(),framesPerSecond)
-                    }
-                    resolve(response)
-                })
+                return
             }
+            if(getTimelapseBuildJob(groupKey,monitorId)){
+                response.msg = lang['Already Processing']
+                resolve(response)
+                return
+            }
+            // The job is opened before the database is touched : looking up several hundred
+            // frames is itself slow enough to look like the request was ignored, and it also
+            // makes the request cancellable from the very first moment.
+            const job = createTimelapseBuildJob(groupKey,monitorId)
+            sendTimelapseBuildStage(job,{ key: 'Reading Frames', frames: framesPosted.length },'0.0')
+            const frames = []
+            var n = 0
+            framesPosted.forEach((frame) => {
+                var firstParam = [['ke','=',groupKey],['mid','=',monitorId],['filename','=',frame.filename]]
+                if(n !== 0)firstParam[0] = (['or']).concat(firstParam[0])
+                frames.push(...firstParam)
+                ++n
+            })
+            s.knexQuery({
+                action: "select",
+                columns: "*",
+                table: "Timelapse Frames",
+                where: frames
+            },async (err,r) => {
+                if(job.cancelled){
+                    endTimelapseBuildJob(job)
+                    response.msg = lang['Build Cancelled']
+                    resolve(response)
+                    return
+                }
+                if(r && r.length > 0){
+                    sendTimelapseBuildStage(job,{ key: 'Preparing', frames: r.length },'0.0')
+                    response = await createVideoFromTimelapse(r.reverse(),framesPerSecond,job)
+                }else{
+                    endTimelapseBuildJob(job)
+                    response.msg = lang.notEnoughFramesText1
+                }
+                resolve(response)
+            })
         })
     }
     // Web Paths
@@ -599,7 +773,16 @@ module.exports = function(s,config,lang,app,io){
                 if(selectedDate.indexOf('-') === -1){
                     selectedDate = req.params.filename.split('T')[0]
                 }
-                fileLocation = `${fileLocation}${frame.ke}/${frame.mid}_timelapse/${selectedDate}/${req.params.filename}`
+                const baseDir = path.resolve(`${fileLocation}${frame.ke}/${frame.mid}_timelapse/`)
+                fileLocation = path.resolve(baseDir,selectedDate,req.params.filename)
+                if(
+                    selectedDate.indexOf('\0') !== -1 ||
+                    req.params.filename.indexOf('\0') !== -1 ||
+                    (fileLocation !== baseDir && !fileLocation.startsWith(baseDir + path.sep))
+                ){
+                    s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
+                    return
+                }
                 if(actionParameter === 'delete'){
                     deleteTimelapseFrame({
                         ke: frame.ke,
@@ -671,6 +854,7 @@ module.exports = function(s,config,lang,app,io){
     s.onOtherWebSocketMessages((d,connection) => {
         switch(d.f){
             case'timelapseVideoBuild':
+                d.ke = connection.ke
                 if(d.frames.length === 0){
                     response.msg = lang.notEnoughFramesText1
                     s.tx({
@@ -683,6 +867,14 @@ module.exports = function(s,config,lang,app,io){
                         },
                     },'GRP_'+d.ke);
                 }else{
+                    // Acknowledge before any work starts so the dashboard can swap the button
+                    // over to a live progress bar instead of sitting silent.
+                    s.tx({
+                        f: 'timelapse_build_started',
+                        ke: d.ke,
+                        mid: d.mid,
+                        frames: d.frames.length,
+                    },'GRP_'+d.ke);
                     initiateTimelapseVideoBuild({
                         groupKey: d.ke,
                         monitorId: d.mid,
@@ -697,6 +889,10 @@ module.exports = function(s,config,lang,app,io){
                         },'GRP_'+d.ke);
                     })
                 }
+            break;
+            case'timelapseVideoCancel':
+                d.ke = connection.ke
+                cancelTimelapseVideoBuild(d.ke,d.mid)
             break;
         }
     })

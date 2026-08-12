@@ -94,7 +94,11 @@ module.exports = (processCwd,config) => {
     }
     const fetchTimeout = (url, ms, { signal, ...options } = {}) => {
         const controller = new AbortController();
-        const promise = fetch(url, { signal: controller.signal, agent: httpsAgent, ...options });
+        const promise = fetch(url, {
+            signal: controller.signal,
+            agent: (parsedUrl) => parsedUrl.protocol === 'https:' ? httpsAgent : undefined,
+            ...options
+        });
         if (signal) signal.addEventListener("abort", () => controller.abort());
         const timeout = setTimeout(() => controller.abort(), ms);
         return promise.finally(() => clearTimeout(timeout));
@@ -114,7 +118,25 @@ module.exports = (processCwd,config) => {
     function fetchWithAuthentication(requestUrl,options,callback){
         let hasDigestAuthEnabled = options.digestAuth;
         let theRequester;
-        const hasUsernameAndPassword = options.username && typeof options.password === 'string'
+        let username = options.username;
+        let password = options.password;
+        let hasUsernameAndPassword = username && typeof password === 'string'
+        let cleanUrl = requestUrl;
+        if(!hasUsernameAndPassword){
+            try{
+                const parsedUrl = new URL(requestUrl);
+                if(parsedUrl.username){
+                    username = decodeURIComponent(parsedUrl.username);
+                    password = decodeURIComponent(parsedUrl.password);
+                    hasUsernameAndPassword = true;
+                    parsedUrl.username = '';
+                    parsedUrl.password = '';
+                    cleanUrl = parsedUrl.toString();
+                }
+            }catch(err){
+
+            }
+        }
         const requestOptions = {
             method : options.method || 'GET',
             headers: {'Content-Type': 'application/json'}
@@ -132,13 +154,15 @@ module.exports = (processCwd,config) => {
             }
         }
         if(hasUsernameAndPassword && hasDigestAuthEnabled){
-            theRequester = (new DigestFetch(options.username, options.password)).fetch
+            const digestClient = new DigestFetch(username, password)
+            theRequester = (url,opts) => digestClient.fetch(url,opts)
         }else if(hasUsernameAndPassword){
-            theRequester = (new DigestFetch(options.username, options.password, { basic: true })).fetch
+            const digestClient = new DigestFetch(username, password, { basic: true })
+            theRequester = (url,opts) => digestClient.fetch(url,opts)
         }else{
             theRequester = fetch
         }
-        return theRequester(requestUrl,requestOptions)
+        return theRequester(cleanUrl,requestOptions)
     }
     function isEven(value) {
         if (value%2 == 0)
@@ -255,10 +279,10 @@ module.exports = (processCwd,config) => {
             } catch (e) {
               if (currentIsWithinDetectorFilters) {
                 // Special handling for detector_filters - allow comparison operators
-                obj[key] = obj[key].replace(/[^\w\s.\-=+(){}\[\]*$@!`^%#:?\/&,><=!'|"]/gi, '');
+                obj[key] = obj[key].replace(/[^\w\p{L}\p{N}\s.\-=+(){}\[\]*$@!`^%#:?\/&,><=!'|"]/giu, '');
               } else {
                 // Normal string cleaning
-                obj[key] = obj[key].replace(/[^\w\s.\-=+(){}\[\]*$@!`^%#:?\/&,'|"]/gi, '');
+                obj[key] = obj[key].replace(/[^\w\p{L}\p{N}\s.\-=+(){}\[\]*$@!`^%#:?\/&,'|"]/giu, '');
               }
             }
           }
@@ -278,9 +302,9 @@ module.exports = (processCwd,config) => {
                   obj[key][index] = cleanStringsInObject(parsed, currentIsWithinDetectorFilters);
                 } catch (e) {
                   if (currentIsWithinDetectorFilters) {
-                    obj[key][index] = item.replace(/[^\w\s.\-=+(){}\[\]*$@!`^%#:?\/&,><=!'|"]/gi, '');
+                    obj[key][index] = item.replace(/[^\w\p{L}\p{N}\s.\-=+(){}\[\]*$@!`^%#:?\/&,><=!'|"]/giu, '');
                   } else {
-                    obj[key][index] = item.replace(/[^\w\s.\-=+(){}\[\]*$@!`^%#:?\/&,'|"]/gi, '');
+                    obj[key][index] = item.replace(/[^\w\p{L}\p{N}\s.\-=+(){}\[\]*$@!`^%#:?\/&,'|"]/giu, '');
                   }
                 }
               } else if (typeof item === 'object' && item !== null) {

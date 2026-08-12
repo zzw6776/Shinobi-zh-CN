@@ -1,303 +1,236 @@
 $(document).ready(function(){
-    var monitorStatesLoaded = {}
+    // Monitor States is a viewer. Presets are created from Monitor Settings ("Create new
+    // Preset" / "Add to Preset" in the bottom right menu), which saves only the fields that
+    // were changed - so all this page needs to do is show what each preset holds and let it
+    // be deleted. It used to rebuild the whole Monitor Settings form here to pick fields one
+    // at a time, which is what made presets awkward to create.
     var monitorStatesPage = $('#tab-monitorStates')
-    var monitorStatesSelector = $('#monitorStatesSelector')
-    var monitorStatesMonitors = $('#monitorStatesMonitors')
-    var theForm = monitorStatesPage.find('form')
-    function loadMonitorStatesPresets(callback){
+    var monitorStatesList = $('#monitorStatesList')
+    var monitorStatesLoaded = {}
+    function escapeText(text){
+        return `${text}`.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    }
+    function buildPresetFieldRows(monitor){
+        var labels = getMonitorSettingsFieldLabels()
+        var rows = []
+        Object.keys(monitor || {}).forEach(function(key){
+            if(key === 'mid' || key === 'ke' || key === 'details')return
+            rows.push({label: labels[key] || key, key: key, value: monitor[key]})
+        })
+        Object.keys(monitor.details || {}).forEach(function(key){
+            rows.push({label: labels[`detail=${key}`] || key, key: `detail=${key}`, value: monitor.details[key]})
+        })
+        if(rows.length === 0){
+            return `<div><small class="text-muted">${lang['PresetMonitorHasNoFieldsText']}</small></div>`
+        }
+        return rows.map(function(row){
+            var value = normalizeMonitorValueForCompare(row.value)
+            if(value.length > 80)value = `${value.substring(0,80)}...`
+            return `<div>
+                <span class="badge bg-secondary">${escapeText(row.label)}</span>
+                <small class="text-muted">${escapeText(row.key)} : ${escapeText(value)}</small>
+            </div>`
+        }).join('')
+    }
+    function buildPresetHtml(preset){
+        var monitors = preset.details && preset.details.monitors ? preset.details.monitors : []
+        var monitorsHtml = monitors.map(function(monitor){
+            // a monitor deleted since the preset was saved is dropped server side the next
+            // time the preset is written, so it may still be listed here until then
+            var loadedMonitor = loadedMonitors[monitor.mid]
+            var monitorName = loadedMonitor ? loadedMonitor.name : `${monitor.mid} (${lang['Deleted']})`
+            return `<div class="mb-3" data-monitor-mid="${escapeText(monitor.mid)}">
+                <div class="d-flex flex-row align-items-center">
+                    <div class="flex-grow-1">
+                        <b>${escapeText(monitorName)}</b> <small class="text-muted">${escapeText(monitor.mid)}</small>
+                    </div>
+                    <div>
+                        <a class="btn btn-default btn-sm copy-monitor-state-entry cursor-pointer" title="${lang['Copy to another Monitor']}"><i class="fa fa-copy"></i> ${lang['Copy to another Monitor']}</a>
+                        <a class="btn btn-danger btn-sm remove-monitor-state-entry cursor-pointer" title="${lang['Remove']}"><i class="fa fa-times"></i> ${lang['Remove']}</a>
+                    </div>
+                </div>
+                ${buildPresetFieldRows(monitor)}
+            </div>`
+        }).join('')
+        return `<div class="card mb-3 ${definitions.Theme.isDark ? 'bg-dark' : 'bg-light'}" data-preset-name="${escapeText(preset.name)}">
+            <div class="card-header d-flex flex-row align-items-center">
+                <div class="flex-grow-1"><h5 class="m-0">${escapeText(preset.name)}</h5></div>
+                <div>
+                    <a class="btn btn-success btn-sm activate-monitor-state-preset cursor-pointer"><i class="fa fa-play"></i> ${lang.Activate}</a>
+                    <a class="btn btn-danger btn-sm delete-monitor-state-preset cursor-pointer"><i class="fa fa-trash-o"></i> ${lang.Delete}</a>
+                </div>
+            </div>
+            <div class="card-body">
+                ${monitors.length > 0 ? monitorsHtml : `<small class="text-muted">${lang['PresetHasNoMonitorsText']}</small>`}
+            </div>
+        </div>`
+    }
+    // Redraws from what is already loaded. After a change is saved the local copy is updated
+    // and this is called, so the list reflects it straight away instead of waiting on a
+    // re-read of the preset.
+    function drawMonitorStatesPresets(){
+        var presets = Object.values(monitorStatesLoaded)
+        if(presets.length === 0){
+            monitorStatesList.html(`<div class="text-center p-4">
+                <i class="fa fa-3x mb-3 fa-folder-open-o"></i>
+                <div>${lang['NoMonitorStatePresetsSavedText']}</div>
+            </div>`)
+            return
+        }
+        monitorStatesList.html(presets.map(buildPresetHtml).join(''))
+    }
+    function setMonitorsInLoadedPreset(presetName,monitors){
+        var preset = monitorStatesLoaded[presetName]
+        if(!preset)return
+        if(!preset.details)preset.details = {}
+        preset.details.monitors = monitors
+    }
+    function loadMonitorStatesPresets(){
         $.getJSON(getApiPrefix(`monitorStates`),function(d){
-            var html = ''
-            $.each(d.presets,function(n,v){
-                monitorStatesLoaded[v.name] = v
-                html += '<option value="' + v.name + '">' + v.name + '</option>'
+            monitorStatesLoaded = {}
+            ;(d.presets || []).forEach(function(preset){
+                monitorStatesLoaded[preset.name] = preset
             })
-            monitorStatesSelector.find('optgroup').html(html)
-            if(callback)callback()
+            drawMonitorStatesPresets()
         })
     }
     addOnTabOpen('monitorStates', function () {
         loadMonitorStatesPresets()
     })
     addOnTabReopen('monitorStates', function () {
-        if(monitorStatesSelector.val() === '')loadMonitorStatesPresets()
+        loadMonitorStatesPresets()
     })
-    var buildOptions = function(field,possiblities,fieldData){
-        if(!field)console.error('field',field)
-        var fieldElement = ''
-        possiblities.forEach(function(option){
-            if(option.optgroup){
-                fieldElement += '<optgroup label="' + option.name + '">'
-                fieldElement += buildOptions(field,option.optgroup,fieldData)
-                fieldElement += '</optgroup>'
-            }else{
-                var selected = ''
-                if(option.value === fieldData || option.value === field.default){
-                    selected = 'selected'
-                }
-                fieldElement += '<option value="' + option.value + '" ' + selected + '>' + option.name + '</option>'
-            }
-        })
-        return fieldElement
-    }
-    var drawBlock = function(monitorSettings,preloadedData){
-        var html = ''
-        var headerTitle = lang[monitorSettings.name]
-        // if(monitorSettings.evaluation && !eval(monitorSettings.evaluation)){
-        //   return
-        // }
-        if(monitorSettings.blocks){
-          monitorSettings.blocks.forEach(function(settingsBlock){
-              html += drawBlock(settingsBlock)
-          })
-        }
-        if(monitorSettings.info){
-         monitorSettings.info.forEach(function(field){
-             if(field.isFormGroupGroup === true){
-                 html += drawBlock(field)
-             }else{
-                 if(field.notForSubAccount === true){
-                      var notForSubAccount = '!details.sub'
-                      if(!field.evaluation){
-                          field.evaluation = notForSubAccount
-                      }else{
-                          field.evaluation += ' && ' + notForSubAccount
-                      }
-                  }
-                  if(!field.name || field.evaluation && !eval(field.evaluation)){
-                      return
-                  }
-                  var attributes = []
-                  var listGroupClass = []
-                  var monitorRowFieldClass = []
-                  if(preloadedData){
-                      var isDetail = false
-                      var name = field.name
-                      var fieldData
-                      if(name.indexOf('detail=') > -1){
-                          isDetail = true
-                          name = name.replace('detail=','')
-                          if(preloadedData.details)fieldData = preloadedData.details[name]
-                      }else{
-                          fieldData = preloadedData[name]
-                      }
-                      if(fieldData){
-                          listGroupClass.push('active')
-                          if(fieldType !== 'select'){
-                              attributes.push(`value="${fieldData}"`)
-                          }
-                      }else{
-                          monitorRowFieldClass.push('display:none')
-                      }
-                  }else{
-                      monitorRowFieldClass.push('display:none')
-                  }
-                  if(field.placeholder || field.default){
-                      attributes.push(`placeholder="${field.placeholder || field.default}"`)
-                  }else if(field.example){
-                      attributes.push(`placeholder="Example : ${field.example}"`)
-                  }
-                  var possiblities = field.possible || []
-                  var fieldType = field.fieldType || 'text'
-                  var fieldElement = ''
-                  switch(fieldType){
-                      case'number':
-                            if(field.numberMin){
-                                attributes.push(`min="${field.numberMin}"`)
-                            }
-                            if(field.numberMax){
-                                attributes.push(`max="${field.numberMax}"`)
-                            }
-                            fieldElement = '<div><input type="number" class="form-control" ' + attributes.join(' ') + '></div>'
-                      break;
-                      case'password':
-                            fieldElement = '<div><input type="password" class="form-control" ' + attributes.join(' ') + '></div>'
-                      break;
-                      case'text':
-                            fieldElement = `<div><input class="form-control" ${attributes.join(' ')}></div>`
-                      break;
-                      case'textarea':
-                            fieldElement = '<div><textarea class="form-control" ' + attributes.join(' ') + '></textarea></div>'
-                      break;
-                      case'select':
-                            fieldElement = '<div><select class="form-control" ' + attributes.join(' ') + '>'
-                            fieldElement += buildOptions(field,possiblities,fieldData)
-                            fieldElement += '</select></div>'
-                      break;
-                  }
-                  if(fieldType === 'ul' || fieldType ===  'div' || fieldType ===  'btn' || field.name === 'mid'){
-
-                  }else{
-                      if(headerTitle){
-                          html += `<div class="list-group-item ${listGroupClass.join(' ')}" data-name="${field.name}" data-value="${field.value || ""}">
-                              <h4>${headerTitle} : ${field.field}</h4>
-                              <div><small>${field.description}</small></div>
-                              <div class="state-monitor-row-fields-field mt-4" style="${monitorRowFieldClass.join(' ')}">${fieldElement}</div>
-                          </div>`
-                      }
-                  }
-              }
-          })
-        }
-        return html
-    }
-    var drawMonitor = function(preloadedData){
-        var MonitorSettings = definitions['Monitor Settings']
-        var html = ''
-        var monitorId = preloadedData ? preloadedData.mid : ''
-        Object.keys(MonitorSettings.blocks).forEach(function(blockKey){
-            var block = MonitorSettings.blocks[blockKey]
-            html += drawBlock(block,preloadedData)
-        })
-        var monitorSelect = `<select class="form-select state-monitor-row-select mb-2">`
-        $.each(loadedMonitors,function(n,monitor){
-            monitorSelect += `<option ${monitorId === monitor.mid ? 'selected' : ''} value="${monitor.mid}">${monitor.name} (${monitor.mid})</option>`
-        })
-        monitorSelect += `</select>`
-        var fullHtml = `<div class="form-group state-monitor-row">
-            <div class="input-group state-monitor-row-select-container mt-3">
-                ${monitorSelect}
-                <div>
-                    <button class="btn btn-outline-danger delete-monitor" type="button">${lang.Delete}</button>
-                </div>
-            </div>
-            <div class="list-group state-monitor-row-fields-container" style="height:300px;overflow: auto">
-                ${html}
-            </div>
-        </div>`
-        return fullHtml
-    }
-    monitorStatesPage.on('click','.add-monitor',function(e){
-        e.stopPropagation()
-        var el = $(this)
-        var html = drawMonitor()
-        monitorStatesMonitors.append(html)
-        return false;
-    })
-    monitorStatesPage.on('click','.state-monitor-row-fields-container .list-group-item',function(e){
-        var el = $(this)
-        var listGroupParent = el.parents('.list-group')
-        var fieldContainer = el.find('.state-monitor-row-fields-field')
-        var name = el.attr('data-name')
-        var value = el.attr('data-value')
-        if(el.hasClass('active')){
-            el.removeClass('active')
-            fieldContainer.hide()
-        }else{
-            el.addClass('active')
-            fieldContainer.show()
-        }
-    })
-    monitorStatesPage.on('click','.state-monitor-row-fields-container .form-control',function(e){
-        e.preventDefault()
-        return false
-    })
-    monitorStatesPage.on('change','.json',function(e){
-        var el = $(this)
-        var val = el.val()
-        try{
-            el.css('border-color','green')
-            var parsed = JSON.parse(val)
-            el.val(JSON.stringify(parsed,null,3))
-        }catch(err){
-            el.css('border-color','red')
-            return new PNotify({title:lang['Invalid JSON'],text:lang.InvalidJSONText,type:'error'})
-        }
-    })
-    monitorStatesPage.on('click','.delete',function(e){
-        $.confirm.e.modal('show');
-        $.confirm.title.text(lang['Delete Monitor States Preset']);
-        $.confirm.body.html(lang.deleteMonitorStateText1);
-        $.confirm.click({title:'Delete',class:'btn-danger'},function(){
-            var form = theForm.serializeObject()
-            $.post(getApiPrefix(`monitorStates`) + '/' + form.name + '/delete',function(d){
-                debugLog(d)
-                if(d.ok === true){
-                    loadMonitorStatesPresets()
-                    new PNotify({title:lang.Success,text:d.msg,type:'success'})
-                }
-            })
-        })
-    })
-    monitorStatesPage.on('click','.delete-monitor',function(e){
-        var el = $(this).parents('.state-monitor-row')
-        $.confirm.e.modal('show');
-        $.confirm.title.text(lang['Delete Monitor State']);
-        $.confirm.body.html(lang.deleteMonitorStateText2)
-        $.confirm.click({title:'Delete',class:'btn-danger'},function(){
-            el.remove()
-        })
-    })
-    monitorStatesSelector.change(function(e){
-        var selected = $(this).val()
-        var loaded = monitorStatesLoaded[selected]
-        var namespace = monitorStatesPage.find('[name="name"]')
-        var deleteButton = monitorStatesPage.find('.delete')
-        if(loaded){
-            namespace.val(loaded.name)
-            var html = ''
-            $.each(loaded.details.monitors,function(n,v){
-                html += drawMonitor(v)
-            })
-            monitorStatesMonitors.html(html)
-            deleteButton.show()
-        }else{
-            namespace.val('')
-            monitorStatesMonitors.empty()
-            deleteButton.hide()
-        }
-    })
-    function getFormValues(){
-        var rows = monitorStatesMonitors.find('.state-monitor-row')
-        var monitors = []
-        rows.each(function(n,v){
-            var monitorJson = {
-                details: {}
-            }
-            var el = $(v)
-            var fieldsSelcted = el.find('.list-group-item.active')
-            monitorJson.mid = el.find('.state-monitor-row-select').val()
-            fieldsSelcted.each(function(nn,element){
-                var field = $(element)
-                var name = field.attr('data-name')
-                var value = field.find('.form-control').val()
-                var isDetail = false
-                if(name.indexOf('detail=') > -1){
-                    isDetail = true
-                    name = name.replace('detail=','')
-                    monitorJson.details[name] = value
-                }else{
-                    monitorJson[name] = value
-                }
-            })
-            if(Object.keys(monitorJson).length > 1 || Object.keys(monitorJson.details).length > 0){
-                monitors.push(monitorJson)
-            }
-        })
-        return monitors
-    }
-    theForm.submit(function(e){
-        e.preventDefault()
-        var el = $(this)
-        var form = el.serializeObject()
-        var monitors = getFormValues()
-        if(form.name === ''){
-            return new PNotify({title:lang['Invalid Data'],text:lang['Name cannot be empty.'],type:'error'})
-        }
-        if(monitors.length === 0){
-            return new PNotify({title:lang['Invalid Data'],text:lang['Must be atleast one row'],type:'error'})
-        }
-        var data = {
-            monitors: monitors
-        }
-        $.post(getApiPrefix(`monitorStates`) + '/' + form.name + '/insert',{data:data},function(d){
-            debugLog(d)
-            if(d.ok === true){
-                loadMonitorStatesPresets(function(){
-                    monitorStatesSelector.val(form.name)
+    // No action segment on the route means "apply this state now" - see the default case in
+    // libs/webPaths/monitorStates.js, the same path a Schedule takes.
+    monitorStatesPage.on('click','.activate-monitor-state-preset',function(e){
+        var presetName = $(this).parents('[data-preset-name]').attr('data-preset-name')
+        var preset = monitorStatesLoaded[presetName]
+        var monitorCount = preset && preset.details && preset.details.monitors ? preset.details.monitors.length : 0
+        $.confirm.create({
+            title: `${lang.Activate} : ${presetName}`,
+            body: `<p>${lang['ActivateMonitorStatePresetText'].replace('{count}',monitorCount)}</p>`,
+            clickOptions: {title: lang.Activate, class: 'btn-success'},
+            clickCallback: function(){
+                $.post(`${getApiPrefix(`monitorStates`)}/${encodeURIComponent(presetName)}`,function(d){
+                    if(d.ok === true){
+                        new PNotify({title:lang.Success,text:d.msg || lang['Activated'],type:'success'})
+                    }else{
+                        new PNotify({title:lang['Invalid Data'],text:d.msg || lang['Failed'],type:'error'})
+                    }
                 })
-                new PNotify({title:lang.Success,text:d.msg,type:'success'})
             }
         })
-        return false;
+    })
+    // Copies one monitor's entry onto another monitor inside the same preset - the fields
+    // stored are the same, only the mid changes.
+    monitorStatesPage.on('click','.copy-monitor-state-entry',function(e){
+        var presetName = $(this).parents('[data-preset-name]').attr('data-preset-name')
+        var sourceMonitorId = $(this).parents('[data-monitor-mid]').attr('data-monitor-mid')
+        var preset = monitorStatesLoaded[presetName]
+        var monitors = preset && preset.details ? preset.details.monitors || [] : []
+        var sourceMonitor = monitors.find(function(monitor){ return monitor.mid === sourceMonitorId })
+        if(!sourceMonitor)return;
+        var targetMonitors = Object.values(loadedMonitors).filter(function(monitor){
+            return monitor.mid !== sourceMonitorId
+        })
+        if(targetMonitors.length === 0){
+            return new PNotify({title:lang['Monitor States'],text:lang['NoOtherMonitorsToCopyToText'],type:'error'})
+        }
+        // a target is either one monitor or a group - groups are the tags given to monitors,
+        // so "mid:" / "tag:" keeps the two apart in a single list
+        var monitorsHtml = targetMonitors.map(function(monitor){
+            return createOptionHtml({value: `mid:${monitor.mid}`, label: `${monitor.name} (${monitor.mid})`})
+        }).join('')
+        var tagList = getListOfTagsFromMonitors()
+        var groupsHtml = Object.keys(tagList).map(function(tag){
+            var count = tagList[tag].filter(function(monitorId){ return monitorId !== sourceMonitorId }).length
+            if(count === 0)return ''
+            return createOptionHtml({value: `tag:${tag}`, label: `${tag} (${count} ${lang.Monitors})`})
+        }).join('')
+        var optionsHtml = `<optgroup label="${escapeText(lang.Monitors)}">${monitorsHtml}</optgroup>`
+        if(groupsHtml)optionsHtml += `<optgroup label="${escapeText(lang.Groups)}">${groupsHtml}</optgroup>`
+        $.confirm.create({
+            title: lang['Copy to another Monitor'],
+            body: `<p>${lang['CopyMonitorStateEntryText']}</p>
+                ${buildPresetFieldRows(sourceMonitor)}
+                <select class="form-control mt-3 monitor-state-copy-target">${optionsHtml}</select>`,
+            clickOptions: {title: lang['Copy'], class: 'btn-success'},
+            clickCallback: function(){
+                var target = `${$.confirm.body.find('.monitor-state-copy-target').val()}`
+                var targetMonitorIds = target.indexOf('tag:') === 0
+                    ? (tagList[target.replace('tag:','')] || []).filter(function(monitorId){ return monitorId !== sourceMonitorId })
+                    : [target.replace('mid:','')]
+                if(targetMonitorIds.length === 0)return;
+                // one entry per monitor, so existing entries for the targets are replaced
+                var updatedMonitors = monitors.filter(function(monitor){
+                    return targetMonitorIds.indexOf(monitor.mid) === -1
+                })
+                targetMonitorIds.forEach(function(targetMonitorId){
+                    // deep copy so the new entries do not share `details` with the source
+                    var copiedMonitor = JSON.parse(JSON.stringify(sourceMonitor))
+                    copiedMonitor.mid = targetMonitorId
+                    updatedMonitors.push(copiedMonitor)
+                })
+                $.post(`${getApiPrefix(`monitorStates`)}/${encodeURIComponent(presetName)}/edit`,{data:JSON.stringify({monitors:updatedMonitors})},function(d){
+                    if(d.ok === true){
+                        new PNotify({title:lang.Success,text:d.msg,type:'success'})
+                        setMonitorsInLoadedPreset(presetName,updatedMonitors)
+                        drawMonitorStatesPresets()
+                    }else{
+                        new PNotify({title:lang['Invalid Data'],text:d.msg || lang['Failed'],type:'error'})
+                    }
+                })
+            }
+        })
+    })
+    // Takes one monitor out of the preset. The preset itself stays, even with nothing left in
+    // it - deleting the preset is the button in its header.
+    monitorStatesPage.on('click','.remove-monitor-state-entry',function(e){
+        var presetName = $(this).parents('[data-preset-name]').attr('data-preset-name')
+        var monitorId = $(this).parents('[data-monitor-mid]').attr('data-monitor-mid')
+        var preset = monitorStatesLoaded[presetName]
+        var monitors = preset && preset.details ? preset.details.monitors || [] : []
+        if(!monitors.some(function(monitor){ return monitor.mid === monitorId }))return;
+        var loadedMonitor = loadedMonitors[monitorId]
+        $.confirm.create({
+            title: lang['Remove'],
+            body: `<p>${lang['RemoveMonitorStateEntryText']
+                .replace('{monitor}',escapeText(loadedMonitor ? loadedMonitor.name : monitorId))
+                .replace('{preset}',escapeText(presetName))}</p>`,
+            clickOptions: {title: lang['Remove'], class: 'btn-danger'},
+            clickCallback: function(){
+                var updatedMonitors = monitors.filter(function(monitor){
+                    return monitor.mid !== monitorId
+                })
+                $.post(`${getApiPrefix(`monitorStates`)}/${encodeURIComponent(presetName)}/edit`,{data:JSON.stringify({monitors:updatedMonitors})},function(d){
+                    if(d.ok === true){
+                        new PNotify({title:lang.Success,text:d.msg,type:'success'})
+                        setMonitorsInLoadedPreset(presetName,updatedMonitors)
+                        drawMonitorStatesPresets()
+                    }else{
+                        new PNotify({title:lang['Invalid Data'],text:d.msg || lang['Failed'],type:'error'})
+                    }
+                })
+            }
+        })
+    })
+    monitorStatesPage.on('click','.delete-monitor-state-preset',function(e){
+        var presetName = $(this).parents('[data-preset-name]').attr('data-preset-name')
+        $.confirm.create({
+            title: lang['Delete Monitor States Preset'],
+            body: lang.deleteMonitorStateText1,
+            clickOptions: {title: lang.Delete, class: 'btn-danger'},
+            clickCallback: function(){
+                $.post(`${getApiPrefix(`monitorStates`)}/${encodeURIComponent(presetName)}/delete`,function(d){
+                    if(d.ok === true){
+                        new PNotify({title:lang.Success,text:d.msg,type:'success'})
+                        delete(monitorStatesLoaded[presetName])
+                        drawMonitorStatesPresets()
+                    }else{
+                        new PNotify({title:lang['Invalid Data'],text:d.msg || lang['Failed'],type:'error'})
+                    }
+                })
+            }
+        })
     })
 })

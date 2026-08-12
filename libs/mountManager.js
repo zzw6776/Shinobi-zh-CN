@@ -51,13 +51,14 @@ module.exports = (s,config,lang,app,io) => {
             const { sourceTarget, localPath, mountType, options } = req.body;
             const response = { ok: false }
             if(sourceTarget && localPath){
+                if(!isValidPath(localPath) || !isValidPath(sourceTarget, '//')){
+                    response.error = lang['Invalid Data']
+                    s.closeJsonResponse(res, response);
+                    return
+                }
                 try{
-                    if(!isValidPath(localPath) || !isValidPath(sourceTarget, '//')){
-                        response.error = lang['Invalid Data']
-                    }else{
-                        const createDirResponse = await createMountPoint(localPath)
-                        response.createDirResponse = createDirResponse
-                    }
+                    const createDirResponse = await createMountPoint(localPath)
+                    response.createDirResponse = createDirResponse
                 }catch(err){
                     console.error(err)
                 }

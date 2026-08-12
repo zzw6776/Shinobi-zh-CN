@@ -44,16 +44,8 @@ module.exports = function(s,config,lang){
     function loadGroupApp(e){
         // e = user
         var userDetails = JSON.parse(e.details)
-        if(userDetails.whcs_use_global === '1' && config.cloudUploaders && config.cloudUploaders.WasabiHotCloudStorage){
-            // {
-            //     whcs_accessKeyId: "",
-            //     whcs_secretAccessKey: "",
-            //     whcs_region: "",
-            //     whcs_bucket: "",
-            //     whcs_dir: "",
-            // }
-            userDetails = Object.assign(userDetails,config.cloudUploaders.WasabiHotCloudStorage)
-        }
+        // Forced (Superuser configured) credentials are merged into the account details
+        // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
         //S3-Based Network Storage
         if(
            !s.group[e.ke].whcs &&
@@ -81,7 +73,17 @@ module.exports = function(s,config,lang){
                     accessKeyId: userDetails.whcs_accessKeyId,
                     secretAccessKey: userDetails.whcs_secretAccessKey,
                 },
-                region: userDetails.whcs_region || null
+                region: userDetails.whcs_region || null,
+                // Since aws-sdk-js-v3 ~3.729 the default changed to computing a flexible
+                // checksum (e.g. CRC32) on every request when the server advertises
+                // support for it. Many S3-compatible backends - notably Ceph RGW (what
+                // Croit ships) - don't fully/correctly validate that extra checksum
+                // trailer on streamed uploads, which surfaces as XAmzContentSHA256Mismatch
+                // even though the object content itself is fine. WHEN_REQUIRED restores
+                // the pre-3.729 behavior (only compute/validate when an operation actually
+                // requires it) and is AWS's own documented fix for this class of issue.
+                requestChecksumCalculation: "WHEN_REQUIRED",
+                responseChecksumValidation: "WHEN_REQUIRED",
             });
         }
     }
@@ -257,6 +259,9 @@ module.exports = function(s,config,lang){
        "name": lang["S3-Based Network Storage"],
        "color": "forestgreen",
        "uploaderId": 'whcs',
+       "enableFlag": 'use_whcs',
+       "globalFlag": 'whcs_use_global',
+       "globalConfigKey": 'WasabiHotCloudStorage',
        "info": [
            {
               "name": "detail=whcs_save",

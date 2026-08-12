@@ -593,6 +593,10 @@ function getEvents(options,callback){
         }
         if(options.onlyCount){
             requestQueries.push(`onlyCount=1`)
+        }else{
+            // `limit` was being computed and then never sent, so every caller silently
+            // got the server-side default (500) instead of what it asked for.
+            requestQueries.push(`limit=${limit}`)
         }
         $.getJSON(`${getApiPrefix(`events`)}${monitorId ? `/${monitorId}` : ''}?${requestQueries.join('&')}`,function(eventData){
             var theEvents = eventData.events || eventData

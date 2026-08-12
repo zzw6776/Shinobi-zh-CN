@@ -1,4 +1,18 @@
 <%
+// Renders a `visibleWhen` rule (see applyVisibleWhen in bs5.dashboard-base.js) as an
+// attribute on the element it governs. Blocks and fields declare it per layer, mirroring
+// the class keys: `visibleWhen` sits on the same element as `class`,
+// `section-visibleWhen` with `section-class`, `form-group-visibleWhen` with
+// `form-group-class`, and so on.
+buildVisibleWhenAttribute = function(rule){
+    if(!rule)return ''
+    var json = JSON.stringify(rule)
+        .replace(/&/g,'&amp;')
+        .replace(/"/g,'&quot;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+    return ` visible-when="${json}"`
+}
 drawBlock = function(theBlock){
   if(theBlock.evaluation && !eval(theBlock.evaluation)){
       return
@@ -31,16 +45,16 @@ drawBlock = function(theBlock){
       sectionClass.push(theBlock['section-class'])
   }
   if(theBlock.isAdvanced){ %>
- <div class="h_us_input h_us_advanced" style="display:none">
+ <div class="h_us_advanced"<%- buildVisibleWhenAttribute({ h_us: 'advanced' }) %> style="display:none">
  <% }
-  if(theBlock['section-pre-pre-class']){ %>
- <div class="<%- theBlock['section-pre-pre-class'] %>">
+  if(theBlock['section-pre-pre-class'] || theBlock['section-pre-pre-visibleWhen']){ %>
+ <div class="<%- theBlock['section-pre-pre-class'] || '' %>"<%- buildVisibleWhenAttribute(theBlock['section-pre-pre-visibleWhen']) %>>
  <% }
-  if(theBlock['section-pre-class']){ %>
- <div class="<%- theBlock['section-pre-class'] %>">
+  if(theBlock['section-pre-class'] || theBlock['section-pre-visibleWhen']){ %>
+ <div class="<%- theBlock['section-pre-class'] || '' %>"<%- buildVisibleWhenAttribute(theBlock['section-pre-visibleWhen']) %>>
  <% }
   %>
-  <<%- theBlock.isForm ? 'form' : 'div' %> <%- attributes.join(' ') %> style="<%- styles.join(';') %>" class="<%- !theBlock.noDefaultSectionClasses ? `card form-group-group p-3 ${define.Theme.isDark ? 'bg-dark' : 'bg-light'} mb-3 shadow` : '' %> <%- sectionClass.join(' ') %>">
+  <<%- theBlock.isForm ? 'form' : 'div' %> <%- attributes.join(' ') %><%- buildVisibleWhenAttribute(theBlock['section-visibleWhen'] || theBlock.visibleWhen) %> style="<%- styles.join(';') %>" class="<%- !theBlock.noDefaultSectionClasses ? `card form-group-group p-3 ${define.Theme.isDark ? 'bg-dark' : 'bg-light'} mb-3 shadow` : '' %> <%- sectionClass.join(' ') %>">
       <% if(!theBlock['noHeader']){ %>
           <h4 class="form-section-header <%- theBlock.headerButtons || theBlock.headerTitle && ( theBlock.headerTitle.indexOf('<a ') > -1 || theBlock.headerTitle.indexOf('<button ') > -1 ) ? 'no-toggle-header' : '' %> cursor-pointer mb-3 pb-3 <%- define.Theme.isDark ? 'text-white' : '' %> border-bottom-dotted border-color-<%- theBlock.color || 'dark' %> <%- theBlock.headerClass %>"><%- headerTitle %>
               <% if(theBlock.headerButtons){ %>
@@ -135,6 +149,9 @@ drawBlock = function(theBlock){
          }
          if(field.class){
              fieldClass.push(`${field.class}`)
+         }
+         if(field.visibleWhen){
+             attributes.push(buildVisibleWhenAttribute(field.visibleWhen).trim())
          }
          var possiblities = field.possible || []
          var fieldType = field.fieldType || 'text'
@@ -243,14 +260,14 @@ drawBlock = function(theBlock){
                    fieldElement += '</select>'
              break;
          }
-          if(field['form-group-class-pre-pre-layer']){ %>
-         <div class="<%- field['form-group-class-pre-pre-layer'] %>">
+          if(field['form-group-class-pre-pre-layer'] || field['form-group-pre-pre-layer-visibleWhen']){ %>
+         <div class="<%- field['form-group-class-pre-pre-layer'] || '' %>"<%- buildVisibleWhenAttribute(field['form-group-pre-pre-layer-visibleWhen']) %>>
          <% };
-          if(field['form-group-class-pre-layer']){ %>
-         <div class="<%- field['form-group-class-pre-layer'] %>">
+          if(field['form-group-class-pre-layer'] || field['form-group-pre-layer-visibleWhen']){ %>
+         <div class="<%- field['form-group-class-pre-layer'] || '' %>"<%- buildVisibleWhenAttribute(field['form-group-pre-layer-visibleWhen']) %>>
          <% };
           if(field['isAdvanced']){ %>
-              <div class="h_us_input h_us_advanced" style="display:none">
+              <div class="h_us_advanced"<%- buildVisibleWhenAttribute({ h_us: 'advanced' }) %> style="display:none">
          <% };
          if(
            fieldType === 'ul' ||
@@ -276,7 +293,7 @@ drawBlock = function(theBlock){
                  <% }
              %>
          <% }else{ %>
-             <div <%- hidden %> <%- field.uiVisibilityConditions ? `visibility-conditions="${field.uiVisibilityConditions}"` : `` %> class="form-group <%- field['form-group-class'] || '' %>" <%- field['form-group-attribute'] || '' %>>
+             <div <%- hidden %> <%- field.uiVisibilityConditions ? `visibility-conditions="${field.uiVisibilityConditions}"` : `` %> class="form-group <%- field['form-group-class'] || '' %>"<%- buildVisibleWhenAttribute(field['form-group-visibleWhen']) %> <%- field['form-group-attribute'] || '' %>>
                  <div>
                      <label><%- field.field %></label>
                  </div>
@@ -293,10 +310,10 @@ drawBlock = function(theBlock){
          if(field['isAdvanced']){ %>
         </div>
         <% };
-         if(field['form-group-class-pre-layer']){ %>
+         if(field['form-group-class-pre-layer'] || field['form-group-pre-layer-visibleWhen']){ %>
         </div>
         <% };
-         if(field['form-group-class-pre-pre-layer']){ %>
+         if(field['form-group-class-pre-pre-layer'] || field['form-group-pre-pre-layer-visibleWhen']){ %>
         </div>
         <% };
      };
@@ -307,10 +324,10 @@ drawBlock = function(theBlock){
 </div>
 </<%- theBlock.isForm ? 'form' : 'div' %>>
 <%
-if(theBlock['section-pre-class']){ %>
+if(theBlock['section-pre-class'] || theBlock['section-pre-visibleWhen']){ %>
 </div>
 <% }
-if(theBlock['section-pre-pre-class']){ %>
+if(theBlock['section-pre-pre-class'] || theBlock['section-pre-pre-visibleWhen']){ %>
 </div>
 <% }
 if(theBlock.isAdvanced){ %>

@@ -263,7 +263,11 @@ module.exports = (s, shinobiConfig, lang, app, io) => {
             dbConfig.client = 'sqlite3';
             dbConfig.useNullAsDefault = true;
         }
-    
+
+        if(dbConfig.client === 'mysql'){
+            dbConfig.client = 'mysql2';
+        }
+
         if(dbConfig.client === 'sqlite3' && dbConfig.connection.filename === undefined){
             dbConfig.connection.filename = `${__dirname}/shinobi.sqlite`;
         }

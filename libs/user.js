@@ -20,6 +20,10 @@ module.exports = function(s,config,lang){
     } = require("./user/utils.js")(s,config,lang);
     require("./user/logger.js")(s,config,lang)
     const diskUsedEmitterTimeouts = {}
+    const sanitizeDiskUsage = (value) => {
+        const number = parseFloat(value)
+        return (!isFinite(number) || number < 0) ? 0 : number
+    }
     let purgeDiskGroup = (groupKey,callback) => {
         const { usedSpace, sizeLimit, addStorageUse } = s.group[groupKey];
         if(usedSpace >= sizeLimit * 0.8){
@@ -38,30 +42,48 @@ module.exports = function(s,config,lang){
     }, 1);
     if(config.cron.deleteOverMax === true){
         purgeDiskGroup = (groupKey,callback) => {
-            if(s.group[groupKey]){
-                if(s.group[groupKey].sizePurging !== true){
-                    s.group[groupKey].sizePurging = true
-                    s.debugLog(`${groupKey} deleteMainVideos`)
-                    deleteMainVideos(groupKey,() => {
-                        s.debugLog(`${groupKey} deleteTimelapseFrames`)
-                        deleteTimelapseFrames(groupKey,() => {
-                            s.debugLog(`${groupKey} deleteAddStorageTimelapseFrames`)
-                            deleteAddStorageTimelapseFrames(groupKey,() => {
-                                s.debugLog(`${groupKey} deleteFileBinFiles`)
-                                deleteFileBinFiles(groupKey,() => {
-                                    s.debugLog(`${groupKey} deleteAddStorageVideos`)
-                                    deleteAddStorageVideos(groupKey,() => {
-                                        s.group[groupKey].sizePurging = false
-                                        s.sendDiskUsedAmountToClients(groupKey)
-                                        callback();
-                                    })
-                                })
+            const theGroup = s.group[groupKey]
+            if(!theGroup){
+                if(callback)callback()
+                return
+            }
+            if(theGroup.sizePurging === true){
+                s.sendDiskUsedAmountToClients(groupKey)
+                if(callback)callback()
+                return
+            }
+            theGroup.sizePurging = true
+            let finished = false
+            const done = () => {
+                if(finished)return
+                finished = true
+                clearTimeout(theGroup.sizePurgingTimeout)
+                theGroup.sizePurging = false
+                s.sendDiskUsedAmountToClients(groupKey)
+                if(callback)callback()
+            }
+            theGroup.sizePurgingTimeout = setTimeout(() => {
+                s.debugLog(`${groupKey} purge did not complete in time, releasing queue`)
+                done()
+            }, config.cron.purgeTimeout || 1000 * 60 * 15)
+            try{
+                s.debugLog(`${groupKey} deleteMainVideos`)
+                deleteMainVideos(groupKey,() => {
+                    s.debugLog(`${groupKey} deleteTimelapseFrames`)
+                    deleteTimelapseFrames(groupKey,() => {
+                        s.debugLog(`${groupKey} deleteAddStorageTimelapseFrames`)
+                        deleteAddStorageTimelapseFrames(groupKey,() => {
+                            s.debugLog(`${groupKey} deleteFileBinFiles`)
+                            deleteFileBinFiles(groupKey,() => {
+                                s.debugLog(`${groupKey} deleteAddStorageVideos`)
+                                deleteAddStorageVideos(groupKey,done)
                             })
                         })
                     })
-                }else{
-                    s.sendDiskUsedAmountToClients(groupKey)
-                }
+                })
+            }catch(err){
+                s.debugLog(err)
+                done()
             }
         }
     }
@@ -211,6 +233,17 @@ module.exports = function(s,config,lang){
             if(r && r[0]){
                 r = r[0];
                 const details = JSON.parse(r.details);
+                // Overlay any Superuser forced cloud uploader credentials before anything
+                // reads the details, so the uploader clients and `s.group[ke].init` below
+                // agree on which account the uploads are going to. The merged copy is written
+                // back onto the row because each uploader's loadGroupApp re-parses
+                // `e.details` itself rather than using the object passed to it. This is the
+                // only place the forced values are applied; they are never persisted to the
+                // Users table, so they stay out of anything sent to a dashboard client.
+                if(s.applyForcedCloudUploaderDetails){
+                    s.applyForcedCloudUploaderDetails(details);
+                    r.details = JSON.stringify(details);
+                }
                 //load extenders
                 s.loadGroupAppExtensions.forEach(function(extender){
                     extender(r,details)
@@ -221,29 +254,25 @@ module.exports = function(s,config,lang){
                     emitter.setMaxListeners(4)
                     s.group[e.ke].diskUsedEmitter = emitter
                     emitter.on('setCloud',function(currentChange,storagePoint){
-                        var amount = currentChange.amount
+                        var amount = parseFloat(currentChange.amount)
+                        if(!isFinite(amount))amount = 0
                         var storageType = currentChange.storageType
                         var cloudDisk = s.group[e.ke].cloudDiskUse[storageType]
-                        //validate current values
-                        if(!cloudDisk.usedSpace){
-                            cloudDisk.usedSpace = 0
-                        }else{
-                            cloudDisk.usedSpace = parseFloat(cloudDisk.usedSpace)
-                        }
-                        if(cloudDisk.usedSpace < 0 || isNaN(cloudDisk.usedSpace)){
-                            cloudDisk.usedSpace = 0
-                        }
-                        //change global size value
-                        cloudDisk.usedSpace = cloudDisk.usedSpace + amount
+                        cloudDisk.usedSpace = sanitizeDiskUsage(cloudDisk.usedSpace)
+                        cloudDisk.usedSpaceVideos = sanitizeDiskUsage(cloudDisk.usedSpaceVideos)
+                        cloudDisk.usedSpaceTimelapseFrames = sanitizeDiskUsage(cloudDisk.usedSpaceTimelapseFrames)
+                        cloudDisk.usedSpaceFilebin = sanitizeDiskUsage(cloudDisk.usedSpaceFilebin)
+                        //change global size value (clamp to >= 0 like the local-disk path)
+                        cloudDisk.usedSpace = Math.max(0, cloudDisk.usedSpace + amount)
                         switch(storagePoint){
                             case'timelapseFrames':
-                                cloudDisk.usedSpaceTimelapseFrames += amount
+                                cloudDisk.usedSpaceTimelapseFrames = Math.max(0, cloudDisk.usedSpaceTimelapseFrames + amount)
                             break;
                             case'fileBin':
-                                cloudDisk.usedSpaceFilebin += amount
+                                cloudDisk.usedSpaceFilebin = Math.max(0, cloudDisk.usedSpaceFilebin + amount)
                             break;
                             default:
-                                cloudDisk.usedSpaceVideos += amount
+                                cloudDisk.usedSpaceVideos = Math.max(0, cloudDisk.usedSpaceVideos + amount)
                             break;
                         }
                         s.sendCloudDiskUsedAmountToClients(e.ke)
@@ -352,7 +381,7 @@ module.exports = function(s,config,lang){
                     }
                     ///unchangeable from client side, so reset them in case they did.
                     var form = d.form
-                    var formDetails = s.parseJSON(form.details,{})
+                    var formDetails = s.parseJSON(form.details,{}) || {}
                     if(!dontRunExtensions){
                         s.beforeAccountSaveExtensions.forEach(function(extender){
                             extender({
@@ -369,6 +398,12 @@ module.exports = function(s,config,lang){
                     formDetails.edit_days = details.edit_days
                     formDetails.use_admin = details.use_admin
                     formDetails.use_ldap = details.use_ldap
+                    // Superuser set: reset it from what is stored so an Admin cannot grant
+                    // themselves the system usage readings from their own Account Settings.
+                    formDetails.show_system_usage = details.show_system_usage
+                    formDetails.use_plugin_manager = details.use_plugin_manager
+                    formDetails.use_remote_access = details.use_remote_access
+                    formDetails.use_system_control = details.use_system_control
                     //check
                     if(details.edit_days == "0"){
                         formDetails.days = details.days;
@@ -432,9 +467,11 @@ module.exports = function(s,config,lang){
                         delete(form.pass)
                     }
                     delete(form.password_again)
-                    Object.keys(form).forEach(function(key){
-                        const value = form[key]
-                        updateQuery[key] = value
+                    const ACCOUNT_EDIT_ALLOWED = ['mail', 'pass']
+                    ACCOUNT_EDIT_ALLOWED.forEach(function(key){
+                        if(form[key] !== undefined){
+                            updateQuery[key] = form[key]
+                        }
                     })
                     updateQuery.details = formDetailsString
                     s.knexQuery({

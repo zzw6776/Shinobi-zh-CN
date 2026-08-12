@@ -1,0 +1,58 @@
+<% const menuInfo = define.SuperSideMenu.blocks.Container1 %>
+<nav id="sidebarMenu" class="<%- menuInfo.class %>">
+    <div id="menu-side" class="position-sticky">
+        <div class="align-items-center d-flex flex-row my-3 m-3 btn-default rounded shadow-sm" style="overflow: hidden;border-bottom: 2px solid <%- config.userHasSubscribed ? '#1f80f9' : 'red' %>;">
+            <div class="align-items-center py-3 ps-3 pe-2">
+                <div class="lh-1">
+                    <img src="<%- window.libURL + config.logoLocation196x196 %>" width="42" style="<%- config.logoLocation76x76Style %>">
+                </div>
+            </div>
+            <!-- min-width:0 lets this flex item shrink below its text width so the
+                 email ellipsizes instead of pushing past the sidebar. -->
+            <div class="flex-grow-1 align-items-center py-3" style="min-width:0">
+                <h1 class="h6 mb-0 lh-1 text-ellipsis" title="<%- $user.mail %>"><%- $user.mail %></h1>
+                <small class="text-ellipsis d-block"><%- lang.Superuser %></small>
+            </div>
+            <div class="align-items-center py-3 px-3 cursor-pointer">
+                <div class="lh-1">
+                    <a class="hide-side-menu-toggle text-white"><i class="fa fa-sign-in fa-rotate-180"></i></a>
+                </div>
+            </div>
+        </div>
+        <div id="side-menu-collapse-point" class="collapse show home-collapse">
+            <ul id="pageTabLinks" class="nav flex-column nav-pills">
+                <div id="createdTabLinks" class="pb-3 px-3 hidden-empty"></div>
+                <div class="pb-2 px-3" id="home-collapse">
+                    <% menuInfo.links.forEach((item) => {
+                          if(item.divider){ %>
+                              <li><hr class="dropdown-divider"></li>
+                          <% }else{ %>
+                              <li class="nav-item" <%- item.pageOpen ? `id="side-menu-link-${item.pageOpen}"` : '' %>>
+                                  <a class="nav-link side-menu-link <%- item.class || '' %>" aria-current="page" <%- item.pageOpen ? `page-open="${item.pageOpen}"` : '' %>>
+                                      <i class="fa fa-<%- item.icon %>"></i> &nbsp; <%- item.label %>
+                                  </a>
+                              </li>
+                          <% } %>
+                    <% }) %>
+                    <% customAutoLoad.superPageTabs.forEach(function(block){ %>
+                        <li class="nav-item" id="side-menu-link-<%- block.target %>">
+                            <a class="nav-link side-menu-link" aria-current="page" page-open="<%- block.target %>">
+                                <i class="fa fa-<%- block.icon || 'puzzle-piece' %>"></i> &nbsp; <%- block.label %>
+                            </a>
+                        </li>
+                    <% }) %>
+                </div>
+            </ul>
+        </div>
+        <% if(currentVersion){ %>
+            <div class="px-3 pb-3 text-center sidebar-version">
+                <a href="https://gitlab.com/Shinobi-Systems/Shinobi/commit/<%- currentVersion %>" target="_blank" title="<%- currentVersion %>">
+                    <small class="text-muted">
+                        <%- lang['Current Version'] %><br><%- currentVersion.substring(0,7) %>
+                    </small>
+                </a>
+            </div>
+        <% } %>
+    </div>
+</nav>
+<a id="floating-hide-button" style="display:none;" class="sticky-button hide-side-menu-toggle btn-primary text-white"><i class="fa fa-sign-in"></i></a>

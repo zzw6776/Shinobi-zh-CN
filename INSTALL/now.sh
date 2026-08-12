@@ -11,6 +11,7 @@ echo "4. CentOS"
 echo "5. MacOS"
 echo "6. FreeBSD"
 echo "7. OpenSUSE"
+echo "8. Arch Linux - Fast and Touchless"
 echo "========"
 read oschoicee
 case $oschoicee in
@@ -41,6 +42,10 @@ sh INSTALL/freebsd.sh
 "7")
 chmod +x INSTALL/opensuse.sh
 sh INSTALL/opensuse.sh
+  ;;
+"8")
+chmod +x INSTALL/arch.sh
+bash INSTALL/arch.sh
   ;;
 
 *)

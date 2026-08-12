@@ -67,14 +67,15 @@ module.exports = (s,config,lang) => {
                 }
                 let finished = false
                 let orphanedFilesCount = 0;
-                let videosFound = 0;
+                let filePathLines = [];
+                const isUnlimited = options.checkMax === 'unlimited';
                 const videosDirectory = s.getVideoDirectory(monitor)
                 const tempDirectory = s.getStreamsDirectory(monitor)
                 // Write the `sh` script
                 try{
                     fs.writeFileSync(
                         tempDirectory + 'orphanCheck.sh',
-                        `find "${s.checkCorrectPathEnding(videosDirectory,true)}" -maxdepth 1 -type f -exec stat -c "%n" {} + | sort -r | head -n ${options.checkMax}`
+                        `find "${s.checkCorrectPathEnding(videosDirectory,true)}" -maxdepth 1 -type f -exec stat -c "%n" {} + | sort -r${isUnlimited ? `` : ` | head -n ${options.checkMax}`}`
                     );
                 } catch(err) {
                     console.log('Failed scanForOrphanedVideos', monitor.ke, monitor.mid)
@@ -95,9 +96,12 @@ module.exports = (s,config,lang) => {
                     delete(listing)
                 }
 
-                const onFinish = () => {
+                const onFinish = async () => {
                     if(!finished){
                         finished = true
+                        for (let i = 0; i < filePathLines.length; i++) {
+                            await processLine(filePathLines[i])
+                        }
                         response.ok = true
                         response.orphanedFilesCount = orphanedFilesCount
                         resolve(response)
@@ -111,10 +115,6 @@ module.exports = (s,config,lang) => {
                         const { status } = await checkIfVideoIsOrphaned(monitor,videosDirectory,filename)
                         if(status === 2){
                             ++orphanedFilesCount
-                        }
-                        ++videosFound
-                        if(videosFound === options.checkMax){
-                            onFinish()
                         }
                     }
                 }
@@ -140,14 +140,10 @@ module.exports = (s,config,lang) => {
                 setTimeout(checkInactivity, 1000)
                 // ------------------------------------------------------------------------------
 
-                listing.stdout.on('data', async (d) => {
+                listing.stdout.on('data', (d) => {
                     // Reset the inactivity timer
                     lastDataTimestamp = Date.now()
-
-                    const filePathLines = d.toString().split('\n')
-                    for (let i = 0; i < filePathLines.length; i++) {
-                        await processLine(filePathLines[i])
-                    }
+                    filePathLines.push(...d.toString().split('\n').filter(item => !!item))
                 })
                 listing.stderr.on('data', d => onError(d.toString()))
                 listing.on('close', (code) => {
@@ -303,6 +299,8 @@ module.exports = (s,config,lang) => {
             const commandString = `-y -threads 1 -f concat -safe 0 -i "${concatListFile}" -c:v copy -an -preset ultrafast "${finalMp4OutputLocation}"`
             s.debugLog("stitchMp4Files",commandString)
             const videoBuildProcess = spawn(config.ffmpegDir,splitForFFMPEG(commandString))
+            // Lets the caller hold on to the process so a long stitch can be aborted.
+            if(options.onProcess)options.onProcess(videoBuildProcess);
             videoBuildProcess.stdout.on('data',function(data){
                 s.debugLog('stdout',finalMp4OutputLocation,data.toString())
             })
@@ -649,7 +647,7 @@ module.exports = (s,config,lang) => {
         monitorId,
         filePaths,
         outputFilePath,
-        videoCodec = 'libx265',
+        videoCodec = 'copy',
         audioCodec = 'aac',
         onStdout = (data) => {s.systemLog(`${data}`)},
         onStderr = (data) => {s.systemLog(`${data}`)},
@@ -667,16 +665,22 @@ module.exports = (s,config,lang) => {
         try {
             await fsP.writeFile(tempFileListPath, fileList);
             let ffmpegArgs;
-            // if (allSameExtension) {
-            //     ffmpegArgs = [
-            //         '-f', 'concat',
-            //         '-safe', '0',
-            //         '-i', tempFileListPath,
-            //         '-c', 'copy',
-            //         '-y',
-            //         outputFilePath
-            //     ];
-            // } else {
+            if (allSameExtension) {
+                // All inputs share the same container/codec: copy the video stream
+                // (fast, lossless) instead of re-encoding. Audio is normalised to
+                // keep it valid in the mp4 output.
+                ffmpegArgs = [
+                    '-loglevel', 'warning',
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', tempFileListPath,
+                    '-c:v', 'copy',
+                    '-c:a', audioCodec,
+                    '-strict', '-2',
+                    '-y',
+                    outputFilePath
+                ];
+            } else {
                 ffmpegArgs = [
                     '-loglevel', 'warning',
                     '-f', 'concat',
@@ -689,7 +693,7 @@ module.exports = (s,config,lang) => {
                     '-y',
                     outputFilePath
                 ];
-            // }
+            }
             s.debugLog(fileList)
             s.debugLog(ffmpegArgs)
 
@@ -721,22 +725,27 @@ module.exports = (s,config,lang) => {
         const groupKey = firstVideo.ke;
         const monitorId = firstVideo.mid;
         const logTarget = { ke: groupKey, mid: '$USER' };
+        const filePaths = videos.reverse().map(video => {
+            const monitorConfig = s.group[video.ke].rawMonitorConfigurations[video.mid];
+            const filePath = path.join(s.getVideoDirectory(video), `${s.formattedTime(video.time)}.mp4`);
+            return filePath
+        });
+        const filename = `${s.formattedTime(firstVideo.time)}-${s.formattedTime(lastVideo.time)}-${filePaths.length}.mp4`
+        const fileBinFolder = s.getFileBinDirectory(firstVideo);
+        const outputFilePath = path.join(fileBinFolder, filename);
+        const mergeResult = {
+            filePath: outputFilePath,
+            filename,
+            ke: groupKey,
+            mid: monitorId,
+        };
         try{
             try{
                 await fsP.stat(outputFilePath)
-                return outputFilePath
+                return mergeResult
             }catch(err){
 
             }
-            const filePaths = videos.reverse().map(video => {
-                const monitorConfig = s.group[video.ke].rawMonitorConfigurations[video.mid];
-                const filePath = path.join(s.getVideoDirectory(video), `${s.formattedTime(video.time)}.mp4`);
-                return filePath
-            });
-            const filename = `${s.formattedTime(firstVideo.time)}-${s.formattedTime(lastVideo.time)}-${filePaths.length}.mp4`
-            const fileBinFolder = s.getFileBinDirectory(firstVideo);
-            const outputFilePath = path.join(fileBinFolder, filename);
-
             s.userLog(logTarget,{
                 type: 'mergeVideos ffmpeg START',
                 msg: {
@@ -776,7 +785,7 @@ module.exports = (s,config,lang) => {
             }
             await s.insertFileBinEntry(fileBinInsertQuery);
             s.notifyFileBinUploaded(fileBinInsertQuery);
-            return outputFilePath
+            return mergeResult
         }catch(err){
             console.log('mergeVideos process ERROR', err)
             s.userLog(logTarget,{

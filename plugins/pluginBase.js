@@ -241,7 +241,19 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
         sock.emit("ocv", { f: "init", plug: config.plug, notice: config.notice, type: config.type, connectionType: config.connectionType, pluginKey: config.key });
       });
 
-      ["disconnect", "connect_error", "error"].forEach((ev) => sock.on(ev, reconnect));
+      sock.on("disconnect", (reason) => {
+        // socket.io reports this exact reason only when the SERVER called
+        // socket.disconnect() - which Shinobi's plugin handler does right
+        // after rejecting an "init" handshake with a bad/missing pluginKey.
+        // A repeating connect -> immediate "io server disconnect" -> retry
+        // loop almost always means config.key here doesn't match this
+        // plugin's entry in Shinobi's conf.json pluginKeys.
+        if (reason === "io server disconnect") {
+          plugLog(`Disconnected by host immediately after connecting - check that this plugin's key matches conf.json's pluginKeys."${config.plug}" on the Shinobi server.`);
+        }
+        reconnect();
+      });
+      ["connect_error", "error"].forEach((ev) => sock.on(ev, reconnect));
 
       sock.on("f", (d) => mainEventController(d, null, (data) => sock.emit("ocv", { ...data, pluginKey: config.key, plug: config.plug })));
 
@@ -292,8 +304,13 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
 
         const det = m.details;
         const separate = det.detector_use_detect_object === "1";
-        const width = parseFloat(separate && det.detector_scale_x_object ? det.detector_scale_x_object : det.detector_scale_x);
-        const height = parseFloat(separate && det.detector_scale_y_object ? det.detector_scale_y_object : det.detector_scale_y);
+        // When separate object-detection scaling is on and left blank, this
+        // must match the 1280x720 default libs/ffmpeg/builders.js actually
+        // encodes that stream at - falling back to the base motion-detector
+        // scale (det.detector_scale_x/y) instead was wrong and caused
+        // detector plugins to assume the wrong reference resolution.
+        const width = parseFloat(separate ? (det.detector_scale_x_object || 1280) : det.detector_scale_x);
+        const height = parseFloat(separate ? (det.detector_scale_y_object || 720) : det.detector_scale_y);
         s.monitorInfo.set(mKey, { isObjectDetectionSeparate: separate, separate, width, height });
 
         imageBuffers.delete(mKey);
@@ -379,8 +396,12 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
   // helper to get scaled dims ------------------------------------------------------
   s.getImageDimensions = (d) => {
     const det = d.mon;
-    const height = det.detector_scale_y_object || det.detector_scale_y;
-    const width = det.detector_scale_x_object || det.detector_scale_x;
+    const separate = det.detector_use_detect_object === "1";
+    // Same fix as the monitorUpdate case above - blank object-detection
+    // scale fields must fall back to 1280x720 (what the stream is actually
+    // encoded at), not the unrelated base motion-detector scale.
+    const height = separate ? (det.detector_scale_y_object || 720) : det.detector_scale_y;
+    const width = separate ? (det.detector_scale_x_object || 1280) : det.detector_scale_x;
     return { height: parseFloat(height), width: parseFloat(width) };
   };
 

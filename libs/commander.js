@@ -2,6 +2,7 @@ const { Worker } = require('worker_threads');
 module.exports = function(s,config,lang,app){
     const fetch = require('node-fetch')
     const { modifyConfiguration, getConfiguration } = require('./system/utils.js')(config)
+    const { addSharedRoute } = require('./sharedRoutes.js')(s,config,lang,app)
     let customerServerList = !!config.p2pServerList;
     var runningWorker;
     config.machineId = config.p2pApiKey + '' + config.p2pGroupId
@@ -138,25 +139,24 @@ module.exports = function(s,config,lang,app){
     /**
     * API : Superuser : Save P2P Server choice
     */
-    app.post(config.webPaths.superApiPrefix+':auth/p2p/save', function (req,res){
-        s.superAuth(req.params,async (resp) => {
-            const response = {ok: true};
-            const form = s.getPostData(req,'data',true)
-            form.p2pEnabled = form.p2pEnabled === '1' ? true : false
-            config = Object.assign(config,form)
-            const currentConfig = await getConfiguration()
-            const configError = await modifyConfiguration(Object.assign(currentConfig,form))
-            if(configError)s.systemLog(configError)
-            setTimeout(() => {
-                if(form.p2pEnabled){
-                    s.systemLog('Starting P2P')
-                    beginConnection()
-                }else{
-                    s.systemLog('Stopping P2P')
-                    stopWorker()
-                }
-            },2000)
-            s.closeJsonResponse(res,response)
-        },res,req)
+    // Also reachable from the dashboard by accounts granted `use_remote_access`.
+    addSharedRoute('post','p2p','/save','use_remote_access', async (req,res,resp) => {
+        const response = {ok: true};
+        const form = s.getPostData(req,'data',true)
+        form.p2pEnabled = form.p2pEnabled === '1' ? true : false
+        config = Object.assign(config,form)
+        const currentConfig = await getConfiguration()
+        const configError = await modifyConfiguration(Object.assign(currentConfig,form))
+        if(configError)s.systemLog(configError)
+        setTimeout(() => {
+            if(form.p2pEnabled){
+                s.systemLog('Starting P2P')
+                beginConnection()
+            }else{
+                s.systemLog('Stopping P2P')
+                stopWorker()
+            }
+        },2000)
+        s.closeJsonResponse(res,response)
     })
 }

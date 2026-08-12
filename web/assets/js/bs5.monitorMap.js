@@ -2,29 +2,49 @@ var loadedMap;
 $(document).ready(function(){
     var theBlock = $('#tab-monitorMap')
     var theMap = $('#monitor-map-canvas')
-    function loadPopupVideoList(monitor){
-        var groupKey = monitor.ke
+    // How far back a pin popup looks for events, and how many it will draw.
+    var popupEventHours = 24
+    var popupEventLimit = 24
+    // Keyed the same way the Events tab keys its rows, so a clicked card can be traced back
+    // to its event and from there to the video that covers it.
+    var loadedPopupEvents = []
+    function loadPopupEventList(monitor){
         var monitorId = monitor.mid
-        getVideos({
-            monitorId: monitorId,
-            limit: 10,
-        },function(data){
-            var videos = data.videos
-            var html = ''
-            setTimeout(function(){
-                var theVideoList = $(`#leaflet-monitor-videos`)
-                if(videos.length > 0){
-                    theVideoList.css('height','')
-                    console.log(2,videos,videos.length)
-                    $.each(videos,function(n,video){
-                        html += createVideoRow(video,`col-12 mb-2`)
-                    })
-                }else{
-                    theVideoList.css('height','initial')
-                    html = `<div class="text-center text-light mb-2">${lang['No Videos Found']}</div>`
-                }
-                theVideoList.html(html)
-            },1000)
+        var theEventList = $(`#leaflet-monitor-events`)
+        // Same shape the date-picker tabs send : server timezone, no offset suffix.
+        var endMoment = moment(convertTZ(new Date()))
+        var startMoment = endMoment.clone().subtract(popupEventHours,'hours')
+        var startDate = startMoment.format('YYYY-MM-DDTHH:mm:ss')
+        var endDate = endMoment.format('YYYY-MM-DDTHH:mm:ss')
+        var eventsUrl = `${getApiPrefix('events')}/${monitorId}?start=${startDate}&end=${endDate}&limit=0,${popupEventLimit}`
+        loadedPopupEvents = []
+        $.getJSON(eventsUrl,async function(data){
+            var events = data.events || data || []
+            if(events.length === 0){
+                theEventList.html(`<div class="text-center text-light p-3">${lang['No Events Found'] || lang['No Data']}</div>`)
+                return
+            }
+            // Videos give the cards something to open, frames give them a thumbnail. Both are
+            // fetched over the same window the events came from, exactly as the Events tab does.
+            var videosResult = await getVideos({monitorId,startDate,endDate},null,true)
+            var frames = await eventsTable_getTimelapseFrames(monitorId,startDate,endDate)
+            var videos = videosResult.videos || []
+            loadedPopupEvents = events
+            var cardsHtml = events.map(function(theEvent){
+                var frame = eventsTable_findClosestFrame(theEvent,frames)
+                var video = eventsTable_findCoveringVideo(theEvent,videos)
+                if(video)theEvent.videoRef = `${video.mid}${video.time}${video.type}`;
+                return eventsTable_buildCard(theEvent,frame,video)
+            }).join('')
+            theEventList.html(`<div class="leaflet-monitor-events-grid">${cardsHtml}</div>`)
+            // The popup is short and always on screen, so the Events tab's scroll-triggered
+            // lazy loading would never fire here - the thumbnails are just loaded outright.
+            theEventList.find('.event-card-thumb[data-src]').each(function(n,img){
+                img.src = img.getAttribute('data-src')
+                img.removeAttribute('data-src')
+            })
+        }).fail(function(){
+            theEventList.html(`<div class="text-center text-light p-3">${lang['No Events Found'] || lang['No Data']}</div>`)
         })
     }
     function buildPinPopupHtml(monitor){
@@ -32,7 +52,11 @@ $(document).ready(function(){
         var html = `
         <div id="leaflet-monitor-block" data-mid="${monitor.mid}" data-ke="${monitor.ke}">
             <div>${userHasSubscribed ? `<iframe src="${embedUrl}"></iframe>` : `<div class="text-center p-3 text-light cursor-pointer" onclick="openTab('helpWindow')">${lang.activateRequiredLiveStream}</div>`}</div>
-            <div id="leaflet-monitor-videos">
+            <div class="leaflet-monitor-events-header d-flex flex-row align-items-center">
+                <div class="flex-grow-1">${lang['Events']} <span class="opacity-50">(${lang.Last} ${popupEventHours} ${lang.hours})</span></div>
+                <a class="btn btn-xs btn-primary leaflet-monitor-open-events" data-mid="${monitor.mid}">${lang['View All'] || lang['Events']}</a>
+            </div>
+            <div id="leaflet-monitor-events">
                 <div class="text-center text-light" style="padding-top: 75px"><i class="fa fa-3x fa-spinner fa-pulse"></i></div>
             </div>
         </div>
@@ -116,8 +140,8 @@ $(document).ready(function(){
             var groupKey = popup.attr('data-ke')
             var monitorId = popup.attr('data-mid')
             var monitor = loadedMonitors[monitorId]
-            console.log(`loading `,monitorId,!!monitor)
-            loadPopupVideoList(monitor)
+            if(!monitor)return;
+            loadPopupEventList(monitor)
         });
         plotPinsToMap(monitorPins)
     }
@@ -133,6 +157,35 @@ $(document).ready(function(){
             zoom,
         })
     }
+    // Leaflet renders popups into the map pane rather than where the tab markup sits, so
+    // these are delegated from body instead of from the tab element.
+    $('body')
+    .on('click','#leaflet-monitor-events .event-card.has-video',function(e){
+        e.preventDefault()
+        var el = $(this)
+        var monitorId = el.attr('data-mid')
+        var eventTime = el.attr('data-time')
+        var theEvent = loadedPopupEvents.find(function(row){
+            return row.mid === monitorId && row.time === eventTime
+        })
+        var video = theEvent && theEvent.videoRef ? loadedVideosInMemory[theEvent.videoRef] : null
+        if(video){
+            var timeInward = Math.max(0,(new Date(theEvent.time).getTime() - new Date(video.time).getTime()) / 1000)
+            createVideoPlayerTab(video,timeInward)
+        }else{
+            new PNotify({
+                title: lang['Video'],
+                text: lang['No Monitor Found, Ignoring Request'],
+                type: 'info',
+            })
+        }
+        return false;
+    })
+    .on('click','.leaflet-monitor-open-events',function(e){
+        e.preventDefault()
+        openEventsTableView($(this).attr('data-mid'))
+        return false;
+    })
     addOnTabOpen('monitorMap', function () {
         loadMap()
     })

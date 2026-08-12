@@ -3,6 +3,13 @@ var exec = require('child_process').exec;
 var spawn = require('child_process').spawn;
 const { getCpuUsageOnLinux, getRamUsageOnLinux } = require('./health/utils.js')
 module.exports = function(s,config,lang,io){
+    require('./health/gpu.js')(s,config)
+    // Detected once the process is up, so the probe commands do not compete with startup and
+    // s.systemLog is available to record what was found. Until it finishes readGpuUsage
+    // simply returns nothing, so the first poll or two carry no GPU figures.
+    s.onProcessReady(function(){
+        s.detectGpuProviders()
+    })
     let lastLoggedCpu = new Date()
     let lastLoggedRam = new Date()
     const allowedLogInterval = 1000 * 1000 * 60 * 60 // 1 hour
@@ -55,10 +62,10 @@ module.exports = function(s,config,lang,io){
                         k.cmd = 'top -b -n 2 | awk \'toupper($0) ~ /^.?CPU/ {gsub("id,","100",$8); gsub("%","",$8); print 100-$8}\' | tail -n 1';
                     break;
                     case'freebsd':
-                        k.cmd = 'vmstat 1 2 | awk \'END{print 100-$19}\''
+                        k.cmd = 'vmstat 1 2 | awk \'END{print 100-$NF}\''
                     break;
                     case'openbsd':
-                        k.cmd = 'vmstat 1 2 | awk \'END{print 100-$18}\''
+                        k.cmd = 'vmstat -w 1 -c 2 | awk \'END{print 100-$NF}\''
                     break;
                 }
                 if(config.customCpuCommand){
@@ -111,13 +118,13 @@ module.exports = function(s,config,lang,io){
                         k.cmd = "wmic OS get FreePhysicalMemory /Value"
                     break;
                     case'darwin':
-                        k.cmd = "vm_stat | awk '/^Pages free: /{f=substr($3,1,length($3)-1)} /^Pages active: /{a=substr($3,1,length($3-1))} /^Pages inactive: /{i=substr($3,1,length($3-1))} /^Pages speculative: /{s=substr($3,1,length($3-1))} /^Pages wired down: /{w=substr($4,1,length($4-1))} /^Pages occupied by compressor: /{c=substr($5,1,length($5-1)); print ((a+w)/(f+a+i+w+s+c))*100;}'"
+                        k.cmd = "vm_stat | awk '/^Pages free/{f=$3+0} /^Pages active/{a=$3+0} /^Pages inactive/{i=$3+0} /^Pages speculative/{sp=$3+0} /^Pages wired down/{w=$4+0} /^Pages occupied by compressor/{c=$5+0} END{print ((a+w+c)/(f+a+i+w+sp+c))*100}'"
                     break;
                     case'freebsd':
-                	    k.cmd = "echo \"scale=4; $(vmstat -H | awk 'END{print $5}')*1024*100/$(sysctl -n hw.physmem)\" | bc"
+                	    k.cmd = "sysctl -n vm.stats.vm.v_page_count vm.stats.vm.v_free_count vm.stats.vm.v_inactive_count | awk 'NR==1{t=$1} NR==2{f=$1} NR==3{i=$1} END{print ((t-f-i)/t)*100}'"
                     break;
         	        case'openbsd':
-                        k.cmd = "echo \"scale=4; $(vmstat | awk 'END{ gsub(\"M\",\"\",$4); print $4 }')*104857600/$(sysctl -n hw.physmem)\" | bc"
+                        k.cmd = "vmstat -s | awk '/pages managed$/{t=$1} /pages free$/{f=$1} END{print ((t-f)/t)*100}'"
                     break;
                     default:
                         k.cmd = "LANG=C free | grep Mem | awk '{print $7/$2 * 100.0}'";
@@ -152,28 +159,35 @@ module.exports = function(s,config,lang,io){
             })
         }
     }
+    // CPU/RAM readings go to their own room rather than 'CPU'. That room also carries plugin
+    // events every dashboard needs, so it cannot be used to opt a group out of these stats.
+    // Only sockets whose group is permitted join 'OSSTATS' -- see libs/socketio.js.
     if(config.childNodes.mode !== 'child'){
         if(config.logCpuAndRamDangerZone){
             setInterval(async () => {
                 const cpu = await s.cpuUsage()
                 const ram = await s.ramUsage()
+                const gpus = await s.readGpuUsage()
                 logCpu(cpu)
                 logRam(ram.percent)
                 s.tx({
                     f: 'os',
                     cpu: cpu,
-                    ram: ram
-                },'CPU')
+                    ram: ram,
+                    gpus: gpus
+                },'OSSTATS')
             },10000)
         }else{
             setInterval(async () => {
                 const cpu = await s.cpuUsage()
                 const ram = await s.ramUsage()
+                const gpus = await s.readGpuUsage()
                 s.tx({
                     f: 'os',
                     cpu: cpu,
-                    ram: ram
-                },'CPU')
+                    ram: ram,
+                    gpus: gpus
+                },'OSSTATS')
             },10000)
         }
     }

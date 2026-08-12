@@ -8,7 +8,8 @@ module.exports = function(s,config,lang,app,io){
     }
 
     // Generate heap snapshot using built-in v8 module
-    app.get('/debug/heapdump', (req, res) => {
+    app.get(config.webPaths.superApiPrefix+':auth/debug/heapdump', (req, res) => {
+      if(!s.superAuth(req.params, () => {}, res, req))return;
       const filename = path.join(HEAPDUMP_DIR, `heapdump-${Date.now()}.heapsnapshot`);
 
       let snapshotStream;
@@ -87,7 +88,8 @@ module.exports = function(s,config,lang,app,io){
     });
 
     // Delete all heap dumps
-    app.get('/debug/heapdumps/delete', (req, res) => {
+    app.get(config.webPaths.superApiPrefix+':auth/debug/heapdumps/delete', (req, res) => {
+      if(!s.superAuth(req.params, () => {}, res, req))return;
       fs.readdir(HEAPDUMP_DIR, (err, files) => {
         if (err) {
           return res.status(500).json({ error: err.message });
@@ -122,7 +124,8 @@ module.exports = function(s,config,lang,app,io){
     });
 
     // List heap dumps
-    app.get('/debug/heapdumps', (req, res) => {
+    app.get(config.webPaths.superApiPrefix+':auth/debug/heapdumps', (req, res) => {
+      if(!s.superAuth(req.params, () => {}, res, req))return;
       fs.readdir(HEAPDUMP_DIR, (err, files) => {
         if (err) {
           return res.status(500).json({ error: err.message });
@@ -146,7 +149,8 @@ module.exports = function(s,config,lang,app,io){
     });
 
     if(config.debugMp4Frag){
-        app.get('/debug/mp4frag', (req, res) => {
+        app.get(config.webPaths.superApiPrefix+':auth/debug/mp4frag', (req, res) => {
+            if(!s.superAuth(req.params, () => {}, res, req))return;
             res.end(JSON.stringify(s.mp4FragMemoryFreed,null,3));
         });
     }

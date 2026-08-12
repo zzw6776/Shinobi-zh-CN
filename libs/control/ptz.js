@@ -2,6 +2,7 @@ var os = require('os');
 var exec = require('child_process').exec;
 module.exports = function(s,config,lang){
     const { fetchWithAuthentication, asyncSetTimeout } = require('../basic/utils.js')(process.cwd(),config)
+    const { isMonitorTargetSelfOrMetadata } = require('../ffmpeg/utils.js')(s,config,lang)
     const moveLock = {}
     const ptzTimeoutsUntilResetToHome = {}
     const sliceUrlAuth = (url) => {
@@ -46,6 +47,11 @@ module.exports = function(s,config,lang){
             const response =  {
                 ok: true,
                 type: lang[doStart ? 'Control Triggered' : 'Control Trigger Ended']
+            }
+            if(!config.disableSSRFSelfTargetFilter && isMonitorTargetSelfOrMetadata(requestUrl)){
+                moveLock[options.ke + options.id] = false
+                resolve({ok: false, msg: lang['Invalid Target']})
+                return
             }
             var fetchWithAuthData;
             if (controlOptions.postData){
@@ -265,7 +271,14 @@ module.exports = function(s,config,lang){
         }
     }
     async function ptzControl(options,callback){
-        if(!s.group[options.ke] || !s.group[options.ke].activeMonitors[options.id]){return}
+        if(!s.group[options.ke] || !s.group[options.ke].activeMonitors[options.id]){
+            const response = {
+                ok: false,
+                msg: lang['Not Found']
+            }
+            if(callback)callback(response);
+            return response
+        }
         const monitorConfig = s.group[options.ke].rawMonitorConfigurations[options.id]
         const controlUrlMethod = monitorConfig.details.control_url_method || 'GET'
         const controlUrlStopTimeout = options.moveTimeout || parseInt(monitorConfig.details.control_url_stop_timeout) || 1000
@@ -277,10 +290,12 @@ module.exports = function(s,config,lang){
                 type: lang['Control Error'],
                 msg: lang.ControlErrorText1
             });
-            return {
+            const response = {
                 ok: false,
                 msg: lang.ControlErrorText1
             }
+            if(callback)callback(response);
+            return response
         }
         let response = {
             direction,
@@ -296,6 +311,7 @@ module.exports = function(s,config,lang){
             ){
                 response.ok = false
                 response.msg = isHorizontalOnly ? lang['Pan Only'] : lang['Tilt Only']
+                if(callback)callback(response);
                 return response
             }
         }
@@ -307,9 +323,10 @@ module.exports = function(s,config,lang){
                 if(direction !== 'stopMove' && direction !== 'center'){
                     await asyncSetTimeout(controlUrlStopTimeout)
                     response.stopMoveResponse = await moveOnvifCamera(options,false)
-                    response.ok = response.moveResponse.ok && response.stopMoveResponse.ok;
+                    // ONVIF move results wrap the ok flag in .msg (from runOnvifMethod)
+                    response.ok = !!((response.moveResponse.msg||{}).ok && (response.stopMoveResponse.msg||{}).ok);
                 }else{
-                    response.ok = response.moveResponse.ok;
+                    response.ok = !!((response.moveResponse.msg||{}).ok);
                 }
             }else{
                 response = await relativeMoveOnvif(options);

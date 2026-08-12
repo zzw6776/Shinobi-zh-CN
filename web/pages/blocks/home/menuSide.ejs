@@ -9,7 +9,7 @@
                 </div>
             </div>
             <div class="flex-grow-1 align-items-center mr-3 py-3 <%- !showMonitors ? `pr-3` : '' %> <%- showMonitors ? `toggle-menu-collapse` : '' %>" style="max-width: 40%;">
-                <h1 class="h6 mb-0 lh-1 text-ellipsis" style="overflow: hidden;"><%- $user.mail %></h1>
+                <h1 class="h6 mb-0 lh-1 text-ellipsis" title="<%- $user.mail %>"><%- $user.mail %></h1>
                 <small><%- lang.Monitors %> : <span class="cameraCount"></span></small>
             </div>
             <div class="align-items-center mr-3 py-3 pr-3 cursor-pointer">
@@ -26,7 +26,8 @@
             <% } %>
         </div>
 
-        <%- include('drawBlock', {theBlock: define.SideMenu.blocks.SideMenuBeforeList}); %>
+        <%# `details` has to be handed in for the CPU/RAM bars' `evaluation` to read. %>
+        <%- include('drawBlock', {theBlock: define.SideMenu.blocks.SideMenuBeforeList, details: $user.details}); %>
         <div tab-specific-content="liveGrid" style="display:none">
             <div class="form-group px-3">
                 <div class="dropdown">

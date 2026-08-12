@@ -1,17 +1,59 @@
 const fs = require("fs")
 const fetch = require("node-fetch")
-module.exports = async function(s,config,lang,getSnapshot){
+module.exports = function(s,config,lang,getSnapshot){
     const {
         getObjectTagNotifyText,
         getEventBasedRecordingUponCompletion,
     } = require('../events/utils.js')(s,config,lang)
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
     //matrix bot
     if(config.matrixBot === true){
         const allowedSend = {}
-        const sdk = await import("matrix-js-sdk")
+        // matrix-js-sdk is ESM-only and (as of writing) its published build still contains
+        // internal directory-style imports that Node's ESM resolver rejects
+        // (ERR_UNSUPPORTED_DIR_IMPORT) even on Node versions the SDK claims to support - see
+        // https://github.com/matrix-org/matrix-js-sdk/issues/4287. Rather than depend on it, talk
+        // to the Matrix Client-Server REST API directly with node-fetch. This client object only
+        // implements the two calls this file actually needs (sendMessage/uploadContent), matching
+        // matrix-js-sdk's method names/shapes so the rest of this module is unchanged.
+        async function matrixApiRequest(baseUrl,accessToken,method,path,opts){
+            const url = `${baseUrl.replace(/\/$/,'')}${path}`
+            const headers = { 'Authorization': `Bearer ${accessToken}` }
+            let body
+            if(opts && opts.json){
+                headers['Content-Type'] = 'application/json'
+                body = JSON.stringify(opts.json)
+            }else if(opts && opts.raw){
+                headers['Content-Type'] = opts.contentType || 'application/octet-stream'
+                body = opts.raw
+            }
+            const response = await fetch(url,{ method, headers, body })
+            const data = await response.json().catch(() => ({}))
+            if(!response.ok){
+                const err = new Error(data.error || `Matrix API error ${response.status}`)
+                err.status = response.status
+                throw err
+            }
+            return data
+        }
+        function createMatrixRestClient(baseUrl,accessToken){
+            return {
+                sendMessage: function(roomId,content){
+                    const txnId = `m${Date.now()}${Math.random().toString(16).slice(2)}`
+                    return matrixApiRequest(baseUrl,accessToken,'PUT',`/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${txnId}`,{ json: content })
+                },
+                uploadContent: function(buffer,opts){
+                    opts = opts || {}
+                    return matrixApiRequest(baseUrl,accessToken,'POST',`/_matrix/media/v3/upload?filename=${encodeURIComponent(opts.name || 'file')}`,{ raw: buffer, contentType: opts.type })
+                },
+                whoami: function(){
+                    return matrixApiRequest(baseUrl,accessToken,'GET','/_matrix/client/v3/account/whoami')
+                },
+            }
+        }
         try{
             function sendFile(file,groupKey){
                 const client = s.group[groupKey].matrixBot
@@ -89,14 +131,17 @@ module.exports = async function(s,config,lang,getSnapshot){
                     }else{
                         detector_matrixbot_timeout = parseFloat(monitorConfig.details.detector_matrixbot_timeout) * 1000 * 60;
                     }
-                    s.group[d.ke].activeMonitors[d.id].detector_matrixbot = setTimeout(function(){
-                        clearTimeout(s.group[d.ke].activeMonitors[d.id].detector_matrixbot);
-                        s.group[d.ke].activeMonitors[d.id].detector_matrixbot = null
-                    },detector_matrixbot_timeout)
                     await getSnapshot(d,monitorConfig)
+                    const willSendVideo = monitorConfig.details.detector_matrixbot_send_video === '1'
+                    if(d.screenshotBuffer || willSendVideo){
+                        s.group[d.ke].activeMonitors[d.id].detector_matrixbot = setTimeout(function(){
+                            clearTimeout(s.group[d.ke].activeMonitors[d.id].detector_matrixbot);
+                            s.group[d.ke].activeMonitors[d.id].detector_matrixbot = null
+                        },detector_matrixbot_timeout)
+                    }
                     if(d.screenshotBuffer){
                         sendMessage({
-                            text: notifyText,
+                            text: notifyText + '\n' + getAppDeepLink(d),
                         },[
                             {
                                 buffer: d.screenshotBuffer,
@@ -109,7 +154,7 @@ module.exports = async function(s,config,lang,getSnapshot){
                             }
                         ],d.ke)
                     }
-                    if(monitorConfig.details.detector_matrixbot_send_video === '1'){
+                    if(willSendVideo){
                         let videoPath = null
                         let videoName = null
                         const eventBasedRecording = await getEventBasedRecordingUponCompletion({
@@ -126,7 +171,7 @@ module.exports = async function(s,config,lang,getSnapshot){
                         }
                         if(videoPath){
                             sendMessage({
-                                text: notifyText,
+                                text: notifyText + '\n' + getAppDeepLink(d),
                             },[
                                 {
                                     buffer: await fs.promises.readFile(videoPath),
@@ -166,15 +211,10 @@ module.exports = async function(s,config,lang,getSnapshot){
                     allowedSend[groupKey] = true;
                     s.debugLog(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`)
                     s.debugLog(`Matrix Connecting... ${userDetails.matrixbot_baseUrl}`)
-                    const client = sdk.createClient({
-                        baseUrl: userDetails.matrixbot_baseUrl,
-                        accessToken: userDetails.matrixbot_accessToken,
-                        userId: userDetails.matrixbot_userId
-                    });
+                    const client = createMatrixRestClient(userDetails.matrixbot_baseUrl, userDetails.matrixbot_accessToken)
                     s.group[user.ke].matrixBot = client
                     s.group[user.ke].matrixBotRoom = userDetails.matrixbot_roomId
-                    client.startClient();
-                    client.once('sync', function(state, prevState, res) {
+                    client.whoami().then(function(){
                         s.userLog({
                             ke: user.ke,
                             mid: '$USER'
@@ -182,14 +222,24 @@ module.exports = async function(s,config,lang,getSnapshot){
                             type: 'matrix.org',
                             msg: lang.Ready
                         })
+                    }).catch(function(err){
+                        s.userLog({
+                            ke: user.ke,
+                            mid: '$USER'
+                        },{
+                            type: 'matrix.org Error',
+                            msg: err.toString()
+                        })
                     });
                 }else{
                     allowedSend[groupKey] = false;
                 }
             }
             const unloadMatrixBotForUser = function(user){
-                if(s.group[user.ke].matrixBot && s.group[user.ke].matrixBot.stopClient){
-                    s.group[user.ke].matrixBot.stopClient()
+                // No persistent connection to tear down (REST is stateless per-call) - just
+                // drop the reference. Previously this was gated on client.stopClient existing,
+                // which meant the bot was never actually cleared on unload.
+                if(s.group[user.ke].matrixBot){
                     delete(s.group[user.ke].matrixBot)
                 }
             }
@@ -283,7 +333,7 @@ module.exports = async function(s,config,lang,getSnapshot){
                isFormGroupGroup: true,
                "name": "Matrix.org",
                "color": "purple",
-               "section-class": "h_det_matrixbot_input h_det_matrixbot_1",
+               "section-visibleWhen": { "h_det_matrixbot": "1" },
                "info": [
                    {
                       "name": "detail=detector_matrixbot_send_video",
@@ -376,21 +426,21 @@ module.exports = async function(s,config,lang,getSnapshot){
                       "name": "detail=matrixbot_baseUrl",
                       "placeholder": "",
                       "field": lang["Host"],
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                    },
                    {
                        hidden: true,
                       "name": "detail=matrixbot_userId",
                       "placeholder": "xxxxxxxxxxxxxxxxxx",
                       "field": lang["User ID"],
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                    },
                    {
                        hidden: true,
                       "name": "detail=matrixbot_roomId",
                       "placeholder": "xxxxxxxxxxxxxxxxxx",
                       "field": lang["Room ID"],
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                    },
                    {
                        hidden: true,
@@ -398,7 +448,7 @@ module.exports = async function(s,config,lang,getSnapshot){
                       "fieldType": "password",
                       "placeholder": "XXXXXXXXXXXXXXXXXXXXXXXX",
                       "field": lang.Token,
-                      "form-group-class":"u_matrixbot_bot_input u_matrixbot_bot_1",
+                      "form-group-visibleWhen":{ "u_matrixbot_bot": "1" },
                   },
                ]
             }

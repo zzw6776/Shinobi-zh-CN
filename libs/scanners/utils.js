@@ -6,6 +6,9 @@ const {
     getBuffer,
 } = require('../common.js')
 module.exports = (s,config,lang) => {
+    // security: caps the expanded range size — without this, an attacker-supplied range like
+    // 1.0.0.0-1.255.255.255 pushes ~16.7M strings into memory synchronously (OOM DoS, see #582)
+    const IP_RANGE_MAX_SIZE = 4096
     const ipRange = (start_ip, end_ip) => {
       var startLong = toLong(start_ip);
       var endLong = toLong(end_ip);
@@ -14,12 +17,26 @@ module.exports = (s,config,lang) => {
         startLong = endLong
         endLong = tmp;
       }
+      if(endLong - startLong + 1 > IP_RANGE_MAX_SIZE){
+        endLong = startLong + IP_RANGE_MAX_SIZE - 1
+      }
       var rangeArray = [];
       var i;
       for (i = startLong; i <= endLong; i++) {
         rangeArray.push(fromLong(i));
       }
       return rangeArray;
+    }
+    // security: blocks loopback and link-local (incl. 169.254.169.254 cloud metadata) scan targets
+    // (see #582). RFC1918 private ranges are intentionally NOT blocked here — scanning the local
+    // LAN for cameras is this feature's whole purpose.
+    const isScanTargetBlocked = (ipEntry) => {
+        const p = ipEntry.split('.').map(Number)
+        if(p.length !== 4 || p.some((n) => Number.isNaN(n)))return true
+        if(p[0] === 127)return true // 127.0.0.0/8 loopback
+        if(p[0] === 169 && p[1] === 254)return true // 169.254.0.0/16 link-local / metadata
+        if(p[0] === 0)return true // 0.0.0.0/8
+        return false
     }
     const portRange = (lowEnd,highEnd) => {
         var list = [];
@@ -180,7 +197,7 @@ module.exports = (s,config,lang) => {
             ip = addressRange.join(',')
         }
         if(ports === ''){
-            ports = '80,8080,8000,7575,8081,9080,8090,8999,8899'
+            ports = '80,8080,8000,7575,8081,9080,8090,8999,8899,2020'
         }
         if(ports.indexOf('-') > -1){
             ports = ports.split('-')
@@ -211,7 +228,7 @@ module.exports = (s,config,lang) => {
             }
         })
         var hitList = []
-        ipList.forEach((ipEntry,n) => {
+        ipList.filter((ipEntry) => !isScanTargetBlocked(ipEntry)).forEach((ipEntry,n) => {
             ports.forEach((portEntry,nn) => {
                 hitList.push({
                     xaddr : 'http://' + ipEntry + ':' + portEntry + '/onvif/device_service',
@@ -235,10 +252,18 @@ module.exports = (s,config,lang) => {
                 try{
                     var device = new onvif.OnvifDevice(camera)
                     var info = await device.init()
-                    var date = await device.services.device.getSystemDateAndTime()
+                    var date = null
+                    try{
+                        date = await device.services.device.getSystemDateAndTime()
+                    }catch(err){
+                        s.debugLog(err)
+                    }
+                    if(!device.current_profile || !device.current_profile.token){
+                        throw new Error('ONVIF_NO_PROFILE')
+                    }
                     var stream = await device.services.media.getStreamUri({
                         ProfileToken : device.current_profile.token,
-                        Protocol : 'RTSP'
+                        Protocol : 'RTSP' /* Won't work for RTSPS (SRTP) */
                     })
                     var cameraResponse = {
                         ip: camera.ip,
@@ -249,13 +274,18 @@ module.exports = (s,config,lang) => {
                     }
                     try{
                         const camPtzConfigs = (await device.services.ptz.getConfigurations()).data.GetConfigurationsResponse
-                        if(
-                            camPtzConfigs.PTZConfiguration &&
-                            (
-                                camPtzConfigs.PTZConfiguration.PanTiltLimits ||
-                                camPtzConfigs.PTZConfiguration.ZoomLimits
-                            )
-                        ){
+                        // GetConfigurations returns one <PTZConfiguration> per configuration.
+                        // shinobi-onvif parses SOAP with xml2js `explicitArray:false`, so that
+                        // is an object for a single config but an ARRAY as soon as a camera
+                        // reports two or more - common on multi-profile PTZ cameras (e.g.
+                        // Dahua). Reading .PanTiltLimits straight off an array gives undefined,
+                        // so those cameras were never flagged PTZ and the Control button never
+                        // appeared. Limits are also optional per the ONVIF spec, so the presence
+                        // of a PTZ configuration is the dependable signal - `device.services.ptz`
+                        // being absent already throws into the catch below for non-PTZ cameras.
+                        const rawPtzConfig = camPtzConfigs ? camPtzConfigs.PTZConfiguration : null
+                        const ptzConfigList = !rawPtzConfig ? [] : (rawPtzConfig instanceof Array ? rawPtzConfig : [rawPtzConfig])
+                        if(ptzConfigList.length > 0){
                             cameraResponse.isPTZ = true
                         }
                     }catch(err){
@@ -277,23 +307,60 @@ module.exports = (s,config,lang) => {
                     }
                     callback(Object.assign(cameraResponse,{f: 'onvif', snapShot: imageSnap}))
                 }catch(err){
+                    const message = (err && err.message) ? err.message : String(err)
                     const searchError = (find) => {
-                        return stringContains(find,err.message,true)
+                        // lowercase the needle too: stringContains lowercases only the
+                        // haystack, so uppercase errno codes (ECONNREFUSED, ETIMEDOUT, …)
+                        // never matched and every one fell through to the default case.
+                        return stringContains(find.toLowerCase(),message,true)
                     }
                     var foundDevice = false
                     var errorMessage = ''
                     switch(true){
+                        case searchError('ECONNREFUSED'):
+                        case searchError('EHOSTUNREACH'):
+                        case searchError('ENETUNREACH'):
+                        case searchError('EHOSTDOWN'):
+                        case searchError('ENOTFOUND'):
+                            foundDevice = false
+                        break;
+                        case searchError('ECONNRESET'):
+                        case searchError('ETIMEDOUT'):
+                        case searchError('ESOCKETTIMEDOUT'):
+                        case searchError('EPIPE'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErrNetwork
+                        break;
+                        case searchError('ONVIF_NO_PROFILE'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErrNoProfile
+                        break;
                         case searchError('400'):
                             foundDevice = true
                             errorMessage = lang.ONVIFErr400
+                        break;
+                        case searchError('401'):
+                        case searchError('403'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErr401
+                        break;
+                        case searchError('404'):
+                            foundDevice = true
+                            errorMessage = lang.ONVIFErr404
                         break;
                         case searchError('405'):
                             foundDevice = true
                             errorMessage = lang.ONVIFErr405
                         break;
-                        case searchError('404'):
+                        case searchError('500'):
+                        case searchError('502'):
+                        case searchError('503'):
                             foundDevice = true
-                            errorMessage = lang.ONVIFErr404
+                            errorMessage = lang.ONVIFErr50x
+                        break;
+                        default:
+                            foundDevice = true
+                            errorMessage = `${lang.ONVIFErrUnknown} (${message.split('\n')[0].slice(0,120)})`
                         break;
                     }
                     if(foundDevice){

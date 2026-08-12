@@ -80,32 +80,38 @@ module.exports = (s,config,lang) => {
         }
         return eventsCounted
     }
-    const addEventDetailsToString = (eventData,string,addOps) => {
+    const removeShellMetacharacters = (value) => {
+        if(value === undefined || value === null)return value;
+        return (value + '').replace(/[\x00-\x1f\x7f;&|<>$`"'\\()^%]/g,'');
+    }
+    const addEventDetailsToString = (eventData,string,addOps,options) => {
         //d = event data
         if(!addOps)addOps = {}
+        if(!options)options = {}
+        const clean = options.shellSafe ? removeShellMetacharacters : (v) => v;
         var newString = string + ''
         var d = Object.assign(eventData,addOps)
         var detailString = s.stringJSON(d.details)
         var firstMatrix = d.details.matrices ? d.details.matrices[0] : null;
         var tag = firstMatrix ? firstMatrix.tag : '';
         newString = newString
-            .replace(/{{TIME}}/g,d.currentTimestamp)
-            .replace(/{{REGION_NAME}}/g,d.details.name)
-            .replace(/{{SNAP_PATH}}/g,s.dir.streams+d.ke+'/'+d.id+'/s.jpg')
-            .replace(/{{MONITOR_ID}}/g,d.id)
-            .replace(/{{MONITOR_NAME}}/g,s.group[d.ke].rawMonitorConfigurations[d.id].name)
-            .replace(/{{GROUP_KEY}}/g,d.ke)
-            .replace(/{{DETAILS}}/g,detailString);
+            .replace(/{{TIME}}/g,clean(d.currentTimestamp))
+            .replace(/{{REGION_NAME}}/g,clean(d.details.name))
+            .replace(/{{SNAP_PATH}}/g,clean(s.dir.streams+d.ke+'/'+d.id+'/s.jpg'))
+            .replace(/{{MONITOR_ID}}/g,clean(d.id))
+            .replace(/{{MONITOR_NAME}}/g,clean(s.group[d.ke].rawMonitorConfigurations[d.id].name))
+            .replace(/{{GROUP_KEY}}/g,clean(d.ke))
+            .replace(/{{DETAILS}}/g,clean(detailString));
         if(firstMatrix && tag){
-            newString = newString.replace(/{{TAG}}/g,tag)
+            newString = newString.replace(/{{TAG}}/g,clean(tag))
         }
         if(d.details.confidence || firstMatrix){
             newString = newString
-            .replace(/{{CONFIDENCE}}/g,d.details.confidence || firstMatrix.confidence)
+            .replace(/{{CONFIDENCE}}/g,clean(d.details.confidence || firstMatrix.confidence))
         }
         if(d.details.reason && newString.includes("REASON")) {
             newString = newString
-            .replace(/{{REASON}}/g, d.details.reason)
+            .replace(/{{REASON}}/g, clean(d.details.reason))
         }
         return newString
     }
@@ -155,6 +161,37 @@ module.exports = (s,config,lang) => {
     }
     const hasMatrices = (eventDetails) => {
         return (eventDetails.matrices && eventDetails.matrices.length > 0) && eventDetails.reason !== 'motion'
+    }
+    const evaluateBooleanTokens = (tokens) => {
+        let pos = 0
+        const peek = () => tokens[pos]
+        const advance = () => tokens[pos++]
+        const parseFactor = () => {
+            const token = peek()
+            if(token === '('){
+                advance()
+                const value = parseExpr()
+                if(peek() === ')')advance()
+                return value
+            }
+            advance()
+            return token === 'true'
+        }
+        const parseTerm = () => {
+            let value = parseFactor()
+            while(peek() === '&&'){ advance(); value = parseFactor() && value }
+            return value
+        }
+        function parseExpr(){
+            let value = parseTerm()
+            while(peek() === '||'){ advance(); value = parseTerm() || value }
+            return value
+        }
+        try{
+            return parseExpr() === true
+        }catch(err){
+            return false
+        }
     }
     const safeCompare = (a, op, b) => {
         switch(op){
@@ -287,13 +324,21 @@ module.exports = (s,config,lang) => {
                     s.userLog(d,{type:lang["Event Filter Error"],msg:lang.eventFilterErrorBrackets})
                 }
                 conditionArray.forEach(function(condition,number){
-                    validationString.push(`${allowBrackets && condition.openBracket ? '(' : ''}${condition.ok}${allowBrackets && condition.closeBracket ? ')' : ''}`);
+                    if(allowBrackets && condition.openBracket)validationString.push('(')
+                    validationString.push(condition.ok ? 'true' : 'false')
+                    if(allowBrackets && condition.closeBracket)validationString.push(')')
                     if(conditionArray.length-1 !== number){
-                        validationString.push(condition.next)
+                        validationString.push(condition.next === '||' ? '||' : '&&')
                     }
                 })
-                if(eval(validationString.join(' '))){
-                    if(haltState === '0' || !haltState){
+                if(evaluateBooleanTokens(validationString)){
+                    // `halt` is tri-state: '1' drops on success, '2' drops on failure,
+                    // '0'/unset never drops. Only '1' should suppress the actions here -
+                    // an earlier version tested `haltState === '0' || !haltState`, which
+                    // left '2' matching neither branch, so a filter set to "Drop on
+                    // Condition Failure" silently stopped applying its actions (including
+                    // record) whenever its condition succeeded.
+                    if(haltState !== '1'){
                         delete(haltState)
                         Object.keys(dFilter.actions).forEach(function(key){
                             var value = dFilter.actions[key]
@@ -419,14 +464,19 @@ module.exports = (s,config,lang) => {
                 matrices: eventDetails.matrices || [],
             },d.frame)
         }else if(
-            !motionFrameSaveTimeouts[timeoutId] &&
-            reason === 'motion' &&
-            monitorDetails.detector_motion_save_frame === '1' &&
+            d.saveFrame ||
             (
-              monitorDetails.detector_use_detect_object !== '1' ||
-              (monitorDetails.detector_use_detect_object === '1' && monitorDetails.detector_use_motion !== '1')
+                !motionFrameSaveTimeouts[timeoutId] && (
+                    reason === 'motion' &&
+                    monitorDetails.detector_motion_save_frame === '1' &&
+                    (
+                      monitorDetails.detector_use_detect_object !== '1' ||
+                      (monitorDetails.detector_use_detect_object === '1' && monitorDetails.detector_use_motion !== '1')
+                    )
+                )
             )
         ){
+            clearTimeout(motionFrameSaveTimeouts[timeoutId])
             motionFrameSaveTimeouts[timeoutId] = setTimeout(() => {
                 delete(motionFrameSaveTimeouts[timeoutId])
             },60000);
@@ -485,13 +535,15 @@ module.exports = (s,config,lang) => {
         }
 
         if(
-            filter.command || (
-                monitorDetails.detector_command_enable === '1' &&
-                !s.group[d.ke].activeMonitors[monitorId].detector_command
+            config.detectorCommandEnabled && (
+                filter.command || (
+                    monitorDetails.detector_command_enable === '1' &&
+                    !s.group[d.ke].activeMonitors[monitorId].detector_command
+                )
             )
         ){
             s.group[d.ke].activeMonitors[monitorId].detector_command = s.createTimeout('detector_command',s.group[d.ke].activeMonitors[monitorId],monitorDetails.detector_command_timeout,10)
-            var detector_command = addEventDetailsToString(d,monitorDetails.detector_command)
+            var detector_command = addEventDetailsToString(d,monitorDetails.detector_command,null,{shellSafe: true})
             if(detector_command === '')return
             exec(detector_command,{detached: true},function(err){
                 if(err){
@@ -503,10 +555,7 @@ module.exports = (s,config,lang) => {
 
         moveAssociatedMonitorPtzTargets(groupKey, monitorId)
 
-        for (var i = 0; i < s.onEventTriggerExtensions.length; i++) {
-            const extender = s.onEventTriggerExtensions[i]
-            await extender(d,filter,eventTime)
-        }
+        await s.runExtensionsForArrayAwaited('onEventTrigger', undefined, [d,filter,eventTime])
     }
     const saveEventBaseRecordingClip = async function({
         groupKey,
@@ -619,7 +668,7 @@ module.exports = (s,config,lang) => {
         const monitorConfig = s.group[groupKey].rawMonitorConfigurations[monitorId]
         const monitorDetails = monitorConfig.details
         const overlappingRecordings = monitorDetails.detector_record_overlap === '1'
-        if(monitorDetails.detector !== '1'){
+        if(monitorDetails.detector !== '1' && monitorDetails.onvif_events !== '1'){
             return
         }
         if(!overlappingRecordings && activeMonitor.eventBasedRecordingLastFileTime)fileTime = activeMonitor.eventBasedRecordingLastFileTime;
@@ -681,7 +730,7 @@ module.exports = (s,config,lang) => {
                 if(config.noEventBasedRecordingMaps)outputMap = '';
                 const secondsBefore = parseInt(monitorDetails.detector_buffer_seconds_before) || 5
                 let LiveStartIndex = parseInt(secondsBefore / 2 + 1)
-                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : autoAudio ? '' : `-c:a aac`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
+                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : autoAudio ? '' : `-c:a ${audioCodec}`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
                 s.debugLog(ffmpegCommand)
                 activeMonitor.eventBasedRecording[fileTime].process = spawn(
                     config.ffmpegDir,
@@ -776,7 +825,9 @@ module.exports = (s,config,lang) => {
                 s.deleteListOfVideos(d.videos)
             break;
             case'execute':
-                exec(d.execute,{detached: true})
+                exec(d.execute,{detached: true},function(err){
+                    if(err)s.debugLog(err)
+                })
             break;
         }
         s.onEventTriggerBeforeFilterExtensions.forEach(function(extender){
@@ -825,6 +876,18 @@ module.exports = (s,config,lang) => {
             delete(activeMonitor.sendingFromSecondaryDetectorOuput)
         },timeout || 5000)
     }
+    // A trigger can legitimately be discarded for several reasons, but every one of them
+    // used to be a bare `return` - so callers (and the HTTP trigger API) could not tell an
+    // accepted trigger from a discarded one, and the API answered "Trigger Successful"
+    // either way. Return a described result instead.
+    // Logging is debugLog-only on purpose: with built-in detection running at detector_fps
+    // these drops can occur many times a second, and writing them to userLog would flood the
+    // Logs table. The HTTP API surfaces the reason to its caller, which is where it matters.
+    const eventDropped = (d,reasonKey,defaultText) => {
+        const msg = lang[reasonKey] || defaultText || reasonKey
+        s.debugLog(`Event Ignored : ${msg}`,d.ke,d.mid || d.id)
+        return { ok: false, triggered: false, reason: reasonKey, msg: msg }
+    }
     const triggerEvent = async (d,forceSave) => {
         var didCountingAlready = false
         const groupKey = d.ke
@@ -842,11 +905,13 @@ module.exports = (s,config,lang) => {
             countObjects : false
         }
         if(!s.group[d.ke] || !s.group[d.ke].activeMonitors[d.id]){
-            return s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            return eventDropped(d,'No Monitor Found, Ignoring Request')
         }
         const monitorConfig = s.group[d.ke].rawMonitorConfigurations[d.id]
         if(!monitorConfig){
-            return s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            s.systemLog(lang['No Monitor Found, Ignoring Request'])
+            return eventDropped(d,'No Monitor Found, Ignoring Request')
         }
         const activeMonitor = s.group[d.ke].activeMonitors[d.id]
         const monitorDetails = monitorConfig.details
@@ -854,7 +919,7 @@ module.exports = (s,config,lang) => {
             extender(d,filter)
         })
         const passedEventFilters = checkEventFilters(d,activeMonitor.details,filter)
-        if(!passedEventFilters)return;
+        if(!passedEventFilters)return eventDropped(d,'Ignored by Event Filters');
         const eventTime = new Date()
         if(
             filter.addToMotionCounter &&
@@ -886,7 +951,9 @@ module.exports = (s,config,lang) => {
         }
         if(filter.useLock){
             const passedMotionLock = checkMotionLock(d,monitorDetails)
-            if(!passedMotionLock)return
+            // Dropped because another event was accepted within detector_lock_timeout
+            // (default 2000ms), or the 15s post-launch motion_lock is still held.
+            if(!passedMotionLock)return eventDropped(d,'Ignored : Motion Lock')
         }
         const thisHasMatrices = hasMatrices(eventDetails)
         if(thisHasMatrices){
@@ -894,7 +961,7 @@ module.exports = (s,config,lang) => {
                 var regions = s.group[monitorConfig.ke].activeMonitors[monitorConfig.mid].parsedObjects.cordsForObjectDetection
                 var matricesInRegions = isAtleastOneMatrixInRegion(regions,eventDetails.matrices)
                 eventDetails.matrices = matricesInRegions
-                if(matricesInRegions.length === 0)return;
+                if(matricesInRegions.length === 0)return eventDropped(d,'Ignored : No Objects in Region');
                 if(filter.countObjects && monitorDetails.detector_obj_count === '1' && monitorDetails.detector_obj_count_in_region === '1' && !didCountingAlready){
                     countObjects(d)
                 }
@@ -905,7 +972,7 @@ module.exports = (s,config,lang) => {
                 const trackedObjects = getTracked(trackerId)
                 const objectsThatMoved = getAllMatricesThatMoved(monitorConfig,trackedObjects)
                 setLastTracked(trackerId, trackedObjects)
-                if(objectsThatMoved.length === 0)return;
+                if(objectsThatMoved.length === 0)return eventDropped(d,'Ignored : Objects Did Not Move');
                 eventDetails.matrices = objectsThatMoved
             }else if(activeMonitor.lineCounter){
                 const trackerId = `${groupKey}${monitorId}`
@@ -941,6 +1008,7 @@ module.exports = (s,config,lang) => {
             details: eventDetails,
             doObjectDetection: d.doObjectDetection
         },`DETECTOR_${monitorConfig.ke}${monitorConfig.mid}`);
+        return { ok: true, triggered: true }
     }
     function convertRegionPointsToNewDimensions(regions, options) {
       const { fromWidth, fromHeight, toWidth, toHeight } = options;
@@ -1009,7 +1077,72 @@ module.exports = (s,config,lang) => {
         }
         return response
     }
+    // Search for Events. Unlike Videos (which has a denormalized `objects`
+    // text column - see getVideosBasedOnTagFoundInMatrixOfAssociatedEvent in
+    // libs/video/utils.js), Events only stores its matrices/tag data inside the
+    // JSON `details` blob, so this matches with a substring LIKE against that
+    // column directly. Same simple substring-match philosophy as the video
+    // search (not a strict JSON field match), so it matches both object tags and
+    // the event's `reason` (which is why the field is labelled "Objects or Reason").
+    // Reasons are not always lower case - ONVIF events store the topic name as the
+    // reason (e.g. "CellMotionDetector") - and Postgres LIKE is case sensitive,
+    // so ILIKE is used there to keep a typed "motion" matching regardless of DB.
+    // ILIKE is Postgres-only syntax, so it is limited to the clients knex maps to Postgres
+    // (see the `databaseType` table in INSTALL.md); MySQL and SQLite LIKE already ignore case.
+    const postgresClients = ['pg','postgres','postgresql','pgnative','cockroachdb','redshift'];
+    const likeOperator = postgresClients.indexOf(`${config.databaseType}`.toLowerCase()) > -1 ? 'ILIKE' : 'LIKE';
+    async function getEventsBasedOnTag({
+        groupKey,
+        monitorId,
+        startTime,
+        endTime,
+        searchQuery,
+        monitorRestrictions,
+        andOnly,
+        limit,
+    }){
+        const theSearches = searchQuery.split(',').map((query) => ['details',likeOperator,`%${query.trim()}%`]);
+        if(!andOnly){
+            theSearches.forEach((item,n) => {
+                if(n !== 0)theSearches[n] = ['or', ...item];
+            });
+        }
+        const whereQuery = [
+            ['ke','=',groupKey],
+        ];
+        if(monitorId)whereQuery.push(['mid','=',monitorId]);
+        if(startTime)whereQuery.push(['time','>=',startTime]);
+        if(endTime)whereQuery.push(['time','<=',endTime]);
+        if(monitorRestrictions && monitorRestrictions.length > 0)whereQuery.push(monitorRestrictions);
+        whereQuery.push([...theSearches]);
+        // '0' (or omitted with noLimit intent) means unbounded - knexQuery's own
+        // limit handling already skips .limit() for '0'/falsy, so pass it through
+        // as-is rather than coercing to a number here. A comma ("offset,limit",
+        // MySQL-style - the same convention knexQuery itself parses) must also
+        // survive untouched rather than being parseInt()'d down to just the offset.
+        const limitValue = limit === '0' ? '0' : (limit ? (`${limit}`.indexOf(',') !== -1 ? `${limit}` : parseInt(limit)) : 300);
+        const [response,countResponse] = await Promise.all([
+            s.knexQueryPromise({
+                action: "select",
+                columns: "*",
+                table: "Events",
+                orderBy: ['time','desc'],
+                limit: limitValue,
+                where: whereQuery,
+            }),
+            s.knexQueryPromise({
+                action: "count",
+                columns: "mid",
+                table: "Events",
+                where: whereQuery,
+            }),
+        ]);
+        (response.rows || []).forEach((row) => { row.details = s.parseJSON(row.details,{}) })
+        response.total = (countResponse.rows && countResponse.rows[0] && countResponse.rows[0]['count(`mid`)']) || 0
+        return response
+    }
     return {
+        getEventsBasedOnTag,
         getAssociatedMonitorPtzTargets,
         moveAssociatedMonitorPtzTargets,
         getObjectTagNotifyText,

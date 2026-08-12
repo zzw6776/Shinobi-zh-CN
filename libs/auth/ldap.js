@@ -1,4 +1,4 @@
-const LdapAuth = require('ldapauth-fork');
+const { Client } = require('ldapts');
 module.exports = (s,config,lang,app) => {
     const {
         basicAuth,
@@ -9,41 +9,49 @@ module.exports = (s,config,lang,app) => {
         bindLoginIdToUser,
         refreshLoginTokenAccessDate,
     } = require('./alternateLogins.js')(s,config,lang)
+    function escapeLdapFilterValue(value){
+        return `${value}`.replace(/[\\*()]/g, (c) => '\\' + c.charCodeAt(0).toString(16).padStart(2,'0'))
+    }
+    function ldapAttr(value){
+        return (Array.isArray(value) ? value[0] : value) || ''
+    }
     async function ldapAuth(params) {
-        return new Promise((resolve,reject) => {
-            const response = { ok: false }
-            let ldapUrl = params.url
-            ldapUrl = ldapUrl.startsWith('ldap://') ? ldapUrl : `ldap://${ldapUrl}`
-            const host = ldapUrl.split('://')[1]
-            const username = params.username// || 'ubuntu2'
-            const password = params.password// || 'moeiscool'
-            const bindDN = params.bindDN// || 'uid=ubuntu2,ou=People,dc=example,dc=com'
-            const searchBase = params.searchBase// || 'ou=People,dc=example,dc=com'
-            let searchFilter = params.searchFilter// || '(uid={{username}})'
-            searchFilter = searchFilter.startsWith('(') ? searchFilter : '(' + searchFilter
-            searchFilter = searchFilter.endsWith(')') ? searchFilter : searchFilter + ')'
-            const ldap = new LdapAuth({
-              url: ldapUrl,
-              bindDN: bindDN,
-              bindCredentials: password,
-              searchBase: searchBase,
-              searchFilter: searchFilter,
-              reconnect: true
+        const response = { ok: false }
+        let ldapUrl = params.url
+        ldapUrl = ldapUrl.startsWith('ldap://') ? ldapUrl : `ldap://${ldapUrl}`
+        const host = ldapUrl.split('://')[1]
+        const username = params.username// || 'ubuntu2'
+        const password = params.password// || 'moeiscool'
+        const bindDN = params.bindDN// || 'uid=ubuntu2,ou=People,dc=example,dc=com'
+        const searchBase = params.searchBase// || 'ou=People,dc=example,dc=com'
+        let searchFilter = params.searchFilter// || '(uid={{username}})'
+        searchFilter = searchFilter.startsWith('(') ? searchFilter : '(' + searchFilter
+        searchFilter = searchFilter.endsWith(')') ? searchFilter : searchFilter + ')'
+        const filter = searchFilter.replace(/\{\{username\}\}/g, escapeLdapFilterValue(username))
+        const client = new Client({ url: ldapUrl })
+        try{
+            if(bindDN)await client.bind(bindDN, password)
+            const { searchEntries } = await client.search(searchBase, {
+                scope: 'sub',
+                filter,
             })
-
-            ldap.authenticate(username, password, function(err, user) {
-                if(err){
-                    response.err = err
-                }else{
-                    response.ok = true
-                    response.user = {
-                        id: host + '_' + user.uidNumber,
-                        name: user.givenName + ' ' + user.sn,
-                    }
+            if(!searchEntries || searchEntries.length === 0){
+                response.err = lang['Not Authorized'] || 'LDAP user not found'
+            }else{
+                const user = searchEntries[0]
+                await client.bind(user.dn, password)
+                response.ok = true
+                response.user = {
+                    id: host + '_' + ldapAttr(user.uidNumber),
+                    name: ldapAttr(user.givenName) + ' ' + ldapAttr(user.sn),
                 }
-                resolve(response)
-            })
-        })
+            }
+        }catch(err){
+            response.err = err
+        }finally{
+            try{ await client.unbind() }catch(e){}
+        }
+        return response
     }
     async function loginWithLdapAccount(params) {
         const response = {ok: false, ldapSignedIn: false}

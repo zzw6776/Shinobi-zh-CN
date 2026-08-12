@@ -9,6 +9,7 @@ module.exports = function(s,config,lang,getSnapshot){
     } = require('../events/utils.js')(s,config,lang)
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
     // mailing with nodemailer
     try{
@@ -143,7 +144,7 @@ module.exports = function(s,config,lang,getSnapshot){
                             html: template.createFramework({
                                 title: lang.EventText1 + ' ' + d.currentTimestamp,
                                 subtitle: 'Shinobi Event',
-                                body: infoRows.join(''),
+                                body: infoRows.join('') + '<div style="margin-top:12px;"><a href="' + getAppDeepLink(d) + '">Open in Shinobi Go</a></div>',
                             }),
                             attachments: files || []
                         }, (error, info) => {
@@ -331,7 +332,7 @@ module.exports = function(s,config,lang,getSnapshot){
                 isFormGroupGroup: true,
                 name: `${lang.Email} (${lang['System Level']})`,
                 color: 'blue',
-                'section-class': 'h_det_input h_det_1',
+                'section-visibleWhen': { "h_det": "1" },
                 info: [
                     {
                        "name": "detail=detector_mail",

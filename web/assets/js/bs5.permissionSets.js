@@ -17,6 +17,7 @@ $(document).ready(function(e){
         { name: 'monitor_edit', label: lang['Can Edit Monitor'] },
         { name: 'video_view', label: lang['Can View Videos and Events'] },
         { name: 'video_delete', label: lang['Can Delete Videos and Events'] },
+        { name: 'control', label: lang['Can Control Monitor'] },
     ];
     function getPermissionSet(name){
         return new Promise((resolve) => {
@@ -32,6 +33,7 @@ $(document).ready(function(e){
             'monitor_edit': [],
             'video_view': [],
             'video_delete': [],
+            'control': [],
         };
         theForm.find(`[detail]`).each(function(n,v){
             var el = $(this);

@@ -41,7 +41,7 @@ module.exports = function(s,config,lang,app,io){
             break;
             case'cameraStart'://start or record camera
                 try{
-                    await s.camera(d.d.mode,d.d)
+                    await s.camera(d.mode,d.d)
                     let activeMonitor = s.group[d.d.ke].activeMonitors[d.d.mid]
                     // activeMonitor.masterSaysToStop = false
                     clearTimeout(activeMonitor.recordingChecker);
@@ -53,6 +53,7 @@ module.exports = function(s,config,lang,app,io){
         }
     }
     function initiateConnectionToMasterNode(){
+        const singleChildNodeKey = Array.isArray(config.childNodes.key) ? config.childNodes.key[0] : config.childNodes.key
         s.cx({
             f: 'init',
             port: config.port,
@@ -60,7 +61,7 @@ module.exports = function(s,config,lang,app,io){
             coreCount: s.coreCount,
             totalmem: s.totalmem / 1048576,
             availableHWAccels: config.availableHWAccels,
-            socketKey: config.childNodes.key
+            socketKey: singleChildNodeKey
         })
         clearInterval(checkHwInterval)
         checkHwInterval = setInterval(() => {

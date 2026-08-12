@@ -109,6 +109,7 @@ module.exports = function(s,config,lang,app,io){
                     const eventData = {
                         id: mid,
                         ke: ke,
+                        saveFrame: true,
                         details: {
                             confidence: 100,
                             name: filename,
@@ -141,10 +142,11 @@ module.exports = function(s,config,lang,app,io){
                         return;
                     }
                 }
-                function completeAction(){
+                function completeAction(saveFrame){
                     triggerEvent({
                         id: mid,
                         ke: ke,
+                        saveFrame,
                         details: {
                             confidence: 100,
                             name: filename,
@@ -160,7 +162,7 @@ module.exports = function(s,config,lang,app,io){
                         }else if(filename){
                             reason = filename
                         }
-                        completeAction()
+                        completeAction(true)
                     })
                 }else{
                     completeAction()
@@ -415,6 +417,7 @@ module.exports = function(s,config,lang,app,io){
                         triggerEvent({
                             id: monitorId,
                             ke: ke,
+                            saveFrame: true,
                             details: {
                                 confidence: 100,
                                 name: 'smtpServer',
