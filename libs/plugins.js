@@ -165,7 +165,14 @@ module.exports = function(s,config,lang,app,io){
     }
     s.sendToDetector = function(pluginName, data){
         const detector = s.connectedPlugins[pluginName];
-        if(detector)detector.tx(data);
+        // A monitor can name a detector that is not (or is no longer) connected - a plugin
+        // renamed, removed, or simply not started yet. Dropping that silently is
+        // indistinguishable from object detection being broken, so say so.
+        if(!detector || detector.plugged !== true){
+            s.debugLog(`sendToDetector : "${pluginName}" is not connected, frame dropped. Connected detectors: ${JSON.stringify(s.detectorPluginArray)}`)
+            return
+        }
+        detector.tx(data);
     }
     s.sendDetectorInfoToClient = function(data,txFunction){
         s.detectorPluginArray.forEach(function(name){
@@ -431,7 +438,13 @@ module.exports = function(s,config,lang,app,io){
     /**
     * API : Get List of Connected Plugins
     */
-    app.get(config.webPaths.apiPrefix+':auth/plugins/:ke/list', async (req,res) => {
+    // `/connected`, not `/list`. The Plugin Manager registers `plugins/:ke/list` on the same
+    // prefix (see libs/sharedRoutes.js) and, because superUser.js is required above, it wins
+    // the match - this handler was never reached and the Monitor Settings detector picker
+    // came back empty. It is also deliberately plain `s.auth`: choosing which detector a
+    // monitor sends frames to is part of editing a monitor, so it must not require
+    // `use_plugin_manager` the way the Plugin Manager's own routes do.
+    app.get(config.webPaths.apiPrefix+':auth/plugins/:ke/connected', async (req,res) => {
         s.auth(req.params, async (resp) => {
             s.closeJsonResponse(res,{
                 ok: true,

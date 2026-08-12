@@ -709,14 +709,23 @@ function drawInputMapSelectorHtml(options,parent){
 }
 function getPluginsList(monitorConfig){
     return new Promise((resolve) => {
-        const chosenDetectors = safeJsonParse(monitorConfig.details).detectors_selected || [];
-        $.get(getApiPrefix('plugins') + '/list',function(data){
+        var chosenDetectors = safeJsonParse(monitorConfig.details).detectors_selected || [];
+        // Stored as an array by the multi-select, but a hand written config (or the API) can
+        // leave a plain comma separated string here.
+        if(!(chosenDetectors instanceof Array))chosenDetectors = `${chosenDetectors}`.split(',');
+        chosenDetectors = chosenDetectors.map((item) => `${item}`.trim()).filter((item) => !!item)
+        // `all` is a sentinel, not a plugin name, so it must never be measured against the
+        // connected plugins - it has no plugin to match and was being rendered a second time
+        // as "all (Disconnected)", selected, right underneath the real "All (Default)".
+        const wantsAll = chosenDetectors.length === 0 || chosenDetectors.includes('all')
+        $.get(getApiPrefix('plugins') + '/connected',function(data){
             var plugins = data.plugins || {};
             var pluginNames = Object.keys(plugins)
-            var disconnectedPlugins = chosenDetectors.filter(item => !pluginNames.includes(item));
+            var disconnectedPlugins = chosenDetectors.filter(item => item !== 'all' && !pluginNames.includes(item));
             var html = createOptionHtml({
                 value: 'all',
-                label: `${lang.All} (${lang.Default})`
+                label: `${lang.All} (${lang.Default})`,
+                selected: wantsAll,
             });
             $.each(plugins, function(name, pluginInfo){
                 html += createOptionHtml({
