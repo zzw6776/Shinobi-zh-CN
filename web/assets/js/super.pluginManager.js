@@ -263,17 +263,21 @@ $(document).ready(function(){
                         <td><small>${module.created}</small></td>
                         <td><small>${module.lastModified}</small></td>
                         <td class="plugin-status-badge">${buildStatusBadge(module)}</td>
-                        <td class="text-end plugin-actions">
-                            <a class="btn btn-sm btn-default" plugin-manager-action="detailsToggle" title="${lang['Output'] || 'Output'}"><i class="fa fa-terminal"></i></a>
-                            <a class="btn btn-sm btn-default" plugin-manager-action="readmeToggle">${lang.Notes}</a>
-                            ${module.hasInstaller ? `
-                                <a class="btn btn-sm btn-info" plugin-manager-action="install">${lang['Run Installer']}</a>
-                                <a class="btn btn-sm btn-danger" style="display:none" plugin-manager-action="cancelInstall">${lang['Stop']}</a>
-                            ` : ''}
-                            ${addCmdButtons}
-                            <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
-                            <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
-                            <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
+                        <td class="text-end plugin-actions text-center">
+                            <div class="mb-2">
+                                <a class="btn btn-sm btn-default" plugin-manager-action="detailsToggle" title="${lang['Output'] || 'Output'}"><i class="fa fa-terminal"></i></a>
+                                <a class="btn btn-sm btn-default" plugin-manager-action="readmeToggle">${lang.Notes}</a>
+                                ${module.hasInstaller ? `
+                                    <a class="btn btn-sm btn-info" plugin-manager-action="install">${lang['Run Installer']}</a>
+                                    <a class="btn btn-sm btn-danger" style="display:none" plugin-manager-action="cancelInstall">${lang['Stop']}</a>
+                                ` : ''}
+                                ${addCmdButtons}
+                            </div>
+                            <div>
+                                <a class="btn btn-sm btn-default" plugin-manager-action="status">${!module.config.enabled ? lang.Enable : lang.Disable}</a>
+                                <a class="btn btn-sm btn-danger" plugin-manager-action="delete">${lang.Delete}</a>
+                                <a class="btn btn-sm btn-warning" plugin-manager-action="editConfig">${lang[`Edit Configuration`]}</a>
+                            </div>
                         </td>
                     </tr>
                     <tr class="plugin-docker-row" package-name="${module.name}"${dockerSectionHtml ? '' : ' style="display:none"'}>
