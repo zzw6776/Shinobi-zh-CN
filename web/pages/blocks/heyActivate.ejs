@@ -9,6 +9,11 @@
         <div class="form-group mb-0">
         	<button class="btn btn-sm btn-round btn-block btn-success" type="submit"><%- lang.Save %></button>
         </div>
+        <%# Shown whenever a key is stored, not only when it validated: a key that fails to
+            activate is precisely the one you need to be able to remove. %>
+        <div class="form-group mb-0 mt-2 remove-license-holder" <%- (config.userHasSubscribed || config.subscriptionId) ? '' : 'style="display:none"' %>>
+        	<a class="btn btn-sm btn-round btn-block btn-danger remove-license"><i class="fa fa-times"></i> <%- lang['Remove License'] %></a>
+        </div>
     </div>
 </form>
 <!-- <style>
@@ -25,14 +30,30 @@
     }
 </style> -->
 <script>
+    // This card lives in the System Control block, which is hosted by the Superuser panel and
+    // by the dashboard. That block publishes the right API prefix for whichever page it is on.
+    function systemApiPrefix(){
+        return (window.systemControlApiPrefixes || {}).system
+    }
     $(document).ready(function(){
         var heyActivateCard = $('#hey-activate')
         var heyActivateCardSubmit = heyActivateCard.find('[type="submit"]')
+        var removeLicenseHolder = heyActivateCard.find('.remove-license-holder')
+        // Called once an activation attempt has finished, whatever the outcome. The panel
+        // reports camera limit, expiry and isActivated, all of which the attempt can change,
+        // so a failed or refused attempt needs the refresh just as much as a successful one.
+        function reloadSystemInfo(){
+            if(typeof drawSystemInfo === 'function')drawSystemInfo()
+        }
+        function setActivatedState(isActivated,hasKeyStored){
+            heyActivateCard.find('.card-header').html(isActivated ? lang.Activated : lang['Not Activated'])
+            removeLicenseHolder.toggle(!!(isActivated || hasKeyStored))
+        }
         heyActivateCard.submit(function(e){
             e.preventDefault()
             var formValues = $(this).serializeObject()
             heyActivateCardSubmit.html(`<i class="fa fa-spinner fa-pulse"></i>`)
-            $.post(superApiPrefix + $user.sessionKey + '/system/activate',{
+            $.post(systemApiPrefix() + '/activate',{
                 subscriptionId: formValues.subscriptionId
             },function(data){
                 var noticeTitle = lang['Not Activated']
@@ -45,13 +66,69 @@
                     // heyActivateCard.find('[name="subscriptionId"]').val('')
                 }
                 heyActivateCardSubmit.html(lang.Save)
-                heyActivateCard.find('.card-header').html(noticeTitle)
+                // A key was just stored whether or not it validated, so keep Remove available.
+                setActivatedState(data.ok,!!formValues.subscriptionId)
                 new PNotify({
                     title: noticeTitle,
                     text: noticeText,
                     type: noticeType
                 })
-                drawSystemInfo()
+                reloadSystemInfo()
+            }).fail(function(){
+                // The request itself failed, so the button would otherwise spin forever and
+                // the panel would keep showing pre-attempt values.
+                heyActivateCardSubmit.html(lang.Save)
+                new PNotify({
+                    title: lang['Not Activated'],
+                    text: lang['Action Failed'],
+                    type: 'error'
+                })
+                reloadSystemInfo()
+            })
+            return false
+        })
+        heyActivateCard.find('.remove-license').click(function(e){
+            e.preventDefault()
+            $.confirm.create({
+                title: lang['Remove License'],
+                body: lang.removeLicenseWarning,
+                clickOptions: {
+                    class: 'btn-danger',
+                    title: lang['Remove License'],
+                },
+                clickCallback: function(){
+                    $.post(systemApiPrefix() + '/deactivate',{},function(data){
+                        if(!data || !data.ok){
+                            new PNotify({
+                                title: lang['Action Failed'],
+                                text: (data && data.msg) || lang['Action Failed'],
+                                type: 'error'
+                            })
+                            reloadSystemInfo()
+                            return
+                        }
+                        heyActivateCard.find('[name="subscriptionId"]').val('')
+                        setActivatedState(data.userHasSubscribed,false)
+                        var noticeText = lang.licenseRemovedText
+                        if(data.otherKeysPresent && data.otherKeysPresent.length > 0){
+                            noticeText += ` (${lang.licenseRemovedOtherKeys} ${data.otherKeysPresent.join(', ')})`
+                        }
+                        new PNotify({
+                            title: lang['Not Activated'],
+                            text: noticeText,
+                            type: 'warning',
+                            hide: false,
+                        })
+                        reloadSystemInfo()
+                    }).fail(function(){
+                        new PNotify({
+                            title: lang['Action Failed'],
+                            text: lang['Action Failed'],
+                            type: 'error'
+                        })
+                        reloadSystemInfo()
+                    })
+                }
             })
             return false
         })

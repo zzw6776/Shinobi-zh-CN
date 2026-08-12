@@ -3,6 +3,7 @@ const FormData = require('form-data');
 module.exports = function(s,config,lang,getSnapshot){
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
     const allowedSend = {}
     function replaceQueryStringValues(webhookEndpoint,data){
@@ -100,7 +101,9 @@ module.exports = function(s,config,lang,getSnapshot){
         const userDetails = s.parseJSON(user.details);
         const groupKey = user.ke;
         //telegrambot
-        let webhookEndpoint = s.group[groupKey].init.global_webhook_url;
+        // read from userDetails (passed in), not s.group[ke].init — init is populated AFTER
+        // loadGroupAppExtensions run in loadGroupApps, so init.global_webhook_url is still empty here
+        let webhookEndpoint = userDetails.global_webhook_url || s.group[groupKey].init.global_webhook_url;
         if(!webhookEndpoint){
             allowedSend[groupKey] = false
         }else{
@@ -121,7 +124,8 @@ module.exports = function(s,config,lang,getSnapshot){
                     description: lang.EventText1+' '+d.currentTimestamp,
                     ke: d.ke,
                     mid: d.id,
-                    eventDetails: d.details
+                    eventDetails: d.details,
+                    deepLink: getAppDeepLink(d)
                 },[
                     {
                         type: 'photo',
@@ -137,7 +141,8 @@ module.exports = function(s,config,lang,getSnapshot){
                     description: lang.EventText1+' '+d.currentTimestamp,
                     ke: d.ke,
                     mid: d.id,
-                    eventDetails: d.details
+                    eventDetails: d.details,
+                    deepLink: getAppDeepLink(d)
                 },[],d.ke)
             }
         }
@@ -279,14 +284,14 @@ module.exports = function(s,config,lang,getSnapshot){
                "name": "detail=global_webhook_url",
                "placeholder": "http://your-webhook-point/onEvent/{{INNER_EVENT_TITLE}}?info={{INNER_EVENT_INFO}}",
                "field": lang["Webhook URL"],
-               "form-group-class":"u_global_webhook_input u_global_webhook_1",
+               "form-group-visibleWhen":{ "u_global_webhook": "1" },
            },
            {
                 hidden: true,
                 "name": "detail=global_webhook_method",
                "field": lang['Call Method'],
                "default": "GET",
-               "form-group-class":"u_global_webhook_input u_global_webhook_1",
+               "form-group-visibleWhen":{ "u_global_webhook": "1" },
                "fieldType": "select",
                "possible": [
                    {

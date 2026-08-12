@@ -1,0 +1,15 @@
+<%# Dashboard Plugin Manager. Only rendered for accounts a Superuser granted the permission;
+    the markup and behaviour are shared with the Superuser panel's tab, including the
+    #superPluginManager enclosure id the shared script scopes itself to. %>
+<% if($user.details.use_plugin_manager === '1'){ %>
+    <main class="container page-tab pt-3" id="tab-pluginManager">
+        <div id="superPluginManager">
+            <script>
+                $(document).ready(function(){
+                    window.pluginManagerApiPrefix = getApiPrefix('plugins')
+                })
+            </script>
+            <%- include('../superPluginManager'); %>
+        </div>
+    </main>
+<% } %>

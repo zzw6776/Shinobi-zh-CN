@@ -7,14 +7,42 @@ function generateId(x){
         t += p.charAt(Math.floor(Math.random() * p.length));
     return t;
 }
+// `visible-when` rules, same contract as applyVisibleWhen in bs5.dashboard-base.js (which
+// the login page does not load). Each rule is evaluated on its own against the current form
+// values, so no selector can hide an element another selector still wants shown.
 function onSelectorChange(el){
     try{
-        var theParam = el.attr('selector')
-        var theValue = el.val()
-        var theSelected = el.find('option:selected').text()
-        loginForm.find(`.${theParam}_input`).hide()
-        loginForm.find(`.${theParam}_${theValue}`).show()
-        loginForm.find(`.${theParam}_text`).text(theSelected)
+        loginForm.find(`.${el.attr('selector')}_text`).text(el.find('option:selected').text())
+        var cache = {}
+        loginForm.find('[visible-when]').each(function(){
+            var target = $(this)
+            var rule
+            try{
+                rule = JSON.parse(target.attr('visible-when'))
+            }catch(err){
+                return console.log('Bad visible-when rule',target.attr('visible-when'),err)
+            }
+            if(!(rule instanceof Array))rule = [rule]
+            var shouldShow = rule.some(function(group){
+                return Object.keys(group).every(function(key){
+                    if(cache[key] === undefined){
+                        var field = loginForm.find(`[selector="${key}"],[name="${key}"]`).first()
+                        cache[key] = field.length > 0 ? `${field.val()}` : null
+                    }
+                    if(cache[key] === null)return false
+                    var accepted = group[key]
+                    if(!(accepted instanceof Array))accepted = [accepted]
+                    return accepted.some(function(oneValue){
+                        return `${oneValue}` === cache[key]
+                    })
+                })
+            })
+            if(shouldShow){
+                target.show()
+            }else{
+                target.hide()
+            }
+        })
     }catch(err){
         console.log(err)
     }

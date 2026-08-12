@@ -88,6 +88,7 @@ $(document).ready(function(e){
     var dateSelector = theEnclosure.find('.date_selector')
     var fileBinDrawArea = $('#fileBin_draw_area')
     var fileBinPreviewArea = $('#fileBin_preview_area')
+    var fileBinPreviewBlock = $('#fileBin_preview_block')
     loadDateRangePicker(dateSelector,{
         onChange: function(start, end, label) {
             drawFileBinViewElements()
@@ -112,7 +113,10 @@ $(document).ready(function(e){
         })
     }
     function drawPreviewVideo(href){
-        fileBinPreviewArea.html(`<video class="video_video" style="width:100%" autoplay controls preload loop src="${href}"></video>`)
+        // The player block starts hidden so an empty card isn't sitting between the search
+        // bar and the table before anything has been picked.
+        fileBinPreviewBlock.show()
+        fileBinPreviewArea.html(`<video class="video_video" style="width:100%;max-height:60vh" autoplay controls preload loop src="${href}"></video>`)
     }
     function archiveFile(video,unarchive){
         return archiveVideo(video,unarchive,true)
@@ -187,6 +191,19 @@ $(document).ready(function(e){
     theEnclosure
     .on('click','.refresh-data',function(e){
         e.preventDefault()
+        drawFileBinViewElements()
+        return false;
+    })
+    .on('click','.fileBin_quick_daterange',function(e){
+        e.preventDefault()
+        var el = $(this)
+        var hours = el.attr('data-hours')
+        var days = el.attr('data-days')
+        var amount = hours ? parseInt(hours) : parseInt(days)
+        var unit = hours ? 'hours' : 'days'
+        var picker = dateSelector.data('daterangepicker')
+        picker.setStartDate(moment().subtract(amount,unit))
+        picker.setEndDate(moment())
         drawFileBinViewElements()
         return false;
     })

@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=node:20-bookworm-slim
+ARG BASE_IMAGE=node:22-bookworm-slim
 FROM ${BASE_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive \
@@ -47,14 +47,18 @@ RUN apt-get install -y \
         make \
         g++ \
         gcc \
+        tini \
         tar
 
 RUN sh /home/Shinobi/Docker/install_ffmpeg.sh
 RUN sh /home/Shinobi/Docker/install_mariadb.sh
 RUN sh /home/Shinobi/Docker/install_nodejs.sh
 
-RUN chmod 777 /home/Shinobi
-RUN chmod -R 777 /home/Shinobi/plugins
+# security: was chmod 777 / chmod -R 777 (world-writable) — the container runs everything as
+# root already, so nothing needs the world-write bit; 777 only added risk (any locally-running
+# process, or an RCE bug elsewhere, could rewrite Shinobi's own source / plugin files)
+RUN chmod 755 /home/Shinobi
+RUN chmod -R 755 /home/Shinobi/plugins
 RUN chmod -f +x /home/Shinobi/Docker/init.sh
 
 RUN sed -i -e 's/\r//g' /home/Shinobi/Docker/init.sh
@@ -67,6 +71,9 @@ VOLUME ["/var/lib/mysql"]
 
 EXPOSE 8080 443 21 25
 
-ENTRYPOINT ["/home/Shinobi/Docker/init.sh"]
+# Run under tini as PID 1 so orphaned/reparented child processes (e.g. ffmpeg
+# left behind when a camera thread is force-killed) are reaped instead of
+# piling up as <defunct> zombies over time. (#461)
+ENTRYPOINT ["/usr/bin/tini", "--", "/home/Shinobi/Docker/init.sh"]
 
 CMD [ "pm2-docker", "/home/Shinobi/Docker/pm2.yml" ]

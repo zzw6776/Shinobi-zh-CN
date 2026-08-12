@@ -2,6 +2,16 @@ const fs = require('fs');
 const url = require('url');
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
+function isChildNodeKeyValid(acceptedKeys, socketKey){
+    if(!socketKey) return false
+    const keys = Array.isArray(acceptedKeys) ? acceptedKeys : [String(acceptedKeys)]
+    return keys.some((k) => {
+        const a = Buffer.from(k)
+        const b = Buffer.from(socketKey)
+        return a.length === b.length && crypto.timingSafeEqual(a, b)
+    })
+}
 const express = require('express');
 const { createWebSocketServer, createWebSocketClient } = require('./basic/websocketTools.js')
 module.exports = function(s,config,lang,app,io){
@@ -63,7 +73,7 @@ module.exports = function(s,config,lang,app,io){
                     client.terminate()
                     return
                 }
-                const childNodeKeyAccepted = config.childNodes.key.indexOf(data.socketKey) > -1;
+                const childNodeKeyAccepted = isChildNodeKeyValid(config.childNodes.key, data.socketKey);
                 if(!client.shinobiChildAlreadyRegistered && data.f === 'init' && childNodeKeyAccepted){
                     initiateDataConnection(client,req,data,connectionId);
                     childNodesConnectionIndex[connectionId] = client;
@@ -86,7 +96,7 @@ module.exports = function(s,config,lang,app,io){
         childNodeFileRelay.on('connection', function (client, req) {
             function onAuthenticate(d){
                 const data = JSON.parse(d);
-                const childNodeKeyAccepted = config.childNodes.key.indexOf(data.socketKey) > -1;
+                const childNodeKeyAccepted = isChildNodeKeyValid(config.childNodes.key, data.socketKey);
                 if(!client.alreadyInitiated && data.fileType && childNodeKeyAccepted){
                     client.alreadyInitiated = true;
                     client.removeListener('message',onAuthenticate)

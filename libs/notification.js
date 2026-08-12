@@ -25,4 +25,5 @@ module.exports = function(s,config,lang){
     require('./notifications/pushover.js')(s,config,lang,getSnapshot)
     require('./notifications/mqtt.js')(s,config,lang,getSnapshot)
     require('./notifications/matrix.js')(s,config,lang,getSnapshot)
+    require('./notifications/fcm.js')(s,config,lang,getSnapshot)
 }

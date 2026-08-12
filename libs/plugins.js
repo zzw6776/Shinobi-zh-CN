@@ -1,4 +1,5 @@
 var socketIOclient = require('socket.io-client');
+var fs = require('fs');
 module.exports = function(s,config,lang,app,io){
     const currentPluginCpuUsage = {}
     const currentPluginGpuUsage = {}
@@ -58,6 +59,7 @@ module.exports = function(s,config,lang,app,io){
         s.connectedDetectorPlugins[d.plug] = newDetector
         s.resetDetectorPluginArray()
         s.runExtensionsForArray('onPluginConnected', null, [d.plug, newDetector])
+        s.tx({f:'plugin-info',process:'connection-status',module:d.plug,status:'connected',plugin:newDetector},'PLUGINMANAGER')
     }
     s.removeDetectorPlugin = function(name){
         const theDetector = Object.assign({}, s.connectedDetectorPlugins[name])
@@ -67,6 +69,7 @@ module.exports = function(s,config,lang,app,io){
         delete(s.connectedDetectorPlugins[name])
         s.resetDetectorPluginArray(name)
         s.runExtensionsForArray('onPluginDisconnected', null, [name, theDetector])
+        s.tx({f:'plugin-info',process:'connection-status',module:name,status:'disconnected',plugin:theDetector},'PLUGINMANAGER')
     }
     s.resetDetectorPluginArray = function(){
         let pluginArray = []
@@ -327,17 +330,59 @@ module.exports = function(s,config,lang,app,io){
             currentPluginFrameProcessingCount[pluginName] = count
         })
     }
+    // config.pluginKeys is the copy loaded at startup, so a key added to conf.json by hand
+    // used to need a restart before the plugin could connect. conf.json is re-read here
+    // instead, at the one point it matters: a plugin connecting. That is once per plugin,
+    // not per frame, so it is a single read of a small, page cached file with nothing held
+    // open in between.
+    const readPluginKeysFromDisk = function(){
+        // A key generated for a Docker plugin lives in memory until it is written. Reading
+        // over it in that window would leave the plugin unable to ever authenticate.
+        if(s.pluginKeysArePendingWrite)return false
+        try{
+            const onDisk = JSON.parse(fs.readFileSync(s.location.config,'utf8'))
+            const keysOnDisk = onDisk.pluginKeys
+            if(!keysOnDisk || !(keysOnDisk instanceof Object))return false
+            // Replaced rather than merged, so a key deleted from conf.json stops working
+            // just as promptly as an added one starts.
+            const changed = JSON.stringify(config.pluginKeys) !== JSON.stringify(keysOnDisk)
+            config.pluginKeys = keysOnDisk
+            return changed
+        }catch(err){
+            // A half written or malformed conf.json must not take the keys already in memory
+            // down with it - connected plugins would start failing on the next message.
+            return false
+        }
+    }
+    // Only called for a plugin that is connecting.
+    const hasValidPluginKey = function(d){
+        readPluginKeysFromDisk()
+        const expectedKey = config.pluginKeys[d.plug]
+        const hasExpectedKey = expectedKey !== undefined && expectedKey !== null && expectedKey !== ''
+        const hasSentKey = d.pluginKey !== undefined && d.pluginKey !== null && d.pluginKey !== ''
+        const isValid = hasExpectedKey && hasSentKey && expectedKey === d.pluginKey
+        if(!isValid){
+            if(!hasExpectedKey){
+                s.systemLog(`Plugin "${d.plug}" tried to connect, but there is no pluginKeys."${d.plug}" configured in conf.json.`)
+            }else if(!hasSentKey){
+                s.systemLog(`Plugin "${d.plug}" tried to connect without sending a pluginKey.`)
+            }else{
+                s.systemLog(`Plugin "${d.plug}" tried to connect with a pluginKey that does not match conf.json's pluginKeys."${d.plug}".`)
+            }
+        }
+        return isValid
+    }
     var onWebSocketConnection = function(cn){
         cn.on('ocv',function(d){
             if(!cn.pluginEngine && d.f === 'init'){
-                if(config.pluginKeys[d.plug] === d.pluginKey){
+                if(hasValidPluginKey(d)){
                     s.pluginInitiatorSuccess("client",d,cn)
                     if(config.detectorPluginsCluster)addCpuUsageHandler(cn,d.plug)
                 }else{
                     s.pluginInitiatorFail("client",d,cn)
                 }
             }else{
-                if(config.pluginKeys[d.plug] === d.pluginKey){
+                if(cn.pluginEngine){
                     s.pluginEventController(d)
                     if(config.detectorPluginsCluster)addCpuUsageHandler(cn,d.plug)
                 }else{

@@ -94,9 +94,8 @@ module.exports = function(s,config,lang){
     function loadGroupApp(e){
         // e = user
         var userDetails = JSON.parse(e.details)
-        if(userDetails.mnt_use_global === '1' && config.cloudUploaders && config.cloudUploaders.WasabiHotCloudStorage){
-            userDetails = Object.assign(userDetails,config.cloudUploaders.mountedDrive)
-        }
+        // Forced (Superuser configured) credentials are merged into the account details
+        // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
         //Mounted Drive Storage
         if(
            !s.group[e.ke].mnt &&
@@ -181,11 +180,15 @@ module.exports = function(s,config,lang){
                 time: insertQuery.time,
                 end: k.endTime,
             }, sourceFilePath, saveLocation);
-            var fileStream = createReadStream(sourceFilePath);
-            const response = fileInFilesystem ? { ok: true } : await uploadObject(groupKey, {
-                filePath: saveLocation,
-                readStream: fileStream,
-            });
+            let response = { ok: true }
+            if(!fileInFilesystem){
+                const fileStream = createReadStream(sourceFilePath)
+                fileStream.on('error', (err) => s.debugLog(err))
+                response = await uploadObject(groupKey, {
+                    filePath: saveLocation,
+                    readStream: fileStream,
+                })
+            }
             if(response.err){
                 s.userLog(e,{type:lang['Mounted Drive Storage Upload Error'],msg:response.err})
             }
@@ -368,26 +371,31 @@ module.exports = function(s,config,lang){
                 }
                 let listing = spawn('sh',[executeScriptPath])
                 const onError = options.onError ? options.onError : s.systemLog
-                const onExit = async () => {
-                    try {
-                        listing.kill('SIGTERM')
-                        await fs.rm(executeScriptPath)
-                    } catch(err) {
+                let cleanedUp = false
+                let stallTimeout = null
+                const cleanup = () => {
+                    if(cleanedUp)return
+                    cleanedUp = true
+                    clearTimeout(stallTimeout)
+                    try{
+                        if(listing && !listing.killed && listing.exitCode === null){
+                            listing.kill('SIGTERM')
+                        }
+                    }catch(err){
                         s.debugLog(err)
                     }
-                    delete(listing)
+                    fs.rm(executeScriptPath).catch((err) => s.debugLog(err))
                 }
                 const onFinish = async () => {
-                    if(!finished){
-                        for (let i = 0; i < filePathLines.length; i++) {
-                            await processLine(filePathLines[i], i, filePathLines.length)
-                        }
-                        finished = true
-                        response.ok = true
-                        response.orphanedFilesCount = orphanedFilesCount
-                        resolve(response)
-                        onExit()
+                    if(finished)return
+                    finished = true
+                    for (let i = 0; i < filePathLines.length; i++) {
+                        await processLine(filePathLines[i], i, filePathLines.length)
                     }
+                    response.ok = true
+                    response.orphanedFilesCount = orphanedFilesCount
+                    cleanup()
+                    resolve(response)
                 }
                 const processLine = async (filePath, i, foundNumber) => {
                     let filename = filePath.split('/').pop().trim()
@@ -398,20 +406,30 @@ module.exports = function(s,config,lang){
                         }
                     }
                 }
-                let checkInactivityTimeout = null
-                const checkInactivity = () => {
-                    clearTimeout(checkInactivityTimeout)
-                    checkInactivityTimeout = setTimeout(() => {
-                        if(finished) return
+                const resetStall = () => {
+                    clearTimeout(stallTimeout)
+                    stallTimeout = setTimeout(() => {
+                        if(finished)return
+                        s.debugLog(`Orphan scan stalled for ${groupKey}-${monitorId}, stopping`)
                         onFinish()
-                    }, 2000)
+                    }, config.orphanedMountScanTimeout || 30000)
                 }
-                checkInactivity()
-                listing.stdout.on('data', async (d) => {
+                resetStall()
+                listing.stdout.on('data', (d) => {
                     filePathLines.push(...d.toString().split('\n').filter(item => !!item))
-                    checkInactivity()
+                    resetStall()
                 })
                 listing.stderr.on('data', d => onError(d.toString()))
+                listing.on('close', () => { onFinish() })
+                listing.on('error', (err) => {
+                    s.debugLog(err)
+                    cleanup()
+                    if(!finished){
+                        finished = true
+                        response.err = `${err}`
+                        resolve(response)
+                    }
+                })
             } else {
                 resolve(response)
             }
@@ -485,6 +503,9 @@ module.exports = function(s,config,lang){
        "name": lang["Mounted Drive Storage"],
        "color": "forestgreen",
        "uploaderId": 'mnt',
+       "enableFlag": 'use_mnt',
+       "globalFlag": 'mnt_use_global',
+       "globalConfigKey": 'mountedDrive',
        "info": [
            {
               "name": "detail=mnt_save",

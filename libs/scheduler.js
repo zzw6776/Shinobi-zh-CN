@@ -34,88 +34,57 @@ module.exports = function(s,config,lang,app,io){
         }
         s.runExtensionsForArray('onScheduleUpdated', null, [schedule.ke, schedule, changeType])
     }
-    //check time in schedule
-    var checkTimeAgainstSchedule = function(schedule,callback){
-        var start = schedule.start
-        var end = schedule.end
-        if(!callback)callback = function(){}
+    // "HH:mm" as minutes since midnight, or null when unusable
+    const parseScheduleTimeToMinutes = function(value){
+        if(!value)return null
+        const parts = `${value}`.split(':')
+        const hours = parseInt(parts[0])
+        const minutes = parseInt(parts[1])
+        if(isNaN(hours) || isNaN(minutes))return null
+        return (hours * 60) + minutes
+    }
+    // The wall clock in the schedule's own timezone. `details.timezone` is minutes from UTC
+    // (see config.timeZones), so the UTC instant is shifted by it and read back as UTC parts.
+    const getScheduleZoneNow = function(schedule,now){
+        const zoneTime = new Date((now || new Date()).getTime() + ((schedule.timezoneOffset || 0) * 60000))
+        return {
+            minutesOfDay: (zoneTime.getUTCHours() * 60) + zoneTime.getUTCMinutes(),
+            day: zoneTime.getUTCDay(),
+        }
+    }
+    const isDayScheduled = function(schedule,day){
+        const days = schedule.details.days
+        if(!days)return true // no day selection at all means every day
+        return days.indexOf(day) > -1
+    }
+    // A schedule whose end is at or before its start runs past midnight, e.g. 22:00 to 01:00.
+    // The selected days are the days the window *opens* on, so the portion after midnight
+    // belongs to the previous day's entry - a Sunday 22:00-01:00 schedule is active from
+    // Sunday 22:00 until Monday 01:00. Comparing two same-day timestamps, as this used to,
+    // made every such window empty and the schedule never fired.
+    const isScheduleActive = function(schedule,now){
         try{
-            if(
-                start
-            ){
-                var checkStartTime = new Date()
-                var startSplit = start.split(':')
-                var startHour = parseInt(startSplit[0])
-                var startMin = parseInt(startSplit[1])
-                checkStartTime.setHours(startHour)
-                checkStartTime.setMinutes(startMin - schedule.timezoneOffset)
-                if(end){
-                    var checkEndTime = new Date()
-                    var endSplit = end.split(':')
-                    var endHour = parseInt(endSplit[0])
-                    var endMin = parseInt(endSplit[1])
-                    checkEndTime.setHours(endHour)
-                    checkEndTime.setMinutes(endMin - schedule.timezoneOffset)
-                }
-                var currentDate = new Date()
-                currentDate.setMinutes(currentDate.getMinutes() - schedule.timezoneOffset)
-                if(
-                    (
-                        currentDate >= checkStartTime &&
-                        currentDate <= checkEndTime
-                    ) ||
-                    currentDate >= checkStartTime && !end
-                ){
-                    callback()
-                    return true
-                }else{
-                    callback({
-                        currentDate : currentDate,
-                        startTime : checkStartTime,
-                        endTime : checkEndTime
-                    })
-                }
-            }else{
-                callback({}) //no start time selected, failed
+            const start = parseScheduleTimeToMinutes(schedule.start)
+            if(start === null)return false
+            const end = parseScheduleTimeToMinutes(schedule.end)
+            const zoneNow = getScheduleZoneNow(schedule,now)
+            const previousDay = (zoneNow.day + 6) % 7
+            if(end === null){
+                return isDayScheduled(schedule,zoneNow.day) && zoneNow.minutesOfDay >= start
             }
+            if(end > start){
+                return isDayScheduled(schedule,zoneNow.day) &&
+                    zoneNow.minutesOfDay >= start &&
+                    zoneNow.minutesOfDay <= end
+            }
+            return (isDayScheduled(schedule,zoneNow.day) && zoneNow.minutesOfDay >= start) ||
+                (isDayScheduled(schedule,previousDay) && zoneNow.minutesOfDay <= end)
         }catch(err){
             console.log(err)
-            callback(err)
+            return false
         }
-        return false
     }
-    //check days in schedule
-    var checkDaysAgainstSchedule = function(schedule,callback){
-        var days = schedule.details.days
-        if(!callback)callback = function(){}
-        try{
-            if(
-                days
-            ){
-                var currentDate = new Date()
-                currentDate.setMinutes(currentDate.getMinutes() - schedule.timezoneOffset)
-                var currentDay = currentDate.getDay()
-                if(
-                    days.indexOf(currentDay) > -1 // if currentDay of week is found in schedule selection
-                ){
-                    callback()
-                    return true
-                }else{
-                    callback({
-                        currentDate: currentDate,
-                        currentDay: currentDay
-                    })
-                }
-            }else{
-                callback() //no days selected, succeed
-                return true
-            }
-        }catch(err){
-            console.log(err)
-            callback(err)
-        }
-        return false
-    }
+    s.isScheduleActive = isScheduleActive
     //check all Schedules
     s.checkSchedules = function(v,callback){
         var groupKeys = Object.keys(s.schedules)
@@ -124,9 +93,7 @@ module.exports = function(s,config,lang,app,io){
             scheduleNames.forEach(function(name){
                 var schedule = s.schedules[key][name]
                 if(schedule.enabled === 1 && schedule.start && schedule.details.monitorStates){
-                    var timePasses = checkTimeAgainstSchedule(schedule)
-                    var daysPasses = checkDaysAgainstSchedule(schedule)
-                    var passed = timePasses && daysPasses
+                    var passed = isScheduleActive(schedule)
                     if(passed && !schedule.active){
                         schedule.active = true
                         var monitorStates = schedule.details.monitorStates

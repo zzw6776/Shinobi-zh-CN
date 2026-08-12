@@ -35,11 +35,15 @@
 #easyRemoteAccess .card.active .fa {
     color: #6ee068;
 }
-#easyRemoteAccess .card .remote-dashboard-link {
+/* Retargeted from `.card` to the table rows this list is drawn as now. The old selectors
+   still matched, because the rows live inside a card -- so the link stayed hidden on every
+   row, its `.card.active` counterpart never being true for a <tr>. Same intent as before:
+   the remote dashboard link only shows for the selected server. */
+#easyRemoteAccess .remote-dashboard-link {
     display: none!important;
 }
-#easyRemoteAccess .card.active .remote-dashboard-link {
-    display: block!important;
+#easyRemoteAccess tr.active .remote-dashboard-link {
+    display: inline-block!important;
 }
 #easyRemoteAccess .card .selected-badge {
     display: none;
@@ -65,4 +69,41 @@
 
 #easyRemoteAccess .active .activate-remote-selection .fa-check:before {
     content: "\f00d"!important;
+}
+
+/* --- Hosted by two different pages -------------------------------------------------
+   Rendered both in the Superuser panel and in the dashboard's Easy Remote Access tab. The
+   Superuser page carries `dark` on <body> plus a page-level white from super-page.css; the
+   dashboard has neither, so the same markup would come out near-black on near-black there.
+   The block sets its own colours rather than depending on whichever page hosts it. */
+#easyRemoteAccess,
+#easyRemoteAccess .card-header {
+    color: #fff;
+}
+#easyRemoteAccess .table-striped > tbody > tr > td,
+#easyRemoteAccess .table > thead > tr > th {
+    color: #fff;
+    border-color: #222;
+}
+
+/* The server list is a table now rather than a grid of stat cards. */
+#p2pServerList tbody tr {
+    cursor: pointer;
+}
+#p2pServerList tbody tr .selected-badge {
+    display: none;
+}
+#p2pServerList tbody tr.active .selected-badge {
+    display: inline-block;
+}
+#p2pServerList tbody tr.active > td {
+    background-color: rgba(31,128,249,0.25);
+}
+
+/* A row selected (or dropped) since the last Save. Deliberately a different colour from the
+   saved-and-active blue, so it reads as "this takes effect when you press Save" rather than
+   as an already-connected server. Declared after the .active rule so it wins on equal
+   specificity. */
+#p2pServerList tbody tr.pending > td {
+    background-color: rgba(209,95,66,0.35);
 }

@@ -1,71 +1,11 @@
-#tab-timelapseViewer .frames .frame{
-    height: 100px;
-}
-#tab-timelapseViewer .frames .frame img{
-    width: 100%;
-    height: 100%;
-}
-#tab-timelapseViewer .frameStrip img{
-    position:absolute;
-    width:100%;
-    height:100%;
-    top:0;
-    left:0;
-}
-#tab-timelapseViewer .modal-body > .row,
-#tab-timelapseViewer .modal-body > .row > div {
-    position:relative;
-    height: 100%;
-}
-#tab-timelapseViewer .frameIcons .frame{
-    border-radius: 15px;
-    overflow: hidden;
-}
-#tab-timelapseViewer .frameIcons .frame.selected{
-    border: 3px solid #ffc96b;
-}
-#tab-timelapseViewer .frameIcons > div:not(:last-child){
-    margin-bottom: 15px
-}
-#tab-timelapseViewer .frameIcons{
-    overflow-y: auto;
-    overflow-x: hidden;
-    max-height: 400px;
-}
-#tab-timelapseViewer .frameIcons .frame{
-    background-size: cover;
-    width: 100%;
-    height: 100px;
-    position: relative;
-    cursor: pointer;
-}
-#tab-timelapseViewer .frameIcons .frame .shade,
-#tab-timelapseViewer .frameIcons .button-strip{
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 5px 10px;
-    font-family: monospace;
-    background: rgba(0,0,0,0.6);
-    color: #fff
-}
-#tab-timelapseViewer .frameIcons .button-strip{
-    top: 0;
-    bottom: auto;
-    opacity: 0;
-    transition: 0.2;
-    text-align: right;
-}
-#tab-timelapseViewer .frameIcons .frame:hover .button-strip{
-    opacity: 1;
-}
 #tab-timelapseViewer .playBackView{
     width: 100%;
     background:#333;
+    text-align: center;
 }
 #tab-timelapseViewer .playBackView img{
-    width:100%;
+    max-width:100%;
+    max-height: 60vh;
     border-radius: 4px;
 }
 #tab-timelapseViewer .liveStreamView{
@@ -83,6 +23,111 @@
     display: inline-block;
     margin: auto;
     border: 0;
+}
+
+/* Frame timeline. Frames are drawn as ticks placed by their time across the searched
+   range - the same coordinate system, markup and hover-preview behaviour as the event
+   strip under the videoPlayer (.video-time-strip / .video-time-needle). */
+.timelapse-strip-wrapper {
+    position: relative;
+}
+#tab-timelapseViewer .timelapse-frame-strip {
+    min-height: 44px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 4px;
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+}
+#tab-timelapseViewer .timelapse-strip-tick {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-left: 2px solid #1f80f9;
+    opacity: 0.75;
+    z-index: 2;
+}
+/* A 2px border is a near-impossible hover target, so the hit area is widened without
+   changing how the tick looks. */
+#tab-timelapseViewer .timelapse-strip-tick::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -6px;
+    width: 14px;
+    height: 100%;
+}
+#tab-timelapseViewer .timelapse-strip-tick:hover {
+    opacity: 1;
+    box-shadow: 0 0 6px 1px rgba(31,128,249,0.9);
+}
+#tab-timelapseViewer .timelapse-strip-tick.is-current {
+    border-left-color: #ffc96b;
+    opacity: 1;
+    z-index: 4;
+    box-shadow: 0 0 6px 1px rgba(255,201,107,0.9);
+}
+#tab-timelapseViewer .timelapse-strip-tick.is-unselected {
+    opacity: 0.2;
+}
+#tab-timelapseViewer .timelapse-strip-selection {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: rgba(31,128,249,0.18);
+    border-left: 1px solid rgba(255,255,255,0.4);
+    border-right: 1px solid rgba(255,255,255,0.4);
+    display: none;
+    z-index: 1;
+}
+#tab-timelapseViewer .timelapse-strip-selection.is-visible {
+    display: block;
+}
+#tab-timelapseViewer .timelapse-strip-playhead {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-left: 2px solid #f00;
+    z-index: 5;
+    pointer-events: none;
+}
+#tab-timelapseViewer .timelapse-strip-empty {
+    text-align: center;
+    line-height: 44px;
+    color: #ccc;
+    font-size: 90%;
+}
+.timelapse-strip-preview {
+    position: absolute;
+    bottom: calc(100% - 6px);
+    width: 200px;
+    display: none;
+    z-index: 1200;
+    pointer-events: none;
+    background: #000;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+}
+.timelapse-strip-preview.is-visible {
+    display: block;
+}
+.timelapse-strip-preview img {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 112px;
+    background: #111;
+}
+.timelapse-strip-preview-caption {
+    padding: 3px 6px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: #fff;
+    background: rgba(0,0,0,0.85);
+    text-align: center;
+    word-break: break-word;
 }
 /* stand alone */
 #tab-timelapseViewer.standalone {

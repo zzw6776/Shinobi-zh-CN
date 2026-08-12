@@ -48,33 +48,8 @@ $(document).ready(function(){
         e.stopPropagation()
         return false;
     })
-    .on('click','.go-home',goBackHome)
-    .on('click','.go-back',goBackOneTab)
-    .on('click','.delete-tab',function(e){
-        e.preventDefault()
-        e.stopPropagation()
-        var tabName = $(this).parents(`[page-open]`).attr(`page-open`)
-        if(activeTabName === tabName){
-            goBackOneTab()
-        }
-        deleteTab(tabName)
-        return false;
-    })
-    .on('click','.delete-tab-dynamic',function(e){
-        e.preventDefault()
-        e.stopPropagation()
-        var tabName = $(this).parents('.page-tab').attr('id').replace('tab-','')
-        goBackOneTab()
-        deleteTab(tabName)
-        return false;
-    })
-    .on('click','[page-open]',function(){
-        var el = $(this)
-        var pageChoice = el.attr('page-open')
-        var pageOptions = JSON.parse(el.attr('page-options') || '{}')
-        if(tabTree.name === pageChoice)return;
-        openTab(pageChoice,pageOptions)
-    })
+    // .go-home, .go-back, .delete-tab, .delete-tab-dynamic and [page-open] are bound in
+    // bs5.tabEngine.js so the Superuser panel gets the same navigation.
     .on('click','[class_toggle]',function(){
         var el = $(this)
         var targetElement = el.attr('data-target')

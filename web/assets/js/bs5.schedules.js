@@ -6,6 +6,14 @@ $(document).ready(function(){
     var schedulerForm = schedulerWindow.find('form')
     var selectedStates = schedulerWindow.find('[name="monitorStates"]')
     var selectedDays = schedulerWindow.find('[name="days"]')
+    // A new Schedule starts on the timezone of the machine viewing the dashboard rather than
+    // UTC. getTimezoneOffset() counts minutes *behind* UTC, while the options are minutes from
+    // UTC (config.timeZones), hence the sign flip. Zones with no matching option - anything
+    // the list does not carry - fall back to UTC so the field is never left blank.
+    var getClientTimezoneOffsetOption = function(tzEl){
+        var clientOffset = -(new Date().getTimezoneOffset())
+        return tzEl.find(`option[value="${clientOffset}"]`).length > 0 ? `${clientOffset}` : '0'
+    }
     var loadSchedules = function(callback){
         $.getJSON(getApiPrefix() + '/schedule/' + $user.ke,function(d){
             var html = ''
@@ -86,7 +94,7 @@ $(document).ready(function(){
             tzEl.val(loaded.details.timezone || '0')
             deleteButton.show()
         }else{
-            tzEl.val('0')
+            tzEl.val(getClientTimezoneOffsetOption(tzEl))
             namespace.val('')
             startField.val('')
             endField.val('')

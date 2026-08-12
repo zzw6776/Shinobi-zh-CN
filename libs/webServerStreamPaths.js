@@ -235,7 +235,7 @@ module.exports = function(s,config,lang,app){
     app.get([config.webPaths.apiPrefix+':auth/hls/:ke/:id/:file',config.webPaths.apiPrefix+':auth/hls/:ke/:id/:channel/:file'], function (req,res){
         s.auth(req.params,function(user){
             const monitorId = req.params.id
-            if(cantLiveStreamPermission(user,monitorId,'watch_stream') || !isValidStreamName(req.params.file)){
+            if(cantLiveStreamPermission(user,monitorId,'watch_stream') || !isValidStreamName(req.params.file) || !isValidStreamName(req.params.id)){
                 s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
                 return;
             }

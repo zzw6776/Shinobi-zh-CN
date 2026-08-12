@@ -14,8 +14,35 @@ module.exports = (config) => {
         });
         return cleanName === streamName;
     };
+    // conf.json is written to the audit log whenever it changes, so the licence key would
+    // otherwise sit in plain text in the Logs table and in the pm2 output. The key is worth
+    // as much as the licence itself, and an audit entry only needs to show that it changed.
+    const redactionMarker = '*** redacted ***'
+    // peerConnectKey and p2pApiKey sit beside subscriptionId as things startup will activate
+    // from, so a licence key pasted into either of those is the same secret under a different
+    // name.
+    const redactedConfigKeys = ['subscriptionId','peerConnectKey','p2pApiKey']
+    const redactConfigForLog = (theConfig) => {
+        if(!theConfig || !(theConfig instanceof Object))return theConfig
+        const redacted = Object.assign({},theConfig)
+        redactedConfigKeys.forEach(function(key){
+            if(redacted[key])redacted[key] = redactionMarker
+        })
+        // Central Management stores the licence key as the connection secret for each server,
+        // so redacting the field above alone still left it readable here. The server
+        // addresses are what makes the entry worth auditing, so those stay.
+        if(redacted.mgmtServers && redacted.mgmtServers instanceof Object){
+            const servers = {}
+            Object.keys(redacted.mgmtServers).forEach(function(address){
+                servers[address] = redactionMarker
+            })
+            redacted.mgmtServers = servers
+        }
+        return redacted
+    }
     return {
         isValidStreamName,
+        redactConfigForLog,
         getSystemInfo: (s) => {
             const response = {
                 "Time Started": s.timeStarted,

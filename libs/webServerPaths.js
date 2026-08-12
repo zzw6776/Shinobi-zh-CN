@@ -1,5 +1,6 @@
 var express = require('express');
 var fs = require('fs');
+var path = require('path');
 var bodyParser = require('body-parser');
 var os = require('os');
 var moment = require('moment');
@@ -23,6 +24,7 @@ module.exports = function(s,config,lang,app,io){
     } = require('./control/ptz.js')(s,config,lang,app,io)
     const {
         triggerEvent,
+        getEventsBasedOnTag,
     } = require('./events/utils.js')(s,config,lang)
     const {
         basicAuth,
@@ -151,10 +153,125 @@ module.exports = function(s,config,lang,app,io){
         }
     });
     /**
+    * API : Activation Status (Localhost Only)
+    * No auth key, so the check is deliberately made against the socket's own remote
+    * address rather than s.getClientIp : proxy headers are client supplied and would
+    * let anyone claim to be 127.0.0.1.
+    */
+    app.get(s.checkCorrectPathEnding(config.webPaths.home)+'activationStatus', function (req,res){
+        const remoteAddress = (req.socket && req.socket.remoteAddress) || ''
+        // 127.0.0.0/8 in either plain IPv4 or IPv4 mapped IPv6 form, plus the IPv6 loopback.
+        const isLocalhost = remoteAddress === '::1' || /^(::ffff:)?127\./.test(remoteAddress)
+        if(!isLocalhost){
+            res.status(403)
+            return s.closeJsonResponse(res,{
+                ok: false,
+                msg: 'This endpoint is only accessible from localhost.'
+            })
+        }
+        s.closeJsonResponse(res,{
+            ok: true,
+            activated: !!config.userHasSubscribed,
+            hasKey: !!config.subscriptionId,
+            maxCameras: s.cameraCount,
+        })
+    });
+    /**
     * Page : Login Screen
     */
     app.get(config.webPaths.home, function (req,res){
         s.renderPage(req,res,config.renderPaths.index,{lang,config: s.getConfigWithBranding(req.hostname),screen:'dashboard'})
+    });
+    /**
+    * Page : Mobile App Redirect
+    * Bounces to a shinobi:// deep link that opens the Shinobi Go mobile app.
+    * Custom URL schemes are not clickable in Discord, email clients, etc., so
+    * notifications link here instead. No auth: the page only echoes back the
+    * (sanitized) ke/mid already present in the URL.
+    */
+    app.get(s.checkCorrectPathEnding(config.webPaths.home)+'app/open', function (req,res){
+        const clean = (val) => String(val || '').replace(/[^a-zA-Z0-9_-]/g,'').substring(0,64)
+        const ke = clean(req.query.ke)
+        const mid = clean(req.query.mid || req.query.id)
+        const appLink = 'shinobi://monitor?ke=' + ke + '&mid=' + mid
+        res.setHeader('Content-Type','text/html')
+        res.end(`<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opening Shinobi Go...</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0A1F44;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:24px;box-sizing:border-box}
+a.btn{display:inline-block;margin-top:24px;padding:14px 28px;background:#42A5F5;color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
+p{color:#9fb3d1;font-size:14px;max-width:420px}
+</style>
+</head>
+<body>
+<h2>Opening Shinobi Go&hellip;</h2>
+<p>If the app does not open automatically, tap the button below. Requires the Shinobi Go app to be installed.</p>
+<a class="btn" href="${appLink}">Open Shinobi Go</a>
+<script>location.href = ${JSON.stringify(appLink)};</script>
+</body>
+</html>`)
+    });
+    /**
+    * API : Is FCM push configured on this server. The mobile app probes this
+    * to default a server's notification mode to FCM vs local.
+    */
+    app.get(config.webPaths.apiPrefix+':auth/fcmStatus/:ke', function (req,res){
+        res.setHeader('Content-Type', 'application/json');
+        s.auth(req.params, function(user){
+            s.closeJsonResponse(res,{ok: true, enabled: s.isFcmEnabled === true})
+        },res,req)
+    });
+    /**
+    * API : Register / Unregister a mobile device FCM push token.
+    * Body: { token, deviceName (optional), action: 'add' (default) | 'delete' }
+    * Tokens live in the dedicated `PushTokens` table (see
+    * libs/database/preQueries.js) and are read by libs/notifications/fcm.js
+    * when a detection event fires.
+    */
+    app.post(config.webPaths.apiPrefix+':auth/fcmToken/:ke', function (req,res){
+        res.setHeader('Content-Type', 'application/json');
+        s.auth(req.params, function(user){
+            const groupKey = req.params.ke
+            const pushToken = String(req.body.token || '').trim()
+            const doDelete = req.body.action === 'delete'
+            if(!pushToken || pushToken.length > 500){
+                s.closeJsonResponse(res,{ok: false, msg: 'Invalid token'})
+                return
+            }
+            // `token` is UNIQUE, so drop any existing row for it first — this
+            // also handles the device switching accounts/servers cleanly.
+            s.knexQuery({
+                action: "delete",
+                table: "PushTokens",
+                where: [
+                    ['token','=',pushToken],
+                ]
+            },() => {
+                if(doDelete){
+                    s.closeJsonResponse(res,{ok: true})
+                    return
+                }
+                s.knexQuery({
+                    action: "insert",
+                    table: "PushTokens",
+                    insert: {
+                        ke: groupKey,
+                        uid: user.uid,
+                        token: pushToken,
+                        name: String(req.body.deviceName || '').substring(0,100),
+                    }
+                },(err) => {
+                    if(err){
+                        s.closeJsonResponse(res,{ok: false, msg: 'Could not save token'})
+                        return
+                    }
+                    s.closeJsonResponse(res,{ok: true})
+                })
+            })
+        },res,req)
     });
     /**
     * Page : Superuser Login Screen
@@ -344,7 +461,31 @@ module.exports = function(s,config,lang,app,io){
                 })
             }
         }
-        function checkRoute(pageTarget,userInfo){
+        async function checkRoute(pageTarget,userInfo){
+            // Resolve the group's effective setting onto the user being rendered. A sub
+            // account carries its own details and has no copy of this Superuser permission,
+            // so without this the sidebar bars would still be drawn for them even though the
+            // readings are never sent.
+            if(userInfo && userInfo.details){
+                // A sub account can also get these from a Permission Group rather than from
+                // its own details. The socket and API paths already merge a group's details
+                // in, so do the same before rendering -- otherwise a permission granted
+                // through a group works at the API while its menu entry and tab are never
+                // drawn, leaving the feature switched on but unreachable.
+                try{
+                    await applyPermissionsToUser(userInfo)
+                }catch(err){
+                    s.debugLog(err)
+                }
+                userInfo.details.show_system_usage = s.groupCanSeeSystemUsage(userInfo.ke) ? '1' : '0'
+                // Resolve the effective value of the Superuser granted tools too. A sub
+                // account is capped by its group's Admin, so rendering straight from the sub
+                // account's own flag would leave a menu link and a tab pointing at an API
+                // that answers Not Authorized.
+                ;['use_plugin_manager','use_remote_access','use_system_control'].forEach(function(permission){
+                    userInfo.details[permission] = s.userHasPermission(userInfo,permission) ? '1' : '0'
+                })
+            }
             switch(pageTarget){
                 case'cam':
                     renderPage(config.renderPaths.dashcam,{
@@ -709,7 +850,7 @@ module.exports = function(s,config,lang,app,io){
         s.auth(req.params,async (user) => {
             const groupKey = req.params.ke
             const monitorId = req.params.id
-            if(!s.group[groupKey] || !s.group[groupKey].rawMonitorConfigurations[monitorId]){
+            if(!s.group[groupKey] || !s.group[groupKey].activeMonitors[monitorId]){
                 response.msg = 'Not Ready'
                 s.closeJsonResponse(res,response);
                 return
@@ -1071,6 +1212,19 @@ module.exports = function(s,config,lang,app,io){
                     }
                     s.closeJsonResponse(res,response)
                 })
+            }else if(req.query.search){
+                getEventsBasedOnTag({
+                    groupKey: req.params.ke,
+                    monitorId: req.params.id,
+                    startTime: req.query.start,
+                    endTime: req.query.end,
+                    searchQuery: req.query.search,
+                    andOnly: req.query.andOnly === '1',
+                    monitorRestrictions: monitorRestrictions,
+                    limit: req.query.noLimit === '1' ? '0' : req.query.limit,
+                }).then((response) => {
+                    res.end(s.prettyPrint({ ok: response.ok, events: response.rows || [], total: response.total }))
+                })
             }else{
                 s.sqlQueryBetweenTimesWithPermissions({
                     table: 'Events',
@@ -1196,7 +1350,7 @@ module.exports = function(s,config,lang,app,io){
                     if(req.query.reset==='1'||(s.group[r.ke]&&s.group[r.ke].rawMonitorConfigurations[r.mid].mode!==req.params.f)||req.query.fps&&(!s.group[r.ke].activeMonitors[r.mid].currentState||!s.group[r.ke].activeMonitors[r.mid].currentState.trigger_on)){
                         if(req.query.reset!=='1'||!s.group[r.ke].activeMonitors[r.mid].trigger_timer){
                             if(!s.group[r.ke].activeMonitors[r.mid].currentState)s.group[r.ke].activeMonitors[r.mid].currentState={}
-                            s.group[r.ke].activeMonitors[r.mid].currentState.mode=r.mode.toString()
+                            s.group[r.ke].activeMonitors[r.mid].currentState.mode=r.mode?r.mode.toString():'stop'
                             if(!s.group[r.ke].activeMonitors[r.mid].currentState.trigger_on){
                                s.group[r.ke].activeMonitors[r.mid].currentState.trigger_on=true
                             }else{
@@ -1394,7 +1548,15 @@ module.exports = function(s,config,lang,app,io){
             }
             const sendVideo = (videoRow) => {
                 cacheVideoRow(videoRow)
-                const filePath = s.getVideoDirectory(videoRow) + req.params.file
+                const baseDir = path.resolve(s.getVideoDirectory(videoRow))
+                const filePath = path.resolve(baseDir, req.params.file)
+                if(
+                    req.params.file.indexOf('\0') !== -1 ||
+                    (filePath !== baseDir && !filePath.startsWith(baseDir + path.sep))
+                ){
+                    s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
+                    return
+                }
                 fs.stat(filePath,function(err,stats){
                     if (!err){
                         if(req.query.json === 'true'){
@@ -1444,7 +1606,7 @@ module.exports = function(s,config,lang,app,io){
     * API : Motion Trigger via GET request
      */
      app.get(config.webPaths.apiPrefix+':auth/motion/:ke/:id', function (req,res){
-         s.auth(req.params,function(user){
+         s.auth(req.params,async function(user){
             const groupKey = req.params.ke
             const monitorId = req.params.id
             const monitorConfig = s.group[groupKey].rawMonitorConfigurations[monitorId]
@@ -1520,9 +1682,25 @@ module.exports = function(s,config,lang,app,io){
                  })
                  return;
              }
-             triggerEvent(simulatedEvent)
+             // triggerEvent() can legitimately discard the event (motion lock, event
+             // filters, region checks). It used to be fire-and-forget, so this endpoint
+             // always answered "Trigger Successful" even when nothing happened - which made
+             // it impossible to tell a working integration from a silently dropped one.
+             // Await it and report what actually occurred, matching how the
+             // detector_http_api gate above already reports a deliberate block.
+             const triggerResponse = await triggerEvent(simulatedEvent)
+             if(triggerResponse && triggerResponse.ok === false){
+                 s.closeJsonResponse(res,{
+                     ok: false,
+                     triggered: false,
+                     reason: triggerResponse.reason,
+                     msg: triggerResponse.msg,
+                 })
+                 return
+             }
              s.closeJsonResponse(res,{
                  ok: true,
+                 triggered: true,
                  msg: lang['Trigger Successful']
              })
          },res,req)
@@ -1578,6 +1756,23 @@ module.exports = function(s,config,lang,app,io){
     app.get(config.webPaths.apiPrefix+':auth/control/:ke/:id/:direction', function (req,res){
         res.setHeader('Content-Type', 'application/json');
         s.auth(req.params,function(user){
+            const monitorId = req.params.id
+            const {
+                monitorPermissions,
+                monitorRestrictions,
+            } = s.getMonitorsPermitted(user.details,monitorId)
+            const {
+                isRestricted,
+                isRestrictedApiKey,
+                apiKeyPermissions,
+            } = s.checkPermission(user);
+            if(
+                isRestrictedApiKey && apiKeyPermissions.control_monitors_disallowed ||
+                isRestricted && !monitorPermissions[`${monitorId}_control`]
+            ){
+                s.closeJsonResponse(res,{ok: false, msg: lang['Not Authorized']});
+                return
+            }
             if(req.params.direction === 'setHome'){
                 setPresetForCurrentPosition({
                     id: req.params.id,
@@ -1836,10 +2031,17 @@ module.exports = function(s,config,lang,app,io){
                 return
             }
             const response = { ok: false }
+            const addMergeResultToResponse = (mergeResult) => {
+                response.ok = !!mergeResult;
+                if(mergeResult){
+                    response.filename = mergeResult.filename;
+                    response.href = `/${req.params.auth}/fileBin/${mergeResult.ke}/${mergeResult.mid}/${mergeResult.filename}`;
+                }
+            }
             const selectedVideos = s.getPostData(req,'videos');
             if(selectedVideos && selectedVideos.length > 1){
-                const mergedFilePath = await mergeVideosAndBin(selectedVideos);
-                response.ok = !!mergedFilePath;
+                const mergeResult = await mergeVideosAndBin(selectedVideos);
+                addMergeResultToResponse(mergeResult);
                 s.closeJsonResponse(res, response);
             }else{
                 s.sqlQueryBetweenTimesWithPermissions({
@@ -1861,9 +2063,11 @@ module.exports = function(s,config,lang,app,io){
                     monitorRestrictions: monitorRestrictions,
                     preliminaryValidationFailed: false
                 }, async ({ videos }) => {
-                    if(videos){
-                        const mergedFilePath = await mergeVideosAndBin(videos);
-                        response.ok = !!mergedFilePath;
+                    if(videos && videos.length > 1){
+                        const mergeResult = await mergeVideosAndBin(videos);
+                        addMergeResultToResponse(mergeResult);
+                    }else{
+                        response.msg = lang['Not enough videos found in that time range to merge'];
                     }
                     s.closeJsonResponse(res, response);
                 })
@@ -2001,7 +2205,7 @@ module.exports = function(s,config,lang,app,io){
                 if(form){
                     endData.ok = true
                     s.accountSettingsEdit({
-                        ke: req.params.ke,
+                        ke: user.ke,
                         uid: user.uid,
                         form: form,
                         cnid: user.cnid

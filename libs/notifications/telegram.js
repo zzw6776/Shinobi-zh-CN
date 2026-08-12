@@ -19,14 +19,15 @@ module.exports = function(s,config,lang,getSnapshot){
     } = require('../ffmpeg/utils.js')(s,config,lang)
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
 
     //telegram bot
     if(config.telegramBot === true){
         try{
             const allowedSend = {};
-            const TelegramBot = require('node-telegram-bot-api');
-            console.error('WARNING : Telegram bot is enabled.')
+            const TelegramBotModule = require('node-telegram-bot-api');
+            const TelegramBot = TelegramBotModule.default || TelegramBotModule;
 
             const sendMessage = async function(sendBody,attachments,groupKey){
                 var bot = s.group[groupKey].telegramBot
@@ -64,7 +65,13 @@ module.exports = function(s,config,lang,getSnapshot){
                                             break;
                                         case'photo':
                                             if(file.hasOwnProperty("file_id") === false) {
-                                                file.file_id = (await bot.sendPhoto(chatId, file.attachment)).photo[0].file_id
+                                                const photoData = Buffer.isBuffer(file.attachment)
+                                                    ? file.attachment
+                                                    : Buffer.from(`${file.attachment}`, 'base64')
+                                                file.file_id = (await bot.sendPhoto(chatId, photoData, {}, {
+                                                    filename: file.name || 'snapshot.jpg',
+                                                    contentType: 'image/jpeg'
+                                                })).photo[0].file_id
                                                 delete file.attachment
                                             } else {
                                                 await bot.sendPhoto(chatId, file.file_id)
@@ -113,15 +120,18 @@ module.exports = function(s,config,lang,getSnapshot){
                     }else{
                         detector_telegrambot_timeout = parseFloat(monitorConfig.details.detector_telegrambot_timeout) * 1000 * 60;
                     }
-                    s.group[d.ke].activeMonitors[d.id].detector_telegrambot = setTimeout(function(){
-                        clearTimeout(s.group[d.ke].activeMonitors[d.id].detector_telegrambot);
-                        s.group[d.ke].activeMonitors[d.id].detector_telegrambot = null
-                    },detector_telegrambot_timeout)
                     await getSnapshot(d,monitorConfig)
+                    const willSendVideo = monitorConfig.details.detector_telegrambot_send_video === '1'
+                    if(d.screenshotBuffer || willSendVideo){
+                        s.group[d.ke].activeMonitors[d.id].detector_telegrambot = setTimeout(function(){
+                            clearTimeout(s.group[d.ke].activeMonitors[d.id].detector_telegrambot);
+                            s.group[d.ke].activeMonitors[d.id].detector_telegrambot = null
+                        },detector_telegrambot_timeout)
+                    }
                     if(d.screenshotBuffer){
                         sendMessage({
                             title: notifyText,
-                            description: lang.EventText1+' '+d.currentTimestamp,
+                            description: lang.EventText1+' '+d.currentTimestamp+'\n'+getAppDeepLink(d),
                         },[
                             {
                                 type: 'photo',
@@ -130,7 +140,7 @@ module.exports = function(s,config,lang,getSnapshot){
                             }
                         ],d.ke)
                     }
-                    if(monitorConfig.details.detector_telegrambot_send_video === '1'){
+                    if(willSendVideo){
                         // await asyncSetTimeout(3000)
                         let videoPath = null
                         let videoName = null
@@ -154,6 +164,7 @@ module.exports = function(s,config,lang,getSnapshot){
                         if(videoPath){
                             sendMessage({
                                 title: notifyText,
+                                description: getAppDeepLink(d),
                             },[
                                 {
                                     type: 'video',
@@ -281,7 +292,7 @@ module.exports = function(s,config,lang,getSnapshot){
                isFormGroupGroup: true,
                "name": "Telegram",
                "color": "blue",
-               "section-class": "h_det_telegram_input h_det_telegram_1",
+               "section-visibleWhen": { "h_det_telegram": "1" },
                "info": [
                    {
                       "name": "detail=detector_telegrambot_send_video",
@@ -357,7 +368,7 @@ module.exports = function(s,config,lang,getSnapshot){
                       "fieldType": "password",
                       "placeholder": "XXXXXXXXXXXXXXXXXXXXXXXX.XXXXXXXXXXXXXXX_XXXXXXXXXXXXXXXXXX",
                       "field": lang.Token,
-                      "form-group-class":"u_telegram_bot_input u_telegram_bot_1",
+                      "form-group-visibleWhen":{ "u_telegram_bot": "1" },
                       "description": "",
                       "default": "",
                       "example": "",
@@ -368,7 +379,7 @@ module.exports = function(s,config,lang,getSnapshot){
                       "name": "detail=telegrambot_channel",
                       "placeholder": "xxxxxxxxxxxxxxxxxx",
                       "field": lang["Recipient ID"],
-                      "form-group-class":"u_telegram_bot_input u_telegram_bot_1",
+                      "form-group-visibleWhen":{ "u_telegram_bot": "1" },
                       "description": "",
                       "default": "",
                       "example": "",
@@ -401,8 +412,7 @@ module.exports = function(s,config,lang,getSnapshot){
             })
         }catch(err){
             console.error(err.message)
-            console.error('Could not start Telegram bot, please run "npm install node-telegram-bot-api" inside the Shinobi folder.')
-            console.error('The Telegram Module is known to have possible vulnerabilities. Use at your own risk.')
+            console.error('Could not start Telegram bot.')
         }
     }
 }

@@ -9,25 +9,7 @@ var floatingBackButton = $('#floating-back-button')
 var monitorIconsLoaded = $('.monitor-icon.unloaded', sidebarMenuInner)
 var sideListMenuDropdownOpen = null
 var sideListScrollTimeout = null
-function buildTabHtml(tabName,tabLabel,tabIcon){
-    return `<li class="nav-link side-menu-link cursor-pointer" page-open="${tabName}">
-        <div class="d-flex flex-row">
-            <div class="d-flex pr-2">
-                <span>
-                    <i class="fa fa-${tabIcon ? tabIcon : 'file-o'}"></i>
-                </span>
-            </div>
-            <div class="flex-grow-1 pr-2">
-                ${tabLabel}
-            </div>
-            <div class="d-flex">
-                <span class="delete-tab">
-                    <i class="fa fa-times-circle-o"></i>
-                </span>
-            </div>
-        </div>
-      </li>`
-}
+// buildTabHtml lives in bs5.tabEngine.js, shared with the Superuser panel.
 function drawMonitorIconToMenu(item, reloadIconList){
     var html = `<li class="nav-item monitor-icon unloaded monitor_block glM${item.mid}" data-ke="${item.ke}" data-mid="${item.mid}" data-status-code="${item.code}">
         <div title="Monitor ID : ${item.mid}" class="d-flex d-flex-row align-items-center p-2 mt-0 mb-3 mx-0 btn btn-default rounded shadow-sm cursor-pointer">

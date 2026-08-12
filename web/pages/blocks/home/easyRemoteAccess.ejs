@@ -1,0 +1,15 @@
+<%# Dashboard Easy Remote Access (P2P). Only rendered for accounts a Superuser granted the
+    permission; markup and behaviour are shared with the Superuser panel's tab, including the
+    #easyRemoteAccess enclosure id the shared script scopes itself to. %>
+<% if($user.details.use_remote_access === '1'){ %>
+    <main class="container page-tab pt-3" id="tab-easyRemoteAccess">
+        <div id="easyRemoteAccess">
+            <script>
+                $(document).ready(function(){
+                    window.remoteAccessApiPrefix = getApiPrefix('p2p')
+                })
+            </script>
+            <%- include('../easyRemoteAccess'); %>
+        </div>
+    </main>
+<% } %>

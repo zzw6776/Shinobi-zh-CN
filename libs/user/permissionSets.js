@@ -15,6 +15,7 @@ module.exports = function(s,config,lang){
         { name: 'monitor_edit', label: lang['Can Edit Monitor'] },
         { name: 'video_view', label: lang['Can View Videos and Events'] },
         { name: 'video_delete', label: lang['Can Delete Videos and Events'] },
+        { name: 'control', label: lang['Can Control Monitor'] },
     ];
     async function getPermissionSets(groupKey, name){
         const whereQuery = [

@@ -1,8 +1,34 @@
 const fs = require('fs');
+const net = require('net');
 const exec = require('child_process').exec;
 const execSync = require('child_process').execSync;
 const spawn = require('child_process').spawn;
-const treekill = require('tree-kill');
+const treekill = require('../basic/safeTreeKill.js');
+const isMonitorTargetSelfOrMetadata = (rawUrl) => {
+    let host
+    try{
+        host = new URL(`${rawUrl}`.replace(/^rtsps?:\/\//,'http://').replace(/^rtmps?:\/\//,'http://')).hostname
+    }catch(e){
+        return false
+    }
+    host = (host || '').replace(/^\[|\]$/g,'')
+    if(!host)return false
+    const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)
+    if(mapped)host = mapped[1]
+    if(net.isIPv4(host)){
+        const p = host.split('.').map(Number)
+        if(p[0] === 0)return true
+        if(p[0] === 169 && p[1] === 254)return true
+        return false
+    }
+    if(net.isIPv6(host)){
+        const lower = host.toLowerCase()
+        if(lower === '::')return true
+        if(/^fe[89ab]/i.test(lower))return true
+        return false
+    }
+    return false
+}
 module.exports = (s,config,lang) => {
     const {
         mergeDeep,
@@ -38,7 +64,10 @@ module.exports = (s,config,lang) => {
             activeProbes[auth] = 1
             var stderr = ''
             var stdout = ''
-            const probeCommand = splitForFFMPEG(`${customInput ? customInput + ' ' : ''}-analyzeduration 10000 -probesize 10000 -v quiet -print_format json -show_format -show_streams -i "${url}"`)
+            const probeCommand = [
+                ...splitForFFMPEG(`${customInput ? customInput + ' ' : ''}-analyzeduration 10000 -probesize 10000 -v quiet -print_format json -show_format -show_streams -i`),
+                url
+            ]
             var processTimeout = null
             var ffprobeLocation = config.ffmpegDir.split('/')
             ffprobeLocation[ffprobeLocation.length - 1] = 'ffprobe'
@@ -74,9 +103,12 @@ module.exports = (s,config,lang) => {
     const probeMonitor = (monitor,timeoutAmount,forceOverlap) => {
         return new Promise((resolve,reject) => {
             const inputTypeIsH264 = monitor.type === 'h264'
-            const protocolIsRtsp = monitor.protocol === 'rtsp'
+            const protocolIsRtsp = (monitor.protocol === 'rtsp' || monitor.protocol === 'rtsps')
             const rtspTransportIsManual = monitor.details.rtsp_transport && monitor.details.rtsp_transport !== 'no'
             const url = s.buildMonitorUrl(monitor);
+            if(!config.disableSSRFSelfTargetFilter && isMonitorTargetSelfOrMetadata(url)){
+                return resolve({ok: false, error: lang['Invalid Target']})
+            }
             runFFprobe(url,`${monitor.ke}${monitor.mid}`,(response) => {
                 setTimeout(() => {
                     resolve(response)
@@ -177,7 +209,8 @@ module.exports = (s,config,lang) => {
         const stdioPipes = [];
         var times = amountToAdd ? amountToAdd + config.pipeAddition : config.pipeAddition;
         if(e.details && e.details.stream_channels){
-            times += e.details.stream_channels.length
+            const streamChannels = s.parseJSON(e.details.stream_channels)
+            if(streamChannels instanceof Array)times += streamChannels.length
         }
         for(var i=0; i < times; i++){
             stdioPipes.push('pipe')
@@ -399,5 +432,6 @@ Run "npm install ffbinaries" to get this static FFmpeg downloader.`
         checkVersion: checkVersion,
         checkHwAccelMethods: checkHwAccelMethods,
         getWarningChangesForMonitor,
+        isMonitorTargetSelfOrMetadata,
     }
 }

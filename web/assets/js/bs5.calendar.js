@@ -1,66 +1,114 @@
 $(document).ready(function(e){
-    //Timelapse JPEG Window
     var theEnclosure = $('#tab-calendarView')
     var monitorsList = theEnclosure.find('.monitors_list')
-    var dateSelector = theEnclosure.find('.date_selector')
     var calendarDrawArea = $('#calendar_draw_area')
+    var calendarLimitNotice = $('#calendar_limit_notice')
     var loadedVideosInMemory = {};
-    loadDateRangePicker(dateSelector,{
-        onChange: function(start, end, label) {
-            drawCalendarViewElements()
-        }
-    })
+    var calendarIsBuilt = false
     monitorsList.change(function(){
-        drawCalendarViewElements()
+        refetchCalendarEvents()
     })
-    function drawCalendarViewElements(selectedMonitor,startDate,endDate){
-        var dateRange = getSelectedTime(dateSelector)
-        if(!startDate)startDate = dateRange.startDate
-        if(!endDate)endDate = dateRange.endDate
-        if(!selectedMonitor)selectedMonitor = monitorsList.val()
-        var queryString = ['start=' + startDate,'end=' + endDate,'limit=0']
-        var frameIconsHtml = ''
-        var apiURL = getApiPrefix('videos') + '/' + selectedMonitor;
+    // fullCalendar hands this the exact span it is about to display, and calls it again on
+    // every prev / next / today / view change. Driving the query from that span is what lets
+    // the tab work without a date picker : whatever you are looking at is what gets loaded.
+    // A stable colour per monitor, derived from the id so the same camera keeps the same
+    // colour between reloads. With every monitor on one calendar the name in the title is
+    // not enough to tell them apart at a glance.
+    function getMonitorColor(monitorId){
+        var hash = 0
+        for(var i = 0; i < `${monitorId}`.length; i++){
+            hash = ((hash << 5) - hash) + `${monitorId}`.charCodeAt(i)
+            hash |= 0
+        }
+        return `hsl(${Math.abs(hash) % 360},60%,42%)`
+    }
+    // A month of every monitor can run to thousands of recordings. The request is capped so
+    // one wide view can't pull the whole archive; the cap is announced whenever it bites,
+    // because the API returns newest-first and a silent cap would quietly empty out the
+    // older end of the range.
+    var maxCalendarEvents = 2000
+    function setLimitNotice(isTruncated,drawnCount){
+        if(!isTruncated){
+            calendarLimitNotice.addClass('d-none').html('')
+            return
+        }
+        calendarLimitNotice.removeClass('d-none').html(
+            `<i class="fa fa-exclamation-triangle"></i> ${lang.Warning ? lang.Warning + ' : ' : ''}`
+            + `${drawnCount} ${lang['recordings shown']}. ${lang['calendarLimitNoticeText']}`
+        )
+    }
+    function fetchVideosForVisibleRange(start,end,timezone,callback){
+        var selectedMonitor = monitorsList.val()
+        // The API reads dates in the server's configured timezone, the same conversion the
+        // date-picker driven tabs get from getSelectedTime().
+        var startDate = moment(convertTZ(start.toDate())).format('YYYY-MM-DDTHH:mm:ss')
+        var endDate = moment(convertTZ(end.toDate())).format('YYYY-MM-DDTHH:mm:ss')
+        // Asking for one past the cap is how the overflow is detected : this endpoint reports
+        // no total, so the extra row is the only signal that more exist.
+        var queryString = ['start=' + startDate,'end=' + endDate,'limit=' + (maxCalendarEvents + 1)]
+        // Leaving the monitor off the path is what asks for every monitor the user can see,
+        // the same way the Videos and Events tabs handle their All Monitors option.
+        var apiURL = getApiPrefix('videos') + (selectedMonitor ? '/' + selectedMonitor : '');
         var calendarData = []
         loadedVideosInMemory = {}
         $.getJSON(apiURL + '?' + queryString.join('&'),function(data){
-            $.each(data.videos,function(n,v){
+            var videos = data.videos || []
+            var isTruncated = videos.length > maxCalendarEvents
+            if(isTruncated)videos = videos.slice(0,maxCalendarEvents);
+            $.each(videos,function(n,v){
                 if(v.status !== 0){
                     loadedVideosInMemory[`${v.mid}${v.time}${v.type}`] = Object.assign({},v)
                     var loadedMonitor = loadedMonitors[v.mid]
                     if(loadedMonitor){
                         v.title = loadedMonitor.name+' - '+(parseInt(v.size)/1048576).toFixed(2)+'mb';
                     }
+                    v.color = getMonitorColor(v.mid)
                     v.start = moment.utc(v.time).local()
                     v.end = moment.utc(v.end).local()
                     calendarData.push(v)
                 }
             })
-            try{
-                calendarDrawArea.fullCalendar('destroy')
-            }catch(er){
-
-            }
-            calendarDrawArea.fullCalendar({
-                header: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'month,agendaWeek,agendaDay,listWeek'
-                },
-                defaultDate: dateRange.startDateMoment.format('YYYY-MM-DD'),
-                locale: ($user.details.lang || '').substring(0, 2) || undefined,
-                navLinks: true,
-                eventLimit: true,
-                events: calendarData,
-                eventClick: function(v){
-                    var video = loadedVideosInMemory[`${v.mid}${v.time}${v.type}`]
-                    var href = video.href
-                    createVideoPlayerTab(Object.assign({},video,{href: href}))
-                    $(this).css('border-color', 'red');
-                }
-            });
-
+            setLimitNotice(isTruncated,calendarData.length)
+            callback(calendarData)
+        }).fail(function(){
+            setLimitNotice(false)
+            callback([])
         })
+    }
+    // Built once and kept. Rebuilding it on every search was what forced the view back to the
+    // picked date and threw away whichever month or week you had navigated to.
+    function buildCalendar(){
+        if(calendarIsBuilt)return;
+        calendarDrawArea.fullCalendar({
+            header: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'month,agendaWeek,agendaDay,listWeek'
+            },
+            locale: ($user.details.lang || '').substring(0, 2) || undefined,
+            navLinks: true,
+            eventLimit: true,
+            events: fetchVideosForVisibleRange,
+            eventClick: function(v){
+                var video = loadedVideosInMemory[`${v.mid}${v.time}${v.type}`]
+                if(!video)return;
+                var href = video.href
+                createVideoPlayerTab(Object.assign({},video,{href: href}))
+                $(this).css('border-color', 'red');
+            }
+        });
+        calendarIsBuilt = true
+    }
+    function refetchCalendarEvents(){
+        if(!calendarIsBuilt){
+            buildCalendar()
+            return
+        }
+        calendarDrawArea.fullCalendar('refetchEvents')
+    }
+    function renderCalendar(){
+        if(!calendarIsBuilt)return;
+        calendarDrawArea.fullCalendar('render')
     }
 
     $('body').on('click','.open-timelapse-viewer',function(){
@@ -72,17 +120,20 @@ $(document).ready(function(e){
     theEnclosure
     .on('click','.refresh-data',function(e){
         e.preventDefault()
-        drawCalendarViewElements()
+        refetchCalendarEvents()
         return false;
     })
     addOnTabOpen('calendarView', function () {
-        drawMonitorListToSelector(monitorsList)
-        drawCalendarViewElements()
+        drawMonitorListToSelector(monitorsList,null,null,true)
+        buildCalendar()
+        // The calendar lays out against a container that has no width until the tab is
+        // actually visible, so it needs a nudge once it is on screen.
+        renderCalendar()
     })
     addOnTabReopen('calendarView', function () {
         var theSelected = `${monitorsList.val()}`
-        drawMonitorListToSelector(monitorsList)
+        drawMonitorListToSelector(monitorsList,null,null,true)
         monitorsList.val(theSelected)
-        drawCalendarViewElements()
+        // renderCalendar()
     })
 })

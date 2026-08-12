@@ -1,4 +1,5 @@
 const fs = require('fs-extra');
+const path = require('path')
 const express = require('express')
 const unzipper = require('unzipper')
 const fetch = require("node-fetch")
@@ -8,6 +9,14 @@ module.exports = async (s,config,lang,app,io) => {
     s.debugLog(`+++++++++++CustomAutoLoad Modules++++++++++++`)
     const runningInstallProcesses = {}
     const modulesBasePath = __dirname + '/customAutoLoad/'
+    const resolvedModulesBase = path.resolve(modulesBasePath)
+    const resolveInsideModules = (entryPath) => {
+        const resolved = path.resolve(modulesBasePath, entryPath)
+        if(resolved !== resolvedModulesBase && !resolved.startsWith(resolvedModulesBase + path.sep)){
+            return null
+        }
+        return resolved
+    }
     const extractNameFromPackage = (filePath) => {
         const filePathParts = filePath.split('/')
         const packageName = filePathParts[filePathParts.length - 1].split('.')[0]
@@ -69,15 +78,26 @@ module.exports = async (s,config,lang,app,io) => {
                 .then((readStream) => {
                     readStream.pipe(unzipper.Parse())
                     .on('entry', async (file) => {
+                        const safePath = resolveInsideModules(file.path)
+                        if(!safePath){
+                            s.debugLog(`Rejected unsafe module entry path: ${file.path}`)
+                            file.autodrain()
+                            return
+                        }
                         if(file.type === 'Directory'){
                             try{
-                                fs.mkdirSync(modulesBasePath + file.path, { recursive: true })
+                                fs.mkdirSync(safePath, { recursive: true })
                             }catch(err){
 
                             }
                         }else{
+                            try{
+                                fs.mkdirSync(path.dirname(safePath), { recursive: true })
+                            }catch(err){
+
+                            }
                             const content = await file.buffer();
-                            fs.writeFile(modulesBasePath + file.path,content,(err) => {
+                            fs.writeFile(safePath,content,(err) => {
                                 if(err)console.log(err)
                             })
                         }
@@ -386,6 +406,10 @@ module.exports = async (s,config,lang,app,io) => {
     */
     app.post(config.webPaths.superApiPrefix+':auth/package/download', async (req,res) => {
         s.superAuth(req.params, async (resp) => {
+            if(s.superUserUsesDefaultPassword(resp.$user)){
+                s.closeJsonResponse(res,{ok: false, msg: lang.superDefaultPasswordBlocksModuleInstall})
+                return
+            }
             try{
                 const url = req.body.downloadUrl
                 const packageRoot = req.body.packageRoot || ''
@@ -443,6 +467,10 @@ module.exports = async (s,config,lang,app,io) => {
     */
     app.post(config.webPaths.superApiPrefix+':auth/package/install', (req,res) => {
         s.superAuth(req.params, async (resp) => {
+            if(s.superUserUsesDefaultPassword(resp.$user)){
+                s.closeJsonResponse(res,{ok: false, msg: lang.superDefaultPasswordBlocksModuleInstall})
+                return
+            }
             const packageName = req.body.packageName
             const response = {ok: true}
             const error = await installModule(packageName)

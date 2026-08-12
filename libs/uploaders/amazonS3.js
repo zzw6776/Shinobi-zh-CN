@@ -43,16 +43,8 @@ module.exports = function(s,config,lang){
     function loadGroupApp(e){
         // e = user
         var userDetails = JSON.parse(e.details)
-        if(userDetails.aws_use_global === '1' && config.cloudUploaders && config.cloudUploaders.AmazonS3){
-            // {
-            //     aws_accessKeyId: "",
-            //     aws_secretAccessKey: "",
-            //     aws_region: "",
-            //     aws_s3_bucket: "",
-            //     aws_s3_dir: "",
-            // }
-            userDetails = Object.assign(userDetails,config.cloudUploaders.AmazonS3)
-        }
+        // Forced (Superuser configured) credentials are merged into the account details
+        // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
         //Amazon S3
         if(
            !s.group[e.ke].aws_s3 &&
@@ -255,6 +247,9 @@ module.exports = function(s,config,lang){
        "name": lang["Amazon S3"],
        "color": "forestgreen",
        "uploaderId": 's3',
+       "enableFlag": 'use_aws_s3',
+       "globalFlag": 'aws_use_global',
+       "globalConfigKey": 'AmazonS3',
        "info": [
            {
               "name": "detail=aws_s3_save",

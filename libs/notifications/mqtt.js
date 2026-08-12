@@ -2,6 +2,7 @@ var fs = require("fs")
 module.exports = function(s,config,lang,getSnapshot){
     const {
         parseMessageOptions,
+        getAppDeepLink,
     } = require('./utils.js')(s,config,lang)
     if(config.mqttClient === true){
         const allowedSend = {}
@@ -123,11 +124,10 @@ module.exports = function(s,config,lang,getSnapshot){
                     //
                     const groupKey = d.ke
                     await getSnapshot(d,monitorConfig)
-                    if(d.screenshotBuffer){
-                        sendToMqttConnections(groupKey,'onEventTrigger',[Object.assign({},d,{
-                            screenshotBuffer: d.screenshotBuffer.toString('base64')
-                        }),filter],true)
-                    }
+                    sendToMqttConnections(groupKey,'onEventTrigger',[Object.assign({},d,{
+                        screenshotBuffer: d.screenshotBuffer ? d.screenshotBuffer.toString('base64') : null,
+                        deepLink: getAppDeepLink(d)
+                    }),filter],true)
                 }
             }
             const onMonitorSave = (monitorConfig) => {
@@ -413,7 +413,7 @@ module.exports = function(s,config,lang,getSnapshot){
                isFormGroupGroup: true,
                "name": lang['MQTT Outbound'],
                "color": "blue",
-               "section-class": "h_det_mqttout_input h_det_mqttout_1",
+               "section-visibleWhen": { "h_det_mqttout": "1" },
                "info": [
                    {
                       "name": "detail=detector_mqttout_timeout",

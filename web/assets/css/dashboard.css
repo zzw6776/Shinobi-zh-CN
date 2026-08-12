@@ -231,8 +231,13 @@ body {
 .text-monospace {
     font-family: monospace;
 }
+/* text-overflow only takes effect on a single overflowing line, so the class has to
+   carry nowrap and overflow itself — without them long text hard-clips mid-character
+   instead of showing the ellipsis. */
 .text-ellipsis {
     text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 .float{
 
@@ -436,4 +441,23 @@ ul.squeeze {
 .log-item .msg-tree > ul {
     list-style: none;
     padding-left: 0;
+}
+
+/* System Control shares its markup with the Superuser panel's Controls and Logs tab, which
+   gets its text colour from `dark` on <body> plus super-page.css. The dashboard has neither,
+   so the block sets its own here. */
+#tab-systemControl,
+#tab-systemControl .card-header,
+#tab-systemControl .super-system-info,
+#tab-systemControl #logs-list {
+    color: #fff;
+}
+/* Bootstrap's .table sets a colour on the cells themselves, so inheriting from the tab is
+   not enough -- the striped rows and the header row need saying explicitly. The Superuser
+   panel gets this from `.dark .table-striped` in bs5.darktheme.css, which the dashboard has
+   no equivalent of. */
+#tab-systemControl .table-striped > tbody > tr > td,
+#tab-systemControl .table > thead > tr > th {
+    color: #fff;
+    border-color: #222;
 }

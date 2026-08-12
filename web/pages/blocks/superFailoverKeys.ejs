@@ -1,4 +1,6 @@
-<div class="tab-pane text-left" id="failoverKeys" role="tabpanel">
+<main class="container page-tab pt-3 text-left" id="tab-failoverKeys">
+<%# inner id kept: super.failoverServers.isFailover.js scopes itself to $('#failoverKeys') %>
+<div id="failoverKeys">
     <form>
         <div class="row" style="display:flex">
             <div class="col-md-12">
@@ -21,9 +23,6 @@
                             <div class="form-group">
                                 <input placeholder="<%- lang['Server Key'] %>" class="form-control btn btn-dark text-left text-white" type="text" name="failoverServer" value="" placeholder="ws://127.0.0.1:8663">
                             </div>
-                            <div class="btn-group d-flex flex-row">
-                                <a href="#" class="submit flex-grow-1 btn btn-success"><i class="fa fa-check"></i> <%- lang.Save %></a>
-                            </div>
                         </div>
                     </div>
                     <div class="card bg-dark text-white">
@@ -36,6 +35,8 @@
                 <% } %>
             </div>
         </div>
+    <%- include('super/stickySubmitBar'); %>
     </form>
     <script src="<%-window.libURL%>assets/js/super.failoverServers.isFailover.js" type="text/javascript"></script>
 </div>
+</main>

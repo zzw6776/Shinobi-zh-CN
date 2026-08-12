@@ -13,6 +13,9 @@ module.exports = function(s,config,lang,io){
     const {
         legacyFilterEvents
     } = require('./events/utils.js')(s,config,lang)
+    const {
+        redactConfigForLog,
+    } = require('./system/utils.js')(config)
     s.clientSocketConnection = {}
     //send data to socket client function
     s.tx = function(z,y,x){
@@ -62,10 +65,6 @@ module.exports = function(s,config,lang,io){
 
     const streamConnectionAuthentication = (options,ipAddress) => {
         return new Promise( (resolve,reject) => {
-            var isInternal = false
-            if(ipAddress.indexOf('localhost') > -1 || ipAddress.indexOf('127.0.0.1') > -1){
-                isInternal = true
-            }
             const baseWheres = [
                 ['ke','=',options.ke],
                 ['uid','=',options.uid],
@@ -74,7 +73,7 @@ module.exports = function(s,config,lang,io){
                 action: "select",
                 columns: "ke,uid,auth,mail,details",
                 table: "Users",
-                where: baseWheres.concat(!isInternal ? [['auth','=',options.auth]] : [])
+                where: baseWheres.concat([['auth','=',options.auth]])
             },(err,r) => {
                 if(r&&r[0]){
                     resolve(r)
@@ -83,7 +82,7 @@ module.exports = function(s,config,lang,io){
                         action: "select",
                         columns: "*",
                         table: "API",
-                        where: baseWheres.concat(!isInternal ? [['code','=',options.auth]] : [])
+                        where: baseWheres.concat([['code','=',options.auth]])
                     },(err,r) => {
                         if(r && r[0]){
                             r = r[0]
@@ -117,23 +116,25 @@ module.exports = function(s,config,lang,io){
     }
 
     const validatedAndBindAuthenticationToSocketConnection = (cn,d,removeListenerOnDisconnect) => {
-        if(!d.channel)d.channel = 'MAIN';
+        if(d.channel){
+            cn.channel = parseInt(d.channel)+config.pipeAddition;
+        }else{
+            d.channel = 'MAIN';
+            cn.channel = 'MAIN';
+        }
         cn.ke = d.ke,
         cn.uid = d.uid,
         cn.auth = d.auth;
-        cn.channel = d.channel;
         cn.removeListenerOnDisconnect = removeListenerOnDisconnect;
         cn.socketVideoStream = d.id;
     }
 
     const createStreamEmitter = (d,cn) => {
-        var Emitter,chunkChannel
+        var Emitter
         if(!d.channel){
             Emitter = s.group[d.ke].activeMonitors[d.id].emitter
-            chunkChannel = 'MAIN'
         }else{
             Emitter = s.group[d.ke].activeMonitors[d.id].emitterChannel[parseInt(d.channel)+config.pipeAddition]
-            chunkChannel = parseInt(d.channel)+config.pipeAddition
         }
         if(!Emitter){
             cn.disconnect();return;
@@ -201,7 +202,7 @@ module.exports = function(s,config,lang,io){
                 cn.closeSocketVideoStream = function(){
                     Emitter.removeListener('data', contentWriter);
                 }
-                tx({time:toUTC(),buffer:s.group[d.ke].activeMonitors[d.id].firstStreamChunk[chunkChannel]})
+                tx({time:toUTC(),buffer:s.group[d.ke].activeMonitors[d.id].firstStreamChunk[cn.channel]})
                 Emitter.on('data',contentWriter = function(buffer){
                     tx({time:toUTC(),buffer:buffer})
                 })
@@ -253,7 +254,7 @@ module.exports = function(s,config,lang,io){
                 r = r[0];
                 validatedAndBindAuthenticationToSocketConnection(cn, d);
 
-                mp4frag = s.group[d.ke].activeMonitors[d.id].mp4frag[d.channel];
+                mp4frag = s.group[d.ke].activeMonitors[d.id].mp4frag[cn.channel];
                 if (!mp4frag) {
                     onFail('MP4 fragment not available');
                     return;
@@ -371,6 +372,11 @@ module.exports = function(s,config,lang,io){
                 const onSuccess = async (r) => {
                     r = r[0];
                     cn.join('GRP_'+d.ke);cn.join('CPU');
+                    // 'CPU' also carries plugin events, so the opt out is a separate room:
+                    // a group set to not see system usage never joins it and therefore never
+                    // receives the readings at all, rather than being sent them and hiding them.
+                    const canSeeSystemUsage = s.groupCanSeeSystemUsage(d.ke)
+                    if(canSeeSystemUsage)cn.join('OSSTATS');
                     cn.ke=d.ke,
                     cn.uid=d.uid,
                     cn.auth=d.auth;
@@ -380,9 +386,16 @@ module.exports = function(s,config,lang,io){
     //                    s.group[d.ke].vid[cn.id]={uid:d.uid};
                     r.details = JSON.parse(r.details);
                     await applyPermissionsToUser(r)
+                    // Live install output for the dashboard Plugin Manager tab. Must come
+                    // after the details are parsed above -- reading the permission off the
+                    // raw JSON string silently yields undefined, so the socket never joined
+                    // and an install ran to completion with the panel showing nothing.
+                    if(s.userCanUsePluginManager(r))cn.join('PLUGINMANAGER');
+                    if(s.userHasPermission(r,'use_system_control'))cn.join('SYSTEMLOGS');
                     // cn.checkedPermissions = s.checkPermission(r)
                     s.group[d.ke].users[d.auth] = {
                         cnid: cn.id,
+                        ke: d.ke,
                         uid: r.uid,
                         mail: r.mail,
                         details: r.details,
@@ -399,18 +412,34 @@ module.exports = function(s,config,lang,io){
                         s.group[d.ke].activeMonitors={}
                         if(!s.group[d.ke].activeMonitors){s.group[d.ke].activeMonitors={}}
                     }
-                    tx({f:'users_online',users:s.group[d.ke].users})
+                    // s.group[d.ke].users holds the full server-side session record per user,
+                    // keyed by their auth token - including that token as the key and their
+                    // entire account `details` blob (which can hold cloud/notification
+                    // credentials). Build a sanitized, uid-keyed copy with only what an "online
+                    // users" list needs before sending it over the socket. (security fix)
+                    var sanitizedUsersOnline = {}
+                    Object.keys(s.group[d.ke].users).forEach(function(authKey){
+                        var onlineUser = s.group[d.ke].users[authKey]
+                        sanitizedUsersOnline[onlineUser.uid] = {
+                            uid: onlineUser.uid,
+                            mail: onlineUser.mail,
+                            sub: !!(onlineUser.details && onlineUser.details.sub)
+                        }
+                    })
+                    tx({f:'users_online',users:sanitizedUsersOnline})
                     s.tx({f:'user_status_change',ke:d.ke,uid:cn.uid,status:1,user:s.group[d.ke].users[d.auth]},'GRP_'+d.ke)
                     s.sendDiskUsedAmountToClients(d.ke)
                     s.sendCloudDiskUsedAmountToClients(d.ke)
                     tx({
                         f:'init_success',
                         users:s.group[d.ke].vid,
-                        os:{
+                        // Core count, platform and total RAM are part of the same picture, so
+                        // they are withheld too rather than sent and left unused.
+                        os: canSeeSystemUsage ? {
                             platform:s.platform,
                             cpuCount:s.coreCount,
                             totalmem:s.totalmem
-                        }
+                        } : undefined
                     })
                     try{
                         // (s.group[d.ke] ? Object.values(s.group[d.ke].rawMonitorConfigurations) : []).forEach((monitor) => {
@@ -559,6 +588,8 @@ module.exports = function(s,config,lang,io){
                             break;
                             case'edit':
                                 d.cnid = cn.id
+                                d.ke = cn.ke
+                                d.uid = cn.uid
                                 s.accountSettingsEdit(d)
                             break;
                         }
@@ -733,6 +764,17 @@ module.exports = function(s,config,lang,io){
                                 }
                               tx({f:'mode_jpeg_on'})
                             break;
+                            case'detector_on':
+                                // Subscribe to detection events only (no viewer
+                                // registration, no stream rooms). Used by mobile
+                                // clients for push/local notifications.
+                                if(!d.ke){d.ke=cn.ke}
+                                cn.join('DETECTOR_'+d.ke+d.id);
+                            break;
+                            case'detector_off':
+                                if(!d.ke){d.ke=cn.ke}
+                                cn.leave('DETECTOR_'+d.ke+d.id);
+                            break;
                             case'watch_on':
                                 if(!d.ke){d.ke=cn.ke}
                                 s.initiateMonitorObject({mid:d.id,ke:d.ke});
@@ -798,6 +840,10 @@ module.exports = function(s,config,lang,io){
                 d.ok=s.superAuth({ auth: d.auth },function(data){
                     cn.mail = data.$user.mail
                     cn.join('$');
+                    // Plugin Manager output and the system log feed are shared with permitted
+                    // dashboard accounts, so they live in rooms of their own.
+                    cn.join('PLUGINMANAGER');
+                    cn.join('SYSTEMLOGS');
                     s.superUsersApi[d.auth].cnid = cn.id
                     cn.ip=cn.request.connection.remoteAddress
                     s.userLog({ke:'$',mid:'$USER'},{type:lang['Websocket Connected'],msg:{for:lang['Superuser'],id:cn.mail,ip:cn.ip}})
@@ -860,7 +906,7 @@ module.exports = function(s,config,lang,io){
                                 }
                             break;
                             case'configure':
-                                s.systemLog('conf.json Modified',{by:cn.mail,ip:cn.ip,old:jsonfile.readFileSync(s.location.config)})
+                                s.systemLog('conf.json Modified',{by:cn.mail,ip:cn.ip,old:redactConfigForLog(jsonfile.readFileSync(s.location.config))})
                                 jsonfile.writeFile(s.location.config,d.data,{spaces: 2},function(){
                                     s.tx({f:'save_configuration'},cn.id)
                                 })
@@ -880,6 +926,7 @@ module.exports = function(s,config,lang,io){
                     where: [
                         ['auth','=',d.auth],
                         ['uid','=',d.uid],
+                        ['ke','=',d.ke],
                     ],
                     limit: 1
                 },(err,r) => {
@@ -952,6 +999,9 @@ module.exports = function(s,config,lang,io){
                     }
                 })
             }else{
+                if(!cn.ke || cn.ke !== d.ke){
+                    return
+                }
                 if(s.group[d.ke] && s.group[d.ke].activeMonitors[d.mid]){
                     if(s.group[d.ke].activeMonitors[d.mid].allowStdinWrite === true){
                         switch(d.f){

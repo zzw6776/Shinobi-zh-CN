@@ -26,7 +26,11 @@ module.exports = function(s,config){
         nameOfExtensionContainer = nameOfExtensionContainer || `${nameOfExtension}Extensions`
         const theExtenders = s[nameOfExtensionContainer];
         for(extender of theExtenders){
-            await extender(...args)
+            try{
+                await extender(...args)
+            }catch(err){
+                s.debugLog('runExtensionsForArrayAwaited ERR',nameOfExtension,err)
+            }
         }
     }
     s.runExtensionsForObject = (nameOfExtension, nameOfExtensionContainer, args) => {

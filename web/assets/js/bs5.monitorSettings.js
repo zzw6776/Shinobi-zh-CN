@@ -22,6 +22,7 @@ var editorForm = monitorEditorWindow.find('form')
 var tagsInput = monitorEditorWindow.find('[name="tags"]')
 var triggerTagsInput = monitorEditorWindow.find('[detail=det_trigger_tags]')
 var fieldsLoaded = {}
+var isImportingIntoMonitorEditor = false
 var sections = {}
 var loadedPresets = {}
 function generateDefaultMonitorSettings(){
@@ -64,7 +65,7 @@ function generateDefaultMonitorSettings(){
            "hwaccel": "auto",
            "hwaccel_vcodec": "",
            "hwaccel_device": "",
-	   "hwaccel_format": "",
+	       "hwaccel_format": "",
            "use_coprocessor": null,
            "stream_type": "hls",
            "stream_flv_type": "http",
@@ -136,7 +137,7 @@ function generateDefaultMonitorSettings(){
            "cust_sip_record": "",
            "custom_output": "",
            "detector": "0",
-           "detector_http_api": null,
+           "detector_http_api": "1",
            "detector_send_frames": "1",
            "detector_lock_timeout": "",
            "detector_save": "1",
@@ -466,7 +467,144 @@ window.getMonitorEditFormFields = function(){
     return response
 }
 
+// Monitor State presets from inside Monitor Settings. A preset (Presets table, type
+// `monitorStates`) holds a list of partial monitor configurations that get merged over the
+// live monitors when the state is activated - see s.activateMonitorStates in libs/monitor.js.
+// Because it is a merge, a preset only needs the fields that differ from what the monitor
+// already has saved, so what goes in is the diff between the editor and loadedMonitors, with
+// the user able to drop any of it before saving. Only available while editing an existing
+// monitor - a new one has nothing to diff against.
+function getMonitorForStatePreset(){
+    var validation = getMonitorEditFormFields()
+    if(!validation.ok){
+        new PNotify({title:lang['Invalid Data'],text:(validation.errors || []).join('<br>'),type:'error'})
+        return null
+    }
+    return validation.monitorConfig
+}
+// The "unchanged" reference is the form as it read immediately after the monitor was loaded,
+// not the stored monitor. getMonitorEditFormFields() synthesizes several details from the DOM
+// (substream, input_maps, stream_channels, triggerMonitorsPtzTargets, detectorLineCounterSettings)
+// and fields absent from the stored config come back as their rendered default, so comparing
+// its output against loadedMonitors reported edits the user never made. Both sides now come
+// out of the same pipeline, so that noise is identical on each side and cancels out.
+var monitorStatePresetBaseline = null
+function captureMonitorStatePresetBaseline(){
+    var validation = getMonitorEditFormFields()
+    monitorStatePresetBaseline = validation.ok ? validation.monitorConfig : null
+}
+// getMonitorSettingsFieldLabels and normalizeMonitorValueForCompare live in
+// bs5.dashboard-base.js - the Monitor States viewer renders the same labels and values.
+function getChangedMonitorFields(monitorConfig,savedMonitor){
+    var labels = getMonitorSettingsFieldLabels()
+    var changes = []
+    var savedDetails = savedMonitor.details instanceof Object ? savedMonitor.details : safeJsonParse(savedMonitor.details || '{}')
+    var formDetails = monitorConfig.details instanceof Object ? monitorConfig.details : safeJsonParse(monitorConfig.details || '{}')
+    Object.keys(monitorConfig).forEach(function(key){
+        // mid identifies the entry, ke is not part of a preset, details is walked separately
+        if(key === 'details' || key === 'mid' || key === 'ke')return
+        if(normalizeMonitorValueForCompare(monitorConfig[key]) === normalizeMonitorValueForCompare(savedMonitor[key]))return
+        changes.push({key: key, isDetail: false, label: labels[key] || key, value: monitorConfig[key]})
+    })
+    Object.keys(formDetails).forEach(function(key){
+        if(normalizeMonitorValueForCompare(formDetails[key]) === normalizeMonitorValueForCompare(savedDetails[key]))return
+        changes.push({key: key, isDetail: true, label: labels[`detail=${key}`] || key, value: formDetails[key]})
+    })
+    return changes
+}
+function buildMonitorChangesHtml(changes){
+    var escapeText = function(text){
+        return `${text}`.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    }
+    // plain form-check rows rather than list-group-items - a list-group-item paints its own
+    // light background, which left the field label unreadable inside the dark modal
+    var rows = changes.map(function(change,n){
+        var preview = normalizeMonitorValueForCompare(change.value)
+        if(preview.length > 60)preview = `${preview.substring(0,60)}...`
+        return `<div class="form-check mb-2">
+            <input type="checkbox" class="form-check-input monitor-state-preset-change" id="monitorStatePresetChange${n}" data-change-index="${n}">
+            <label class="form-check-label cursor-pointer" for="monitorStatePresetChange${n}">
+                <div>${escapeText(change.label)}</div>
+                <small class="text-muted">${escapeText(change.isDetail ? `detail=${change.key}` : change.key)} : ${escapeText(preview)}</small>
+            </label>
+        </div>`
+    }).join('')
+    return `<div class="mb-3 pe-2" style="max-height:300px;overflow:auto">${rows}</div>`
+}
+// ticked as a property after the body is in the DOM - the `checked` attribute alone did not
+// survive into the rendered modal
+function checkAllMonitorStatePresetChanges(){
+    $.confirm.body.find('.monitor-state-preset-change').prop('checked',true)
+}
+function getCheckedMonitorChanges(changes){
+    var selected = []
+    $.confirm.body.find('.monitor-state-preset-change:checked').each(function(){
+        var change = changes[parseInt($(this).attr('data-change-index'))]
+        if(change)selected.push(change)
+    })
+    return selected
+}
+function buildMonitorPartialFromChanges(monitorConfig,changes){
+    var partial = {mid: monitorConfig.mid}
+    changes.forEach(function(change){
+        if(change.isDetail){
+            if(!partial.details)partial.details = {}
+            partial.details[change.key] = change.value
+        }else{
+            partial[change.key] = change.value
+        }
+    })
+    return partial
+}
+// null when there is nothing to save - the caller has already been told why
+function getMonitorStatePresetChanges(){
+    var monitorConfig = getMonitorForStatePreset()
+    if(!monitorConfig)return null
+    if(!loadedMonitors[monitorConfig.mid] || !monitorStatePresetBaseline){
+        new PNotify({title:lang['Monitor States'],text:lang['MonitorStatePresetNeedsSavedMonitorText'],type:'error'})
+        return null
+    }
+    var changes = getChangedMonitorFields(monitorConfig,monitorStatePresetBaseline)
+    if(changes.length === 0){
+        new PNotify({title:lang['Monitor States'],text:lang['NoMonitorChangesForPresetText'],type:'error'})
+        return null
+    }
+    return {monitorConfig: monitorConfig, changes: changes}
+}
+// the two menu items only make sense against a monitor that already exists
+function updateMonitorStatePresetMenuItems(monitorId){
+    var el = $('.monitor-state-preset-option')
+    if(loadedMonitors[monitorId]){
+        el.show()
+    }else{
+        el.hide()
+    }
+}
+function getMonitorStatePresets(callback){
+    $.getJSON(getApiPrefix(`monitorStates`),function(data){
+        callback(data.presets || [])
+    }).fail(function(){
+        callback([])
+    })
+}
+function saveMonitorIntoStatePreset(presetName,existingMonitors,monitorConfig){
+    // one entry per monitor - saving again replaces what the preset held for this monitor
+    var monitors = (existingMonitors || []).filter(function(monitor){
+        return monitor.mid !== monitorConfig.mid
+    })
+    monitors.push(monitorConfig)
+    // sent as a JSON string, not a nested object - bodyParser.urlencoded defaults to a
+    // 1000 parameter limit and a whole monitor config deep-serializes well past that
+    $.post(`${getApiPrefix(`monitorStates`)}/${encodeURIComponent(presetName)}/insert`,{data:JSON.stringify({monitors:monitors})},function(d){
+        if(d.ok === true){
+            new PNotify({title:lang.Success,text:d.msg,type:'success'})
+        }else{
+            new PNotify({title:lang['Invalid Data'],text:d.msg || lang['Failed'],type:'error'})
+        }
+    })
+}
 function drawMonitorSettingsSubMenu(){
+    if(isImportingIntoMonitorEditor)return
     drawSubMenuItems('monitorSettings',definitions['Monitor Settings'])
 }
 
@@ -603,6 +741,11 @@ function getPluginsList(monitorConfig){
     })
 }
 async function importIntoMonitorEditor(options){
+    // Loading a monitor sets hundreds of fields with .val().change(). Every one of those that
+    // is a `selector` would otherwise re-run the whole visibility pass, re-serialize the form
+    // and rebuild the side menu, so the work is suppressed until the form is fully populated
+    // and then done once at the end.
+    isImportingIntoMonitorEditor = true
     var monitorConfig = options.values || options
     var monitorId = monitorConfig.mid
     var monitorDetails = safeJsonParse(monitorConfig.details);
@@ -747,8 +890,10 @@ async function importIntoMonitorEditor(options){
         }
     })
     monitorsForCopy.find('optgroup').html(tmp)
+    isImportingIntoMonitorEditor = false
     setFieldVisibility()
     drawMonitorSettingsSubMenu()
+    captureMonitorStatePresetBaseline()
     onMonitorSettingsLoadedExtensions.forEach(function(theAction){
         theAction(monitorConfig)
     })
@@ -792,6 +937,10 @@ monitorEditorWindow.on('change','[detail="auto_host"]',function(e){
             isRTSP = true;
             url = url.replace('rtsp://','http://')
         }
+        if(has('rtsps://')){
+            isRTSP = true;
+            url = url.replace('rtsps://','http://')
+        }
         if(has('rtmp://')){
             isRTMP = true;
             url = url.replace('rtmp://','http://')
@@ -821,8 +970,27 @@ monitorEditorWindow.on('change','[detail="auto_host"]',function(e){
         delete(parsedURL)
     }
 })
+var DETECTOR_CMD_SHELL_RE = /[;&|<>$`"'\\()^%]/g
+var DETECTOR_CMD_FIELDS = ['detector_command','detector_notrigger_command']
+function checkDetectorCommandField(val){
+    var found = val.match(DETECTOR_CMD_SHELL_RE) || []
+    if(found.length === 0) return
+    var unique = found.filter(function(c,i,a){ return a.indexOf(c) === i }).join(' ')
+    new PNotify({
+        title: lang.detectorCommandWarnTitle || 'Command Field — Restricted Characters',
+        text: (lang.detectorCommandWarnText || 'Characters not permitted in command fields will be removed on save: {CHARS}').replace('{CHARS}', unique),
+        type: 'warning'
+    })
+}
+monitorEditorWindow.on('change', '[detail="detector_command"],[detail="detector_notrigger_command"]', function(){
+    checkDetectorCommandField($(this).val())
+})
 editorForm.submit(function(e){
     e.preventDefault();
+    DETECTOR_CMD_FIELDS.forEach(function(field){
+        var el = monitorEditorWindow.find('[detail="' + field + '"]')
+        if(el.length) checkDetectorCommandField(el.val())
+    })
     var validation = getMonitorEditFormFields()
     if(!validation.ok){
         var errorsFound = validation.errors
@@ -838,6 +1006,9 @@ editorForm.submit(function(e){
                 text: d.msg,
                 type: 'danger'
             })
+        }else{
+            // what was just saved is the new "unchanged" reference
+            captureMonitorStatePresetBaseline()
         }
         debugLog(d)
         setSubmitButton(editorForm, lang.Save, `check`, false)
@@ -925,14 +1096,14 @@ var channelPlacementInit = function(){
         _this.find('[input-mapping]').attr('input-mapping','stream_channel-'+n)
     })
 }
-var getSubStreamChannelFields = function(){
+function getSubStreamChannelFields(){
     var selectedChannels = {
         input: getPseudoFields('detail-substream-input'),
         output: getPseudoFields('detail-substream-output')
     }
     return selectedChannels
 }
-var getPseudoFields = function(fieldKey,parent){
+function getPseudoFields(fieldKey,parent){
     parent = parent || monitorEditorWindow
     fieldKey = fieldKey || 'detail-substream-input'
     var fields = {}
@@ -943,7 +1114,6 @@ var getPseudoFields = function(fieldKey,parent){
         var value = el.val()
         fields[paramKey] = value
     });
-    console.log(fields)
     return fields
 }
 var buildMonitorURL = function(){
@@ -984,6 +1154,7 @@ var showInputMappingFields = function(showMaps){
     drawMonitorSettingsSubMenu()
 }
 function setFieldVisibilityNewWay(){
+    if(isImportingIntoMonitorEditor)return
     var validation = getMonitorEditFormFields()
     if(!validation.ok){
         return console.log('Failed setFieldVisibilityNewWay', validation)
@@ -1020,24 +1191,18 @@ function setFieldVisibilityNewWay(){
         }
     })
 }
-function setFieldVisibilityOldWay(formElement){
-    var listToShow = []
-    formElement.find('[selector]').each(function(n,v){
+function setFieldVisibilityBySelectors(formElement){
+    formElement.find('[selector]').each(function(){
         var el = $(this)
-        var keyName = el.attr('selector')
-        var value = el.val()
-        var toShow = `${keyName}_${value}`
-        listToShow.push(toShow)
-        formElement.find(`.${keyName}_input`).hide()
+        formElement.find(`.${el.attr('selector')}_text`).text(el.find('option:selected').text())
     })
-    for (let i = 0; i < listToShow.length; i++) {
-        var item = listToShow[i];
-        var elements = formElement.find(`[class*="${item}"]`)
-        elements.show()
-    }
+    applyVisibleWhen(formElement)
+    // for definitions that still encode conditions in class names (plugins)
+    applySelectorVisibility(formElement)
 }
 function setFieldVisibility(){
-    setFieldVisibilityOldWay(editorForm)
+    if(isImportingIntoMonitorEditor)return
+    setFieldVisibilityBySelectors(editorForm)
     setFieldVisibilityNewWay()
 }
 monitorStreamChannels.on('click','.delete',function(){
@@ -1076,7 +1241,9 @@ editorForm.find('[name="type"]').change(function(e){
 // editorForm.find('[detail]').change(function(){
 //     onDetailFieldChange(this)
 // })
-editorForm.on('change','[selector]',function(){
+editorForm.on('change','[selector]',function(e){
+    // a real user change means the form is not being populated, whatever went on before
+    if(!e.isTrigger)isImportingIntoMonitorEditor = false
     var el = $(this);
     onSelectorChange(el,editorForm)
     setFieldVisibilityNewWay()
@@ -1157,6 +1324,7 @@ editorForm.find('[name="type"]').change(function(e){
             monitorEditorTitle.find('i').attr('class','fa fa-wrench')
         }
         monitorEditorSelectedMonitor = monitorConfigToLoad
+        updateMonitorStatePresetMenuItems(monitorId)
         importIntoMonitorEditor(monitorConfigToLoad)
         openTab(`monitorSettings`,{},null)
         monitorsList.val(monitorConfigToLoad.mid || '')
@@ -1338,6 +1506,59 @@ editorForm.find('[name="type"]').change(function(e){
     })
     .on('click','.reset-monitor-settings-form',function(){
         resetMonitorEditor()
+    })
+    .on('click','.create-monitor-state-preset',function(){
+        var pending = getMonitorStatePresetChanges()
+        if(!pending)return;
+        $.confirm.create({
+            title: lang['Create new Preset'],
+            body: `<p>${lang['CreateMonitorStatePresetText']}</p>
+                ${buildMonitorChangesHtml(pending.changes)}
+                <input class="form-control monitor-state-preset-name" placeholder="${lang['Name']}">`,
+            clickOptions: {title: lang['Save'], class: 'btn-success'},
+            clickCallback: function(){
+                var presetName = `${$.confirm.body.find('.monitor-state-preset-name').val() || ''}`.trim()
+                if(!presetName){
+                    return new PNotify({title:lang['Invalid Data'],text:lang['Name cannot be empty.'],type:'error'})
+                }
+                var selectedChanges = getCheckedMonitorChanges(pending.changes)
+                if(selectedChanges.length === 0){
+                    return new PNotify({title:lang['Invalid Data'],text:lang['NoMonitorChangesSelectedText'],type:'error'})
+                }
+                saveMonitorIntoStatePreset(presetName,[],buildMonitorPartialFromChanges(pending.monitorConfig,selectedChanges))
+            }
+        })
+        checkAllMonitorStatePresetChanges()
+    })
+    .on('click','.add-monitor-to-state-preset',function(){
+        var pending = getMonitorStatePresetChanges()
+        if(!pending)return;
+        getMonitorStatePresets(function(presets){
+            if(presets.length === 0){
+                return new PNotify({title:lang['Monitor States'],text:lang['NoMonitorStatePresetsText'],type:'error'})
+            }
+            var optionsHtml = presets.map(function(preset){
+                return createOptionHtml({value: preset.name, label: preset.name})
+            }).join('')
+            $.confirm.create({
+                title: lang['Add to Preset'],
+                body: `<p>${lang['AddMonitorToStatePresetText']}</p>
+                    ${buildMonitorChangesHtml(pending.changes)}
+                    <select class="form-control monitor-state-preset-selection">${optionsHtml}</select>`,
+                clickOptions: {title: lang['Save'], class: 'btn-success'},
+                clickCallback: function(){
+                    var presetName = $.confirm.body.find('.monitor-state-preset-selection').val()
+                    var selectedChanges = getCheckedMonitorChanges(pending.changes)
+                    if(selectedChanges.length === 0){
+                        return new PNotify({title:lang['Invalid Data'],text:lang['NoMonitorChangesSelectedText'],type:'error'})
+                    }
+                    var chosenPreset = presets.find(function(preset){ return preset.name === presetName })
+                    var existingMonitors = chosenPreset && chosenPreset.details ? chosenPreset.details.monitors || [] : []
+                    saveMonitorIntoStatePreset(presetName,existingMonitors,buildMonitorPartialFromChanges(pending.monitorConfig,selectedChanges))
+                }
+            })
+            checkAllMonitorStatePresetChanges()
+        })
     })
     .on('click','.import-into-monitor-settings-window',function(){
         launchImportMonitorWindow(function(monitor){

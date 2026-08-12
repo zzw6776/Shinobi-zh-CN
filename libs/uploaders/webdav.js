@@ -1,4 +1,5 @@
 var fs = require('fs');
+const { pipeline } = require('stream');
 module.exports = async function(s,config,lang){
     if(config.webDavUpload){
         try{
@@ -23,15 +24,8 @@ module.exports = async function(s,config,lang){
             var loadWebDavForUser = function(e){
                 // e = user
                 var userDetails = JSON.parse(e.details);
-                if(userDetails.webdav_use_global === '1' && config.cloudUploaders && config.cloudUploaders.WebDAV){
-                    // {
-                    //     webdav_user: "",
-                    //     webdav_pass: "",
-                    //     webdav_url: "",
-                    //     webdav_dir: "",
-                    // }
-                    userDetails = Object.assign(userDetails,config.cloudUploaders.WebDAV)
-                }
+                // Forced (Superuser configured) credentials are merged into the account details
+                // centrally in libs/uploaders.js before this runs -- see applyForcedCloudUploaderDetails.
                 //owncloud/webdav
                 if(!s.group[e.ke].webdav &&
                    userDetails.webdav_user&&
@@ -81,11 +75,23 @@ module.exports = async function(s,config,lang){
                 //cloud saver - webdav
                var wfs = s.group[e.ke].webdav
                if(wfs && s.group[e.ke].init.use_webdav !== '0' && s.group[e.ke].init.webdav_save === "1"){
+                   if(!k.filesize){
+                       s.userLog(e,{
+                           type: lang['Webdav Error'],
+                           msg: `Skipping WebDAV upload of empty (0 byte) recording: ${k.filename || k.file}`
+                       })
+                       return
+                   }
                    var webdavUploadDir = s.group[e.ke].init.webdav_dir+e.ke+'/'+e.mid+'/'
                    var startWebDavUpload = function(){
                        s.group[e.ke].activeMonitors[e.id].webdavDirExist = true
-                       var wfsWriteStream =
-                       fs.createReadStream(k.dir + k.filename).pipe(wfs.createWriteStream(webdavUploadDir + k.filename))
+                       pipeline(
+                           fs.createReadStream(k.dir + k.filename),
+                           wfs.createWriteStream(webdavUploadDir + k.filename),
+                           function(err){
+                               if(err)s.userLog(e,{type:lang['Webdav Error'],msg:`${err}`})
+                           }
+                       )
                        if(s.group[e.ke].init.webdav_log === '1'){
                            var webdavRemoteUrl = s.addUserPassToUrl(s.checkCorrectPathEnding(s.group[e.ke].init.webdav_url),s.group[e.ke].init.webdav_user,s.group[e.ke].init.webdav_pass) + s.group[e.ke].init.webdav_dir + e.ke + '/'+e.mid+'/'+k.filename
                            s.knexQuery({
@@ -170,7 +176,13 @@ module.exports = async function(s,config,lang){
                 if(s.group[e.ke].webdav && s.group[e.ke].init.use_webdav !== '0' && s.group[e.ke].init.webdav_save === '1'){
                     const wfs = s.group[e.ke].webdav
                     const saveLocation = s.group[e.ke].init.webdav_dir+e.ke+'/'+e.mid+'_timelapse/' + queryInfo.filename
-                    fs.createReadStream(filePath).pipe(wfs.createWriteStream(saveLocation))
+                    pipeline(
+                        fs.createReadStream(filePath),
+                        wfs.createWriteStream(saveLocation),
+                        function(err){
+                            if(err)s.debugLog(err)
+                        }
+                    )
                     if(s.group[e.ke].init.webdav_log === '1'){
                         s.knexQuery({
                             action: "insert",
@@ -241,6 +253,9 @@ module.exports = async function(s,config,lang){
                "name": lang.WebDAV,
                "color": "forestgreen",
                "uploaderId": 'webdav',
+               "enableFlag": 'use_webdav',
+               "globalFlag": 'webdav_use_global',
+               "globalConfigKey": 'WebDAV',
                "info": [
                    {
                       "name": "detail=webdav_save",

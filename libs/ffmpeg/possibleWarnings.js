@@ -122,7 +122,8 @@ module.exports = (monitor,probeResult,config,lang) => {
         {
             isTrue: (
                 !monitor.port &&
-                monitor.protocol === 'rtsp'
+                (monitor.protocol === 'rtsp' ||
+                monitor.protocol === 'rtsps')
             ),
             title: lang['Automatic Field Fill'],
             text: lang.Port + ' : 554',

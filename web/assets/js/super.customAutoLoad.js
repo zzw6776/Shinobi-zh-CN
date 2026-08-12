@@ -1,5 +1,19 @@
 $(document).ready(function(){
     var loadedModules = {}
+    // Every action here used to act only on `data.ok` and drop failures on the floor, so a
+    // refused download -- the default Superuser password blocks them, for one -- looked
+    // exactly like nothing happening at all.
+    function actionFailed(data){
+        if(data && data.ok)return false
+        var reason = data && (data.msg || (data.error && (data.error.message || data.error)))
+        new PNotify({
+            title: lang['Action Failed'],
+            text: typeof reason === 'string' && reason ? reason : lang['Action Failed'],
+            type: 'error',
+            hide: false,
+        })
+        return true
+    }
     var listElement = $('#customAutoLoadList')
     var quickSelectEl = $('#moduleQuickSelect')
     var downloadForm = $('#downloadNewModule')
@@ -29,8 +43,11 @@ $(document).ready(function(){
     var loadedBlocks = {}
     var drawModuleBlock = function(module){
         var humanName = module.properties.name ? module.properties.name : module.name
-        if(listElement.find('[package-name="${module.name}"]').length > 0){
-            var existingElement = listElement.find('[package-name="${module.name}"]')
+        // Backticks, not single quotes: as a plain string the selector looked for a literal
+        // "${module.name}" attribute, never matched, and so every redraw prepended a second
+        // card for a module that was already listed instead of updating the existing one.
+        if(listElement.find(`[package-name="${module.name}"]`).length > 0){
+            var existingElement = listElement.find(`[package-name="${module.name}"]`)
             existingElement.find('.title').text(humanName)
             existingElement.find('[calm-action="status"]').text(module.properties.disabled ? lang.Enable : lang.Disable)
         }else{
@@ -130,24 +147,22 @@ $(document).ready(function(){
         switch(action){
             case'install':
                 installModule(packageName,function(data){
-                    if(data.ok){
-                        console.log(data)
-                    }
+                    if(actionFailed(data))return
                 })
             break;
             case'status':
                 setModuleStatus(packageName,!!!loadedModules[packageName].properties.disabled,function(data){
-                    if(data.ok){
-                        loadedModules[packageName].properties.disabled = !!!loadedModules[packageName].properties.disabled
-                        el.text(loadedModules[packageName].properties.disabled ? lang.Enable : lang.Disable)
-                    }
+                    if(actionFailed(data))return
+                    loadedModules[packageName].properties.disabled = !!!loadedModules[packageName].properties.disabled
+                    el.text(loadedModules[packageName].properties.disabled ? lang.Enable : lang.Disable)
                 })
             break;
             case'delete':
                 deleteModule(packageName,function(data){
-                    if(data.ok){
-                        card.remove()
-                    }
+                    if(actionFailed(data))return
+                    card.remove()
+                    delete(loadedModules[packageName])
+                    delete(loadedBlocks[packageName])
                 })
             break;
         }
@@ -157,11 +172,14 @@ $(document).ready(function(){
         var el = $(this)
         var form = el.serializeObject()
         downloadModule(form.downloadUrl,form.packageRoot,function(data){
-            console.log(data)
-            if(data.ok){
-                data.newModule.properties.disabled = true
-                drawModuleBlock(data.newModule)
+            if(actionFailed(data))return
+            if(!data.newModule){
+                new PNotify({title: lang['Action Failed'], text: 'The module downloaded but the server returned no module information.', type:'error'})
+                return
             }
+            data.newModule.properties.disabled = true
+            drawModuleBlock(data.newModule)
+            new PNotify({title: lang.Download, text: data.moduleName, type:'success'})
         })
         return false
     })

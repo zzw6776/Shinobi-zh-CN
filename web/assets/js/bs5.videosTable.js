@@ -77,7 +77,6 @@ $(document).ready(function(e){
     });
 
     async function drawVideosTableViewElements(pageNumber, pageSize, usePreloadedData) {
-        // Set default values if pageNumber and pageSize are not provided
         if(alreadyLoading)return;
         alreadyLoading = true
         pageNumber = pageNumber || 1;
@@ -93,32 +92,28 @@ $(document).ready(function(e){
         var wantsArchivedVideo = getVideoSetSelected() === 'archive';
         var wantCloudVideo = wantCloudVideos();
         videosTableNoticeArea.hide();
-        if (!usePreloadedData) {
-            var result = await getVideos({
-                monitorId,
-                startDate,
-                endDate,
-                searchQuery,
-                andOnly,
-                archived: wantsArchivedVideo,
-                customVideoSet: wantCloudVideo ? 'cloudVideos' : null,
-                pageSize: pageSize, // Pass pageSize to server
-                currentPage: pageNumber // Pass currentPage to server
-            });
-            loadedVideosTable = result.videos;
-        }
-
+        var result = await getVideos({
+            monitorId,
+            startDate,
+            endDate,
+            searchQuery,
+            andOnly,
+            archived: wantsArchivedVideo,
+            customVideoSet: wantCloudVideo ? 'cloudVideos' : null,
+            pageSize: pageSize, // Pass pageSize to server
+            currentPage: pageNumber // Pass currentPage to server
+        });
+        loadedVideosTable = result.videos;
         //videosTableDrawArea.bootstrapTable('destroy');
         videosTableDrawArea.bootstrapTable({
             pagination: true,
-            search: true,
+            search: false,
             pageList: [10, 25, 50, 100, 1000, 2000],
             pageSize: pageSize, // Ensure the current page size is maintained
             pageNumber: pageNumber, // Ensure the current page number is maintained
             totalRows: result.total, // Reflect total number of videos
             onPostBody: loadFramesForVideosInView,
             onPageChange: (newPageNumber, newPageSize) => {
-                // drawVideosTableViewElements(newPageNumber, newPageSize);
                 setTimeout(() => {
                     loadFramesForVideosInView();
                 }, 500);
@@ -176,7 +171,7 @@ $(document).ready(function(e){
                                     <a class="video-thumbnail-button-cell open-snapshot p-3">
                                         <i class="fa fa-camera"></i>
                                     </a>
-                                    <a class="video-thumbnail-button-cell preview-video p-3" href="${href}" title="${lang.Play}">
+                                    <a class="video-thumbnail-button-cell open-video p-3" href="${href}" title="${lang.Play}">
                                         <i class="fa fa-play"></i>
                                     </a>
                                 </div>
@@ -354,6 +349,22 @@ $(document).ready(function(e){
         drawVideosTableViewElements()
         return false;
     })
+    .on('click','.videosTable_quick_daterange',function(e){
+        e.preventDefault()
+        var el = $(this)
+        var hours = el.attr('data-hours')
+        var days = el.attr('data-days')
+        var amount = hours ? parseInt(hours) : parseInt(days)
+        var unit = hours ? 'hours' : 'days'
+        var picker = dateSelector.data('daterangepicker')
+        picker.setStartDate(moment().subtract(amount,unit))
+        picker.setEndDate(moment())
+        // setStartDate/setEndDate only fire a `change` on the input element, not the
+        // picker's own apply callback that loadDateRangePicker() wires up, so redraw here.
+        videosTableDrawArea.bootstrapTable('destroy');
+        drawVideosTableViewElements()
+        return false;
+    })
     .on('click','.open-snapshot',function(e){
         e.preventDefault()
         var href = $(this).parents('.video-thumbnail').find('img').click()
@@ -469,8 +480,8 @@ $(document).ready(function(e){
                         delete(loadedVideosInMemory[`${data.mid}${data.time}${data.type}`])
                         clearTimeout(redrawTimeout)
                         redrawTimeout = setTimeout(function(){
-			    videosTableDrawArea.bootstrapTable('destroy');
-                            drawVideosTableViewElements(true)
+			                videosTableDrawArea.bootstrapTable('destroy');
+                            drawVideosTableViewElements()
                         },2000)
                     }
                 }
@@ -511,7 +522,6 @@ $(document).ready(function(e){
     })
     addOnTabOpen('videosTableView', function () {
         drawMonitorListToSelector(monitorsList,null,null,true)
-        // drawVideosTableViewElements()
         videosTableNoticeArea.show()
     })
     addOnTabReopen('videosTableView', function () {

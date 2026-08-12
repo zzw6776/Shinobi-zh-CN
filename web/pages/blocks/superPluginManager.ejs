@@ -4,18 +4,16 @@
             <div class="card-header">
                 <%- lang['Plugin Manager'] %>
             </div>
-            <ul class="nav nav-tabs nav-tabs-neutral justify-content-center bg-dark" id="tablist" role="tablist">
-                <li class="nav-item">
-                    <a class="nav-link active" data-bs-toggle="tab" data-bs-target="#pluginManagerList" role="tab"><%-lang['Downloaded']%></a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" data-bs-target="#pluginManagerDownloadbleList" role="tab"><%-lang['Download Plugins']%></a>
-                </li>
-            </ul>
+            <div class="card-body">
+                <div class="nav btn-group plugin-manager-tabs" role="tablist">
+                    <a class="btn btn-sm btn-success plugin-manager-tab-btn active" data-bs-toggle="tab" data-bs-target="#pluginManagerList" role="tab"><%-lang['Downloaded']%></a>
+                    <a class="btn btn-sm btn-default plugin-manager-tab-btn" data-bs-toggle="tab" data-bs-target="#pluginManagerDownloadbleList" role="tab"><%-lang['Download Plugins']%></a>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-6">
-        <form class="card bg-dark grey mt-1" id="downloadNewPlugin">
+        <form class="card bg-dark grey mt-1" id="downloadNewPlugin" style="display:none">
             <div class="card-body">
                 <div class="form-group">
                     <input type="text" placeholder="<%- lang['Download URL for Module'] %> (.zip)" class="form-control" name="downloadUrl" />
@@ -26,18 +24,40 @@
                 <div><button type="submit" class="btn btn-round btn-block btn-default mb-0"><i class="fa fa-download"></i> <%- lang.Download %></button></div>
             </div>
         </form>
+        <div class="card bg-dark grey mt-1" id="connectedPluginsCard">
+            <div class="card-header"><%- lang['Connected Plugins'] %></div>
+            <div class="card-body" id="connectedPluginsList"></div>
+        </div>
     </div>
 </div>
-<div class="tab-content pt-4 pb-0 m-0">
-    <div class="tab-pane active" id="pluginManagerList"></div>
-    <div class="tab-pane" id="pluginManagerDownloadbleList">
-        <div class="form-group">
-            <input id="pluginManagerDownloadbleListSearch" type="text" placeholder="<%- lang.Search %>" class="form-control" />
+<div class="row">
+    <div class="col-md-12">
+        <div class="card bg-dark grey mt-3">
+            <div class="card-body">
+                <div class="tab-content pb-0 m-0">
+                    <div class="tab-pane active" id="pluginManagerList"></div>
+                    <div class="tab-pane" id="pluginManagerDownloadbleList">
+                        <div class="form-group">
+                            <input id="pluginManagerDownloadbleListSearch" type="text" placeholder="<%- lang.Search %>" class="form-control" />
+                        </div>
+                        <table class="table table-striped mb-0" id="pluginManagerDownloadble">
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
-        <table class="table table-striped" id="pluginManagerDownloadble">
-            <tbody></tbody>
-        </table>
     </div>
 </div>
 <link rel="stylesheet" href="<%-window.libURL%>assets/css/super.pluginManager.css">
+<script>
+// This block is shared by the Superuser panel and the dashboard's Plugin Manager tab. The
+// dashboard sets the prefix itself (it needs getApiPrefix, which only exists once the footer
+// scripts have run), so only fall back to the Superuser session form when nothing set it.
+// Registered before super.pluginManager.js so it wins the ready queue.
+$(document).ready(function(){
+    if(window.pluginManagerApiPrefix)return;
+    window.pluginManagerApiPrefix = `${superApiPrefix}${$user.sessionKey}/plugins`
+})
+</script>
 <script src="<%-window.libURL%>assets/js/super.pluginManager.js" type="text/javascript"></script>

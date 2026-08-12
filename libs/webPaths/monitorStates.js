@@ -81,11 +81,33 @@ module.exports = function(s,config,lang,app){
                         s.closeJsonResponse(res,endData)
                         return
                     }
+                    // Editing a preset is also when it gets tidied - monitors that have since
+                    // been deleted are dropped instead of being written back out again.
+                    const monitorsStillPresent = s.getMonitorsPresentInPreset(groupKey,form.monitors)
+                    // The response waits for the write to land. It used to be sent while the
+                    // insert/update was still in flight, so a client that re-read the preset
+                    // as soon as it got the ok was served the row's previous contents.
                     s.findPreset(presetQueryVals,function(notFound,preset){
+                        const onWriteComplete = (err,details,txAction) => {
+                            if(err){
+                                endData.ok = false
+                                endData.msg = lang['Failed']
+                                s.debugLog(err)
+                            }else{
+                                endData.ok = true
+                                s.tx({
+                                    f: txAction,
+                                    details: details,
+                                    ke: req.params.ke,
+                                    name: req.params.stateName
+                                },'GRP_'+req.params.ke)
+                            }
+                            s.closeJsonResponse(res,endData)
+                        }
                         if(notFound === true){
                             endData.msg = lang["Inserted State Configuration"]
                             var details = {
-                                monitors : form.monitors
+                                monitors : monitorsStillPresent
                             }
                             var insertData = {
                                 ke: req.params.ke,
@@ -97,17 +119,13 @@ module.exports = function(s,config,lang,app){
                                 action: "insert",
                                 table: "Presets",
                                 insert: insertData
+                            },(err) => {
+                                onWriteComplete(err,details,'add_group_state')
                             })
-                            s.tx({
-                                f: 'add_group_state',
-                                details: details,
-                                ke: req.params.ke,
-                                name: req.params.stateName
-                            },'GRP_'+req.params.ke)
                         }else{
                             endData.msg = lang["Edited State Configuration"]
                             var details = Object.assign(preset.details,{
-                                monitors : form.monitors
+                                monitors : monitorsStillPresent
                             })
                             s.knexQuery({
                                 action: "update",
@@ -119,16 +137,10 @@ module.exports = function(s,config,lang,app){
                                     ['ke','=',req.params.ke],
                                     ['name','=',req.params.stateName],
                                 ]
+                            },(err) => {
+                                onWriteComplete(err,details,'edit_group_state')
                             })
-                            s.tx({
-                                f: 'edit_group_state',
-                                details: details,
-                                ke: req.params.ke,
-                                name: req.params.stateName
-                            },'GRP_'+req.params.ke)
                         }
-                        endData.ok = true
-                        s.closeJsonResponse(res,endData)
                     })
                 break;
                 case'delete':

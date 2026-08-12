@@ -9,6 +9,8 @@
   "videosDir": "__DIR__/videos",
   "passwordType": "sha256",
   "detectorMergePamRegionTriggers": true,
+  "detectorCommandEnabled": false,
+  "disableSSRFSelfTargetFilter": false,
   "wallClockTimestampAsDefault": true,
   "useBetterP2P": true,
   "logCpuAndRamDangerZone": false,
@@ -35,5 +37,45 @@
     }
   },
   "cron":{},
-  "pluginKeys":{}
+  "pluginKeys":{},
+  "cloudUploaders":{
+    "_comment": "Credentials used when a Cloud Uploader is Forced for an Admin account from the Superuser panel (Accounts > the account > Force <uploader>). They are read only on the server and are never written to the account or sent to a dashboard, so the Admin cannot see or change them. Include the upload switch (for example aws_s3_save) because a forced uploader is hidden from the Admin's Account Settings and they cannot turn it on themselves. Keys map to config.cloudUploaders.<name> as listed below.",
+    "AmazonS3":{
+      "aws_s3_save": "1",
+      "aws_accessKeyId": "",
+      "aws_secretAccessKey": "",
+      "aws_region": "",
+      "aws_s3_bucket": "",
+      "aws_s3_dir": "/"
+    },
+    "BackblazeB2":{
+      "bb_b2_save": "1",
+      "bb_b2_accountId": "",
+      "bb_b2_applicationKey": "",
+      "bb_b2_bucket": "",
+      "bb_b2_dir": "/"
+    },
+    "WasabiHotCloudStorage":{
+      "whcs_save": "1",
+      "whcs_accessKeyId": "",
+      "whcs_secretAccessKey": "",
+      "whcs_region": "",
+      "whcs_bucket": "",
+      "whcs_dir": "/"
+    },
+    "WebDAV":{
+      "webdav_save": "1",
+      "webdav_user": "",
+      "webdav_pass": "",
+      "webdav_url": "",
+      "webdav_dir": "/"
+    },
+    "GoogleDrive":{
+      "googd_save": "1"
+    },
+    "mountedDrive":{
+      "mnt_save": "1",
+      "mnt_path": ""
+    }
+  }
 }

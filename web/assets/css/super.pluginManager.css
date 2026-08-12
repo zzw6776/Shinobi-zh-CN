@@ -15,3 +15,83 @@
 #superPluginManager .badge-success {
     background-color: #2fa523;
 }
+.docker-plugin-install {
+    border: 1px solid #444;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.03);
+}
+.docker-plugin-install:empty {
+    display: none;
+    border: none;
+    padding: 0 !important;
+}
+.docker-logs-view pre {
+    padding: 1rem;
+    border: 1px solid #444;
+    border-radius: 5px;
+    max-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+.connected-plugin-row {
+    border-bottom: 1px solid #333;
+}
+.connected-plugin-row:last-child {
+    border-bottom: none;
+}
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+.status-dot-connected {
+    background-color: #2fa523;
+    box-shadow: 0 0 4px #2fa523;
+}
+.status-dot-disconnected {
+    background-color: #888;
+}
+
+/* The Downloaded list is a table: each plugin is a summary row plus a details row, so the
+   per-card spacing the old card layout needed no longer applies. */
+#pluginManagerList .plugin-manager-table > tbody > tr > td {
+    vertical-align: middle;
+}
+#pluginManagerList .plugin-detail-row > td {
+    border-top: 0;
+}
+/* The details row is only opened when there is something in it, so its cell should not add
+   height when the panels inside are empty. */
+#pluginManagerList .plugin-detail-row .install-output:empty,
+#pluginManagerList .plugin-detail-row .docker-section:empty {
+    display: none;
+}
+#pluginManagerList .plugin-actions {
+    white-space: nowrap;
+}
+
+/* --- Hosted by two different pages -------------------------------------------------
+   This panel renders both in the Superuser panel and in the dashboard's Plugin Manager
+   tab. The Superuser page carries `dark` on <body> (which is what bs5.darktheme.css keys
+   its table colours off) plus a page-level white from super-page.css; the dashboard has
+   neither, so the same markup came out near-black on near-black there. The block sets its
+   own colours rather than depending on whichever page is hosting it. */
+#superPluginManager,
+#superPluginManager .card-header {
+    color: #fff;
+}
+#superPluginManager .table-striped > tbody > tr > td,
+#superPluginManager .plugin-manager-table > thead > tr > th,
+#superPluginManager .plugin-manager-table > tbody > tr > td {
+    color: #fff;
+    border-color: #222;
+}
+
+/* The dashboard scrolls on <body>, so a Commands menu opened on the last row extended past
+   the end of the content with nothing below to scroll into and appeared cut off. Give the
+   panel room to grow only while a menu is actually open, so there is no permanent gap. */
+#superPluginManager:has(.dropdown-menu.show) {
+    padding-bottom: 16rem;
+}

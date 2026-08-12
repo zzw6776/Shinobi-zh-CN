@@ -529,6 +529,7 @@ function importZoneMinderMonitor(Monitor){
             }
             if(
                 url.protocol === 'rtsp:' ||
+                url.protocol === 'rtsps:' ||
                 url.protocol === 'rtmp:' ||
                 url.protocol === 'rtmps:'
             ){
@@ -723,6 +724,15 @@ function buildPosePoints(bodyParts, x, y){
     }
     return theArray;
 }
+function escapeHtml(value){
+    if(value === undefined || value === null)return ''
+    return (value + '')
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#039;')
+}
 async function drawMatrices(event, options, autoRemoveTimeout, drawTrails){
     var theContainer = options.theContainer
     var height = options.height
@@ -738,22 +748,22 @@ async function drawMatrices(event, options, autoRemoveTimeout, drawTrails){
         const newWidth = widthRatio * matrix.width;
         const newHeight = heightRatio * matrix.height;
         if(drawTrails)html += `<div class="stream-detected-object fresh-detected-trail" style="height:2px;width:2px;top:${heightRatio * matrix.y + (newHeight / 2)}px;left:${widthRatio * matrix.x + (newWidth / 2)}px;border-color: green;"></div>`
-        html += `<div class="stream-detected-object fresh-detected-object" name="${objectTagGroup}" style="height:${newHeight}px;width:${newWidth}px;top:${heightRatio * matrix.y}px;left:${widthRatio * matrix.x}px;border-color: ${matrix.color};">`
-        if(matrix.tag)html += `<span class="tag">${matrix.tag}${!isNaN(matrix.id) ? ` <small class="label label-default">${matrix.id}</small>`: ''} (${matrix.confidence.toFixed(2) || 0})</span>`
-        if(matrix.notice)html += `<div class="matrix-info" style="color:yellow">${matrix.notice}</div>`;
+        html += `<div class="stream-detected-object fresh-detected-object" name="${escapeHtml(objectTagGroup)}" style="height:${newHeight}px;width:${newWidth}px;top:${heightRatio * matrix.y}px;left:${widthRatio * matrix.x}px;border-color: ${escapeHtml(matrix.color)};">`
+        if(matrix.tag)html += `<span class="tag">${escapeHtml(matrix.tag)}${!isNaN(matrix.id) ? ` <small class="label label-default">${escapeHtml(matrix.id)}</small>`: ''} (${matrix.confidence.toFixed(2) || 0})</span>`
+        if(matrix.notice)html += `<div class="matrix-info" style="color:yellow">${escapeHtml(matrix.notice)}</div>`;
         if(matrix.missingNear && matrix.missingNear.length > 0){
-            html += `<div class="matrix-info yellow"><small>Missing Near</small><br>${matrix.missingRecently.map(item => `${item.tag} (${item.id}) by ${item.missedNear.tag} (${item.missedNear.id})`).join(', ')}</div>`;
+            html += `<div class="matrix-info yellow"><small>Missing Near</small><br>${matrix.missingRecently.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)}) by ${escapeHtml(item.missedNear.tag)} (${escapeHtml(item.missedNear.id)})`).join(', ')}</div>`;
         }
         if(matrix.missingRecentlyNearHands && matrix.missingRecentlyNearHands.length > 0){
-            html += `<div class="matrix-info yellow"><small>Missing Recently</small><br>${matrix.missingRecentlyNearHands.map(item => `${item.tag} (${item.id})`).join(', ')}</div>`;
+            html += `<div class="matrix-info yellow"><small>Missing Recently</small><br>${matrix.missingRecentlyNearHands.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
         }
         if(matrix.pose){
             var pose = matrix.pose;
             html += `<div class="matrix-info text-left">`;
-            if(pose.isPersonFallen)html += `<div><small>Stance</small><br>${pose.isPersonFallen}</div>`;
+            if(pose.isPersonFallen)html += `<div><small>Stance</small><br>${escapeHtml(pose.isPersonFallen)}</div>`;
             if(pose.isPersonReaching){
-                html += `<div><small>Left Hand</small><br>${pose.isPersonReaching.left.pose}</div>`;
-                html += `<div><small>Right Hand</small><br>${pose.isPersonReaching.right.pose}</div>`;
+                html += `<div><small>Left Hand</small><br>${escapeHtml(pose.isPersonReaching.left.pose)}</div>`;
+                html += `<div><small>Right Hand</small><br>${escapeHtml(pose.isPersonReaching.right.pose)}</div>`;
             }
             // if(pose.isPersonTouchingWaistOrHips)html += `<div>Waist or Hips : ${pose.isPersonTouchingWaistOrHips}</div>`;
             html += `</div>`;
@@ -764,22 +774,22 @@ async function drawMatrices(event, options, autoRemoveTimeout, drawTrails){
             var leftHand = matrix.nearHands.leftWrist;
             var rightHand = matrix.nearHands.rightWrist;
             html += `<div class="matrix-info text-left">`
-                html += `<div><small>Left Interact</small><br>${leftHand.matrices.map(item => `${item.tag} (${item.id})`).join(', ')}</div>`;
-                html += `<div><small>Right Interact</small><br>${rightHand.matrices.map(item => `${item.tag} (${item.id})`).join(', ')}</div>`;
+                html += `<div><small>Left Interact</small><br>${leftHand.matrices.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
+                html += `<div><small>Right Interact</small><br>${rightHand.matrices.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
             html += `</div>`
         }
         if(matrix.nearBy){
             html += `<div class="matrix-info">`
             matrix.nearBy.forEach((nearMatrix) => {
-                html += `<div class="mb-1">${nearMatrix.tag} <small class="label label-default">${nearMatrix.id}</small> (${nearMatrix.overlapPercent.toFixed(2)}%)</div>`
+                html += `<div class="mb-1">${escapeHtml(nearMatrix.tag)} <small class="label label-default">${escapeHtml(nearMatrix.id)}</small> (${nearMatrix.overlapPercent.toFixed(2)}%)</div>`
             });
             html += `</div>`
         }
         if(matrix.redAlert){
             var monitor = loadedMonitors[monitorId]
             redAlertNotify({
-                title: `${monitor.name}`,
-                text: `${matrix.tag} (${matrix.id})<br>${matrix.notice}`,
+                title: `${escapeHtml(monitor.name)}`,
+                text: `${escapeHtml(matrix.tag)} (${escapeHtml(matrix.id)})<br>${escapeHtml(matrix.notice)}`,
                 type: 'danger'
             });
         }

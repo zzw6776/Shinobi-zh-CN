@@ -154,6 +154,12 @@ module.exports = function(s,config){
                 console.log(JSON.stringify(options,null,3))
             }
             if(callback || options.update || options.insert || options.action === 'delete'){
+                if(config.debugLogSql){
+                    console.log('------->')
+                    console.log(options)
+                    console.log(new Date(),new Error('Trace to SQL Query'))
+                    console.log('------/>')
+                }
                 runQuery.push({
                     dbQuery,
                 },function(err,r){

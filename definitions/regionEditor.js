@@ -17,6 +17,7 @@ module.exports = (s,config,lang) => {
                        "headerTitle": `<span class="cord_name">&nbsp;</span>
                          <div class="pull-right">
                              <a href=# class="btn btn-success btn-sm add"><i class="fa fa-plus"></i></a>
+                             <a href=# class="btn btn-warning btn-sm reset-region" title="${lang['Reset Region'] || 'Reset Region'}"><i class="fa fa-refresh"></i></a>
                              <a href=# class="btn btn-danger btn-sm erase"><i class="fa fa-trash-o"></i></a>
                          </div>`,
                        "color": "orange",
