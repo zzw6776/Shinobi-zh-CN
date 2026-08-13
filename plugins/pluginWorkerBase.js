@@ -207,8 +207,10 @@ module.exports = function(__dirname, config){
                 // 1280x720 (what libs/ffmpeg/builders.js actually encodes
                 // that stream at), not the unrelated base motion-detector
                 // scale (monitorDetails.detector_scale_x/y).
-                var width = parseFloat(isObjectDetectionSeparate ? (monitorDetails.detector_scale_x_object || 1280) : monitorDetails.detector_scale_x)
-                var height = parseFloat(isObjectDetectionSeparate ? (monitorDetails.detector_scale_y_object || 720) : monitorDetails.detector_scale_y)
+                // The non-separate branch defaults to the 640x480 builders.js encodes
+                // the base detector stream at; a blank field would otherwise yield NaN.
+                var width = parseFloat(isObjectDetectionSeparate ? (monitorDetails.detector_scale_x_object || 1280) : (monitorDetails.detector_scale_x || 640))
+                var height = parseFloat(isObjectDetectionSeparate ? (monitorDetails.detector_scale_y_object || 720) : (monitorDetails.detector_scale_y || 480))
                 s.monitorInfo.set(monitorKey,{
                     separate: isObjectDetectionSeparate,
                     isObjectDetectionSeparate,
@@ -304,8 +306,8 @@ module.exports = function(__dirname, config){
             height = d.mon.detector_scale_y_object || 720
             width = d.mon.detector_scale_x_object || 1280
         }else{
-            height = d.mon.detector_scale_y
-            width = d.mon.detector_scale_x
+            height = d.mon.detector_scale_y || 480
+            width = d.mon.detector_scale_x || 640
         }
         return {
             height : parseFloat(height),

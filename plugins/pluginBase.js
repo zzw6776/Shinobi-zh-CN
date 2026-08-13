@@ -309,8 +309,11 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
         // encodes that stream at - falling back to the base motion-detector
         // scale (det.detector_scale_x/y) instead was wrong and caused
         // detector plugins to assume the wrong reference resolution.
-        const width = parseFloat(separate ? (det.detector_scale_x_object || 1280) : det.detector_scale_x);
-        const height = parseFloat(separate ? (det.detector_scale_y_object || 720) : det.detector_scale_y);
+        // The non-separate branch defaults to the 640x480 builders.js encodes the base
+        // detector stream at; without it a blank field yields NaN and every matrix on
+        // the event becomes unplottable.
+        const width = parseFloat(separate ? (det.detector_scale_x_object || 1280) : (det.detector_scale_x || 640));
+        const height = parseFloat(separate ? (det.detector_scale_y_object || 720) : (det.detector_scale_y || 480));
         s.monitorInfo.set(mKey, { isObjectDetectionSeparate: separate, separate, width, height });
 
         imageBuffers.delete(mKey);
@@ -400,8 +403,8 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
     // Same fix as the monitorUpdate case above - blank object-detection
     // scale fields must fall back to 1280x720 (what the stream is actually
     // encoded at), not the unrelated base motion-detector scale.
-    const height = separate ? (det.detector_scale_y_object || 720) : det.detector_scale_y;
-    const width = separate ? (det.detector_scale_x_object || 1280) : det.detector_scale_x;
+    const height = separate ? (det.detector_scale_y_object || 720) : (det.detector_scale_y || 480);
+    const width = separate ? (det.detector_scale_x_object || 1280) : (det.detector_scale_x || 640);
     return { height: parseFloat(height), width: parseFloat(width) };
   };
 

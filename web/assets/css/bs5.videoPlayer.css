@@ -22,15 +22,37 @@
 .tab-videoPlayer-view-container > * {
     flex: 0 0 auto;
 }
-.tab-videoPlayer video{
+/* Wraps the video and its detection overlay. The box has no size of its own -- it
+   shrink-wraps the video element, and the video is sized auto/auto under max-width
+   and max-height so it always keeps its aspect ratio and is never letterboxed inside
+   its own box. The box is therefore exactly the displayed picture, which lets the
+   overlay be a flat 100%/100% and the matrices land on the pixels they came from. */
+.tab-videoPlayer-video-box {
+    position: relative;
     flex: 0 1 auto; /* never grows past its natural size, but shrinks when space is tight */
     min-height: 0;
     max-height: 100%;
+    max-width: 100%;
+    align-self: center;
+    line-height: 0; /* no inline-descender gap under the video */
+}
+.tab-videoPlayer video{
+    display: block;
+    width: auto;
     height: auto;
-    width: 100%;
-    object-fit: contain; /* keeps aspect ratio while the box shrinks */
+    max-width: 100%;
+    max-height: 100%;
     background: #333;
     border-radius: 5px;
+}
+.tab-videoPlayer-event-objects {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none; /* never steal clicks from the video controls */
 }
 .tab-videoPlayer-event-row {
     cursor: pointer;

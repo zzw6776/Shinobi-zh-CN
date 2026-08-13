@@ -115,9 +115,11 @@ $(document).ready(function(){
         var eventMatrixHtml = buildVideoPlayerEventStripHtml(video,video.events,loadedEvents)
         var videoRangeMs = new Date(video.end).getTime() - new Date(video.time).getTime()
         var baseHtml = `<main class="pt-3 page-tab tab-videoPlayer" id="tab-${newTabId}" video-id="${video.mid}${video.time}${video.type}" data-time="${video.time}" data-mid="${video.mid}" data-ke="${video.ke}" data-type="${video.type}">
-            <div class="tab-videoPlayer-view-container" style="position: relative">
-                <div class="tab-videoPlayer-event-objects" style="position: absolute;width: 100%; height: 100%; z-index: 10"></div>
-                <video class="tab-videoPlayer-video-element mb-2" controls autoplay src="${videoUrl}"></video>
+            <div class="tab-videoPlayer-view-container">
+                <div class="tab-videoPlayer-video-box mb-2">
+                    <video class="tab-videoPlayer-video-element" controls autoplay src="${videoUrl}"></video>
+                    <div class="tab-videoPlayer-event-objects"></div>
+                </div>
                 <div class="tab-videoPlayer-strip-wrapper">
                     <div class="video-time-strip tab-videoPlayer-event-strip mb-3" data-range-ms="${videoRangeMs}" title="${lang['Click to seek'] || 'Click to seek'}">
                         <div class="tab-videoPlayer-strip-ticks">${eventMatrixHtml}</div>
@@ -195,16 +197,19 @@ $(document).ready(function(){
             var videoObjectContainer = tabCreateResponse.theTab.find('.tab-videoPlayer-event-objects')
             var stripPlayhead = tabCreateResponse.theTab.find('.tab-videoPlayer-strip-playhead')
             var videoRangeSeconds = videoRangeMs / 1000
-            var videoHeight = videoObjectContainer.height()
-            var videoWidth = videoObjectContainer.width()
+            // The overlay is pinned to the video box by CSS, so its size *is* the
+            // displayed picture size. Measure it per draw (not once at tab creation)
+            // so resizing, fullscreen and late-arriving metadata all stay aligned.
             videoElement.ontimeupdate = function(time){
                 var eventTime = new Date(((new Date(video.time).getTime() / 1000) + videoElement.currentTime) * 1000)
                 var theEvent = loadedEvents[eventTime]
-                if(theEvent){
+                var pictureWidth = videoElement.clientWidth
+                var pictureHeight = videoElement.clientHeight
+                if(theEvent && pictureWidth && pictureHeight){
                     drawMatrices(theEvent,{
                         theContainer: videoObjectContainer,
-                        height: videoHeight,
-                        width: videoWidth,
+                        height: pictureHeight,
+                        width: pictureWidth,
                     })
                 }else{
                     videoObjectContainer.find('.stream-detected-object').remove()
