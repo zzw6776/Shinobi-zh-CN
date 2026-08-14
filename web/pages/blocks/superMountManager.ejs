@@ -2,30 +2,85 @@
     <div class="col-md-12">
         <form class="card bg-dark grey mt-1" id="mountManagerNewMount">
             <div class="card-header">
-                <%- lang['Add Mount'] %>
+                <span id="mountManagerFormTitle"><%- lang['Add Mount'] %></span>
+                <a class="btn btn-sm btn-default float-end d-none" id="mountManagerCancelEdit"><%- lang.Cancel %></a>
             </div>
             <div class="card-body">
+                <%# Mount Type first : it decides what the other fields even mean (a CIFS
+                    source is //server/share, an NFS one is host:/export, ext4 is a device),
+                    so asking for the source before the type led people to type the wrong
+                    shape and get an unhelpful rejection. %>
+                <div class="form-group">
+                    <label><%- lang['Mount Type'] %></label>
+                    <select class="form-control" name="mountType">
+                        <option value="cifs" selected>CIFS / SMB (<%- lang['Windows Share'] %>)</option>
+                        <option value="nfs">NFS</option>
+                        <option value="ext4">ext4 (<%- lang['Local Disk'] %>)</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label><%- lang.Source %></label>
-                    <input type="text" placeholder="//192.168.1.200/shared/folder" class="form-control" name="sourceTarget" />
+                    <input type="text" class="form-control" name="sourceTarget" />
+                    <small class="text-muted" id="mountSourceHint"></small>
                 </div>
                 <div class="form-group">
                     <label><%- lang['Mount Path'] %></label>
                     <input type="text" placeholder="/mnt/newmount" class="form-control" name="localPath" />
+                    <small class="text-muted"><%- lang.mountPathHint %></small>
                 </div>
+                <%# Credentials as their own fields. They used to be buried in a prefilled
+                    options string reading `username=username,password=password`, which is a
+                    valid looking value that silently mounts as the literal user "username". %>
+                <div class="mount-fields-cifs">
+                    <div class="form-group">
+                        <label><%- lang['Authentication'] %></label>
+                        <select class="form-control" name="credentialsMode">
+                            <option value="password" selected><%- lang['Username and Password'] %></option>
+                            <%# fstab is world readable, so a password typed here is visible to
+                                every user on the machine. A credentials file (chmod 600) is the
+                                standard way around that, and some setups mandate it. %>
+                            <option value="file"><%- lang['Credentials File'] %></option>
+                            <option value="guest"><%- lang['Connect as Guest'] %></option>
+                        </select>
+                    </div>
+                    <div class="row mount-credentials">
+                        <div class="col-md-4 form-group">
+                            <label><%- lang.Username %></label>
+                            <input type="text" class="form-control" name="mountUsername" autocomplete="off" />
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label><%- lang.Password %></label>
+                            <input type="password" class="form-control" name="mountPassword" autocomplete="new-password" />
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label><%- lang.Domain %> <small class="text-muted">(<%- lang.Optional %>)</small></label>
+                            <input type="text" class="form-control" name="mountDomain" />
+                        </div>
+                    </div>
+                    <div class="form-group mount-credentials-file">
+                        <label><%- lang['Credentials File'] %></label>
+                        <input type="text" placeholder="/etc/shinobi.smbcredentials" class="form-control" name="credentialsFile" />
+                        <small class="text-muted"><%- lang.credentialsFileHint %></small>
+                    </div>
+                </div>
+                <%# No read-only choice on purpose : Shinobi records into the mount, so a
+                    read-only one mounts fine and then fails later at write time, far from
+                    here and hard to attribute. The API forces rw regardless of caller. %>
                 <div class="form-group">
-                    <label><%- lang['Mount Type'] %></label>
-                    <select type="text" class="form-control" name="mountType">
-                        <option value="cifs" selected>CIFS</option>
-                        <option value="nfs">NFS</option>
-                        <option value="ext4">ext4</option>
-                    </select>
+                    <small class="text-muted"><i class="fa fa-info-circle"></i> <%- lang.mountReadWriteHint %></small>
                 </div>
+                <%# The raw fstab string is still here for anyone who needs it, but it is now
+                    generated from the fields above and folded away by default. %>
                 <div class="form-group">
-                    <label><%- lang.Options %></label>
-                    <input type="text" placeholder="username=username,password=password,rw,iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" value="username=username,password=password,rw,iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" class="form-control" name="options" />
+                    <a class="cursor-pointer" id="mountManagerToggleAdvanced"><i class="fa fa-caret-right"></i> <%- lang['Advanced'] %></a>
+                    <div id="mountManagerAdvanced" style="display:none">
+                        <label class="mt-2"><%- lang.Options %> <small class="text-muted">(fstab)</small></label>
+                        <input type="text" class="form-control" name="options" />
+                        <small class="text-muted"><%- lang.mountOptionsHint %></small>
+                        <div><a class="btn btn-sm btn-default mt-2" id="mountManagerResetOptions"><%- lang['Rebuild from fields above'] %></a></div>
+                    </div>
                 </div>
-                <div><button type="submit" class="btn btn-round btn-block btn-default mb-0"><i class="fa fa-check"></i> <%- lang.Save %></button></div>
+                <div><button type="submit" class="btn btn-round btn-block btn-default mb-0" id="mountManagerSubmit"><i class="fa fa-check"></i> <%- lang.Save %></button></div>
             </div>
         </form>
     </div>

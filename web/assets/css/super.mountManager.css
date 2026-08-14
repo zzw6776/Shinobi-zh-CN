@@ -1,0 +1,7 @@
+/* Usage bar in the mounts table. Kept short so a full-width bar does not dominate the row. */
+.mount-capacity-bar {
+    height: 6px;
+    max-width: 220px;
+    margin-bottom: 4px;
+    background: rgba(255,255,255,0.1);
+}
