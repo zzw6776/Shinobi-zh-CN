@@ -2,6 +2,18 @@ $(document).ready(function(){
     var changeSuperPreferencesTab = $('#changeSuperPreferences')
     var tokenContainer = $('#super-tokens')
     var changeSuperPreferencesForm = changeSuperPreferencesTab.find('form')
+    // API Keys are only added to the page when Add is pressed - nothing is stored until
+    // the form is saved, so leaving the tab at that point silently loses the key. This
+    // notice is the warning that the page owes the user.
+    var hasUnsavedTokens = false
+    var unsavedNotice = $(`<div class="alert alert-warning mt-3 unsaved-tokens-notice d-none">
+        <b><i class="fa fa-exclamation-triangle"></i> ${lang['Unsaved API Keys'] || 'Unsaved API Keys'}</b>
+        <div><small>${lang.unsavedTokensText || 'These API Keys have not been saved yet. Press Save to keep them - they are lost if you leave this tab.'}</small></div>
+    </div>`)
+    function setUnsavedTokens(isUnsaved){
+        hasUnsavedTokens = !!isUnsaved
+        unsavedNotice.toggleClass('d-none',!hasUnsavedTokens)
+    }
     function generateId(x){
         if(!x){x=10};var t = "";var p = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for( var i=0; i < x; i++ )
@@ -39,9 +51,15 @@ $(document).ready(function(){
     }
     changeSuperPreferencesTab.find('.new-token').click(function(){
         drawTokenRow()
+        setUnsavedTokens(true)
     })
     changeSuperPreferencesTab.on('click','.delete-token',function(){
         $(this).parents('.token-row').remove()
+        setUnsavedTokens(true)
+    })
+    // Editing an existing key is just as unsaved as adding one.
+    changeSuperPreferencesTab.on('input','.token-row-input',function(){
+        setUnsavedTokens(true)
     })
     changeSuperPreferencesTab.find('.submit').click(function(){
         changeSuperPreferencesForm.submit()
@@ -54,9 +72,44 @@ $(document).ready(function(){
         $.post(superApiPrefix + $user.sessionKey + '/accounts/saveSettings',{
             data: JSON.stringify(formValues)
         },function(data){
-            console.log(data)
+            if(data && data.ok === false){
+                new PNotify({
+                    type: 'error',
+                    title: lang['Settings Changed'],
+                    text: data.msg || lang['Action Failed'],
+                })
+                return
+            }
+            // Only cleared once the save actually came back - otherwise the notice would
+            // disappear on a failed save and the keys would still be at risk.
+            setUnsavedTokens(false)
+            $user.tokens = formValues.tokens
+            new PNotify({
+                type: 'success',
+                title: lang['Settings Changed'],
+                text: lang['Saved'] || lang['Settings Changed'],
+            })
         })
         return false
+    })
+    // Sits directly above the keys it is about.
+    tokenContainer.before(unsavedNotice)
+    // The notice is only visible while this tab is, so leaving it is the moment the keys
+    // are actually at risk. The tab engine exposes this hook for exactly that.
+    if(typeof addOnTabAway === 'function'){
+        addOnTabAway('changeSuperPreferences',function(){
+            if(!hasUnsavedTokens)return
+            new PNotify({
+                type: 'error',
+                title: lang['Unsaved API Keys'] || 'Unsaved API Keys',
+                text: lang.unsavedTokensLeftText || 'You left Preferences with API Keys that were never saved. They are still on the page - go back and press Save to keep them.',
+                hide: false,
+            })
+        })
+    }
+    // Closing or reloading the page loses them outright, with no way back.
+    $(window).on('beforeunload',function(){
+        if(hasUnsavedTokens)return lang.unsavedTokensText || 'These API Keys have not been saved yet.'
     })
     loadPreferences()
 })
