@@ -2207,7 +2207,7 @@
    "failoverKeysDescription" : "Add a unique identifier here. Your normal Shinobi server (non-failover) will use this key to connect. Each normal server must have their own key. You can put anything for the key.",
    "failoverServersSaved" : "Settings saved. Restarting connection to Failover Server(s).",
    "centralManagementNotEnabled" : "Management Server connectivity is not enabled. Activate your installation and add <code>\"enableMgmtConnect\": true</code> to your conf.json.",
-   "centralManagementNeedsActivation" : "Central Management needs an activated installation. Activate this Shinobi in the Controls and Logs tab, then check again.",
+   "centralManagementNeedsActivation" : "Central Management needs an activated installation. Activate this Shinobi in the System tab, then check again.",
    "centralManagementHowTo" : "View and manage all of your Shinobi servers from one panel. You need a Management Server running elsewhere, and the P2P API Key from your Shinobi Shop account. Add that server below as <code>ws://its-address:8663</code> - port 8663 has to be reachable from here. Once it connects, this Shinobi appears in the Management Server's own panel.",
    "centralManagementDocsLink" : "More detail on setting this up",
    "centralManagementEnableText" : "Connect this Shinobi to a Management Server so it can be administered centrally. This can be turned off again at any time.",

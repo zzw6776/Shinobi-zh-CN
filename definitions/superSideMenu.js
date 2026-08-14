@@ -19,7 +19,11 @@ module.exports = (s,config,lang,Theme) => {
                    },
                    {
                        icon: 'terminal',
-                       label: lang['Controls and Logs'],
+                       // Renamed to "System". The old key is kept as the fallback because
+                       // this panel's `lang` is the raw configured language file with no
+                       // merge against the default - five language files have no "System"
+                       // key, and an undefined label would render as an empty menu entry.
+                       label: lang['System'] || lang['Controls and Logs'],
                        pageOpen: 'system',
                    },
                    {
