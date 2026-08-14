@@ -56,6 +56,48 @@ module.exports = (s,config,lang,app,io,helpers) => {
             execFile('docker',['--version'],{timeout:5000},(err) => resolve(!err))
         })
     }
+    // Which GPUs this host actually has. Drives the Plugin Manager's advice about what
+    // a container can be given access to - there is no point telling someone to install
+    // the NVIDIA Container Toolkit on a machine with only an Intel iGPU.
+    // Maps a detected vendor onto the acceleration variant plugin images are published
+    // under (the same keys as ACCELERATION_DOCKER_FLAGS above).
+    const VENDOR_ACCELERATION = {
+        nvidia: 'cuda',
+        amd: 'rocm',
+        intel: 'openvino',
+    }
+    const vendorOfDevice = (line) => {
+        const text = line.toLowerCase()
+        if(text.indexOf('nvidia') > -1)return 'nvidia'
+        if(/amd|advanced micro devices|ati /.test(text))return 'amd'
+        if(text.indexOf('intel') > -1)return 'intel'
+        return null
+    }
+    const detectGpuVendors = () => {
+        return new Promise((resolve) => {
+            const none = { nvidia: false, amd: false, intel: false, devices: [] }
+            if(process.platform !== 'linux')return resolve(none)
+            execFile('lspci',[],{timeout:8000},(err,stdout) => {
+                if(err)return resolve(none)
+                const found = Object.assign({},none,{devices:[]})
+                ;(stdout || '').split('\n')
+                    .filter((line) => /vga compatible controller|3d controller|display controller/i.test(line))
+                    .forEach((line) => {
+                        const vendor = vendorOfDevice(line)
+                        if(!vendor)return
+                        found[vendor] = true
+                        found.devices.push({
+                            vendor: vendor,
+                            acceleration: VENDOR_ACCELERATION[vendor],
+                            // Drop the PCI slot and class prefix ("00:02.0 VGA compatible
+                            // controller: ") so what is shown is just the hardware name.
+                            name: line.replace(/^\S+\s+[^:]+:\s*/,'').trim(),
+                        })
+                    })
+                resolve(found)
+            })
+        })
+    }
     const getContainerStatus = (packageName) => {
         return new Promise((resolve) => {
             execFile('docker',['inspect','--format','{{.State.Status}}|{{.Config.Image}}',containerName(packageName)],{timeout:5000},(err,stdout) => {
@@ -142,7 +184,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
     // panel/progress flag on the frontend - only the last step on the happy path
     // should tell the frontend "the whole action is done, go refresh the card".
     // A failing step always signals end (there's no next step coming).
-    const runDockerStreamed = (packageName,args,isFinalStep = true) => {
+    const runStreamed = (packageName,command,args,isFinalStep = true) => {
         return new Promise((resolve) => {
             const sendData = (data,channel) => {
                 // reuses the same 'install-stdout'/'install-stderr' process names the
@@ -157,7 +199,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
             }
             let proc
             try{
-                proc = spawn('docker',args)
+                proc = spawn(command,args)
             }catch(err){
                 sendData(err.message || String(err),'stderr')
                 sendData('#END_PROCESS','stdout')
@@ -177,6 +219,45 @@ module.exports = (s,config,lang,app,io,helpers) => {
             })
         })
     }
+    const runDockerStreamed = (packageName,args,isFinalStep = true) => runStreamed(packageName,'docker',args,isFinalStep)
+    // The Docker install streams over the same 'plugin-info' channel as a plugin's own
+    // install output, addressed to this reserved name instead of a real package - the
+    // frontend listens for it and paints the Downloaded tab's Docker notice.
+    const DOCKER_HOST_LABEL = '#docker-host'
+    let dockerInstallRunning = false
+    /**
+    * API : Superuser : Install Docker Engine on this host.
+    */
+    addPluginManagerRoute('post','/docker/install', async (req,res,resp) => {
+        if(process.platform !== 'linux'){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Not Supported'] || 'Docker can only be installed from here on Linux.' })
+            return
+        }
+        if(dockerInstallRunning){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Please Wait...'] })
+            return
+        }
+        if(await isDockerAvailable()){
+            s.closeJsonResponse(res,{ ok: true, alreadyInstalled: true })
+            return
+        }
+        dockerInstallRunning = true
+        s.closeJsonResponse(res,{ ok: true })
+        // Docker's own convenience script (get.docker.com). No user input goes into this
+        // command line - it is a fixed string - and it needs root, so it runs through
+        // sudo when Shinobi is not already root.
+        const installCommand = 'curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && sh /tmp/get-docker.sh'
+        const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+        const args = isRoot ? ['-c',installCommand] : ['-c',`sudo -n sh -c '${installCommand}'`]
+        const result = await runStreamed(DOCKER_HOST_LABEL,'sh',args)
+        dockerInstallRunning = false
+        s.tx({
+            f: 'plugin-info',
+            module: DOCKER_HOST_LABEL,
+            process: 'docker-install-complete',
+            ok: result.ok,
+        },'PLUGINMANAGER')
+    })
     /**
     * API : Superuser : Pull + Run a plugin as a Docker container, connected
     * back to this Shinobi instance over websocket (client-mode plugin).
@@ -304,6 +385,7 @@ module.exports = (s,config,lang,app,io,helpers) => {
     return {
         isDockerAvailable,
         getDockerInfoForModule,
+        detectGpuVendors,
         detectHostIp,
     }
 }

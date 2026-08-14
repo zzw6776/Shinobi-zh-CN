@@ -8,7 +8,11 @@ $(document).ready(function(){
     var connectedPluginsListElement = $('#connectedPluginsList')
     var connectedPluginsCardElement = $('#connectedPluginsCard')
     var theEnclosure = $('#superPluginManager')
-    var listElement = $('#pluginManagerList')
+    var listElement = $('#pluginManagerListRows')
+    var dockerNoticeElement = $('#pluginManagerDockerNotice')
+    var gpuVendors = {}
+    var canInstallDocker = false
+    var dockerInstallRunning = false
     var downloadListElement = $('#pluginManagerDownloadble tbody')
     var quickSelect = $('#pluginQuickSelect')
     var pluginDownloadForm = $('#downloadNewPlugin')
@@ -113,6 +117,72 @@ $(document).ready(function(){
     function dockerStatusBadge(status){
         var badgeClass = status === 'running' ? 'badge-success' : (status === 'absent' ? 'badge-secondary' : 'badge-warning')
         return `<span class="badge ${badgeClass}">${dockerStatusLabel(status)}</span>`
+    }
+    // What a container on this host needs before it can reach each kind of GPU. Only the
+    // vendors actually present are ever shown - see renderDockerNotice.
+    var GPU_PASSTHROUGH_NOTES = {
+        nvidia: {
+            title: 'NVIDIA',
+            acceleration: 'cuda',
+            requirement: lang['dockerGpuNvidia'] || 'Install the NVIDIA Container Toolkit on this host, then containers can be run with <code>--gpus all</code>. Plugin images with a <b>cuda</b> variant use this automatically.',
+        },
+        amd: {
+            title: 'AMD (ROCm / VAAPI)',
+            acceleration: 'rocm',
+            requirement: lang['dockerGpuAmd'] || 'Passed through as devices - <code>--device=/dev/kfd --device=/dev/dri</code> with the <b>video</b> and <b>render</b> groups. Plugin images with a <b>rocm</b> variant use this automatically.',
+        },
+        intel: {
+            title: 'Intel (QuickSync / OpenVINO)',
+            acceleration: 'openvino',
+            requirement: lang['dockerGpuIntel'] || 'Passed through as a device - <code>--device=/dev/dri</code> with the <b>video</b> group. Plugin images with an <b>openvino</b> variant use this automatically.',
+        },
+    }
+    function renderDockerNotice(){
+        if(dockerNoticeElement.length === 0)return
+        if(dockerInstallRunning){
+            // The output pane is only added here, so an in-progress install must not have
+            // its notice repainted out from under it by a background list refresh.
+            return
+        }
+        if(!dockerAvailable){
+            dockerNoticeElement.html(`
+                <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                    <div>
+                        <b><i class="fa fa-cube"></i> ${lang['Docker is not installed'] || 'Docker is not installed'}</b>
+                        <div><small>${lang['dockerMissingHint'] || 'Docker lets plugins run in containers that bring their own dependencies (including CUDA), instead of installing them on this machine.'}</small></div>
+                    </div>
+                    ${canInstallDocker ? `<a class="btn btn-sm btn-success ms-2" plugin-manager-action="docker-install"><i class="fa fa-download"></i> ${lang['Install Docker'] || 'Install Docker'}</a>` : ''}
+                </div>
+                <div class="docker-install-output d-none"><pre class="text-white mb-2"></pre></div>`)
+            return
+        }
+        var detected = Object.keys(GPU_PASSTHROUGH_NOTES).filter(function(vendor){
+            return !!gpuVendors[vendor]
+        })
+        var devices = gpuVendors.devices || []
+        dockerNoticeElement.html(`
+            <div class="alert alert-success">
+                <b><i class="fa fa-cube"></i> ${lang['Docker is installed'] || 'Docker is installed'}</b>
+                ${detected.length === 0 ? `
+                    <div><small>${lang['dockerNoGpuHint'] || 'No GPU was detected on this host, so containers will run on CPU.'}</small></div>
+                ` : `
+                    ${devices.length === 0 ? '' : `
+                        <div class="mt-1 small">
+                            ${lang['Detected Hardware'] || 'Detected Hardware'} :
+                            ${devices.map(function(device){
+                                return `<div><span class="badge badge-primary">${device.acceleration}</span> ${device.name}</div>`
+                            }).join('')}
+                        </div>
+                    `}
+                    <div class="mt-1"><small>${lang['dockerGpuHint'] || 'GPU detected. To use it from a container the host needs the following:'}</small></div>
+                    <ul class="mb-0 mt-1 small">
+                        ${detected.map(function(vendor){
+                            var note = GPU_PASSTHROUGH_NOTES[vendor]
+                            return `<li><b>${note.title}</b> (<code>${note.acceleration}</code>) — ${note.requirement}</li>`
+                        }).join('')}
+                    </ul>
+                `}
+            </div>`)
     }
     function buildDockerSectionHtml(module){
         var docker = module.docker || {}
@@ -469,6 +539,37 @@ $(document).ready(function(){
         e.preventDefault()
         var el = $(this)
         var action = el.attr('plugin-manager-action')
+        // Host-level, so it has no `package-name` parent to resolve like the rest do.
+        if(action === 'docker-install'){
+            $.confirm.create({
+                title: lang['Install Docker'] || 'Install Docker',
+                body: lang['confirmInstallDocker'] || 'This will install Docker Engine on this machine using Docker\'s official install script. Continue?',
+                clickOptions: {
+                    class: 'btn-success',
+                    title: lang.Install,
+                },
+                clickCallback: function(){
+                    $.post(pluginManagerApiPrefix + '/docker/install',{},function(data){
+                        if(!data.ok){
+                            new PNotify({
+                                title: lang['Install Docker'] || 'Install Docker',
+                                text: data.msg || lang['Error'],
+                                type: 'error'
+                            })
+                            return
+                        }
+                        if(data.alreadyInstalled){
+                            refreshModuleList()
+                            return
+                        }
+                        dockerInstallRunning = true
+                        el.addClass('disabled')
+                        dockerNoticeElement.find('.docker-install-output').removeClass('d-none').find('pre').empty()
+                    })
+                }
+            })
+            return
+        }
         var packageName = el.parents('[package-name]').attr('package-name')
         // Both rows for this plugin, not just the one the button sits in - the buttons are
         // in the summary row while .command-line, .command-installer and the output panels
@@ -722,6 +823,9 @@ $(document).ready(function(){
     function refreshModuleList(){
         getModules(function(data){
             dockerAvailable = !!data.dockerAvailable
+            gpuVendors = data.gpuVendors || {}
+            canInstallDocker = !!data.canInstallDocker
+            renderDockerNotice()
             detectedHostIp = data.detectedHostIp || ''
             loadedModules = data.modules
             // Populated BEFORE drawing: each row's Status cell reports whether that
@@ -753,6 +857,28 @@ $(document).ready(function(){
         switch(data.f){
             case'plugin-info':
                 var name = data.module
+                // Host Docker install output - not a plugin, so it never has a card and is
+                // painted into the Downloaded tab's notice instead.
+                if(name === '#docker-host'){
+                    var installOutput = dockerNoticeElement.find('.docker-install-output pre')
+                    if(data.process === 'docker-install-complete'){
+                        dockerInstallRunning = false
+                        new PNotify({
+                            title: lang['Install Docker'] || 'Install Docker',
+                            text: data.ok ? (lang['dockerInstalledText'] || 'Docker was installed.') : (lang['dockerInstallFailedText'] || 'Docker could not be installed. See the output above.'),
+                            type: data.ok ? 'success' : 'error'
+                        })
+                        if(data.ok){
+                            refreshModuleList()
+                        }else{
+                            // Leave the output on screen to be read, just make the button usable again.
+                            dockerNoticeElement.find('[plugin-manager-action="docker-install"]').removeClass('disabled')
+                        }
+                    }else if(data.data && data.data !== '#END_PROCESS'){
+                        appendLoggerData(data.data,installOutput)
+                    }
+                    return
+                }
                 // A running plugin streams output continuously, so frames can arrive before
                 // this page has drawn that plugin's card (or after it was deleted). The
                 // output panels only exist on the card, so without this every line would

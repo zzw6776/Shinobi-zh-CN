@@ -35,7 +35,13 @@
         <div class="card bg-dark grey mt-3">
             <div class="card-body">
                 <div class="tab-content pb-0 m-0">
-                    <div class="tab-pane active" id="pluginManagerList"></div>
+                    <%# The rows live in their own child element because the script replaces
+                        its whole contents when it (re)draws the table - the Docker notice
+                        has to sit outside of that to survive a refresh. %>
+                    <div class="tab-pane active" id="pluginManagerList">
+                        <div id="pluginManagerDockerNotice"></div>
+                        <div id="pluginManagerListRows"></div>
+                    </div>
                     <div class="tab-pane" id="pluginManagerDownloadbleList">
                         <div class="form-group">
                             <input id="pluginManagerDownloadbleListSearch" type="text" placeholder="<%- lang.Search %>" class="form-control" />

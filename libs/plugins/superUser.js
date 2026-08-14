@@ -409,6 +409,7 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
     const {
         isDockerAvailable,
         getDockerInfoForModule,
+        detectGpuVendors,
         detectHostIp,
     } = require('./docker.js')(s,config,lang,app,io,{
         getModulePath,
@@ -434,6 +435,10 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
             ok: true,
             modules: modules,
             dockerAvailable: dockerAvailable,
+            // Both halves of the Downloaded tab's Docker notice: whether Docker is here
+            // at all, and - when it is - which GPUs it could be given access to.
+            gpuVendors: await detectGpuVendors(),
+            canInstallDocker: process.platform === 'linux',
             detectedHostIp: dockerAvailable ? detectHostIp() : null,
             connectedPlugins: s.connectedDetectorPlugins,
         })
