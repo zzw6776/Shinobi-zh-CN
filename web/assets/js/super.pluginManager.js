@@ -10,8 +10,12 @@ $(document).ready(function(){
     var theEnclosure = $('#superPluginManager')
     var listElement = $('#pluginManagerListRows')
     var dockerNoticeElement = $('#pluginManagerDockerNotice')
+    var hardwareNoticeElement = $('#pluginManagerHardwareNotice')
     var gpuVendors = {}
     var canInstallDocker = false
+    var shinobiInContainer = false
+    var acceleratorReadiness = {}
+    var accelerationRuntimes = {}
     var dockerInstallRunning = false
     var downloadListElement = $('#pluginManagerDownloadble tbody')
     var quickSelect = $('#pluginQuickSelect')
@@ -144,6 +148,18 @@ $(document).ready(function(){
             // its notice repainted out from under it by a background list refresh.
             return
         }
+        // Shinobi in a container with no reachable daemon. "Docker is not installed" would
+        // be both wrong and unactionable here - the daemon that matters is the host's, and
+        // reaching it is a change to how this container was started, not something a button
+        // can do.
+        if(!dockerAvailable && shinobiInContainer){
+            dockerNoticeElement.html(`
+                <div class="alert alert-info">
+                    <b><i class="fa fa-cube"></i> ${lang['Shinobi is running in a container'] || 'Shinobi is running in a container'}</b>
+                    <div><small>${lang['dockerInContainerHint'] || 'Plugin containers cannot be started from in here. To manage them from this panel, start Shinobi with the host\'s Docker socket mounted (<code>-v /var/run/docker.sock:/var/run/docker.sock</code>) and the <code>docker</code> CLI available in the image. Plugin containers started that way are siblings on the host, so the Host field below must be an address the host can reach.'}</small></div>
+                </div>`)
+            return
+        }
         if(!dockerAvailable){
             dockerNoticeElement.html(`
                 <div class="alert alert-warning d-flex justify-content-between align-items-center">
@@ -159,28 +175,93 @@ $(document).ready(function(){
         var detected = Object.keys(GPU_PASSTHROUGH_NOTES).filter(function(vendor){
             return !!gpuVendors[vendor]
         })
-        var devices = gpuVendors.devices || []
         dockerNoticeElement.html(`
             <div class="alert alert-success">
                 <b><i class="fa fa-cube"></i> ${lang['Docker is installed'] || 'Docker is installed'}</b>
+                ${!shinobiInContainer ? '' : `
+                    <div class="mt-1"><small><i class="fa fa-exclamation-triangle"></i> ${lang['dockerSiblingHint'] || 'Shinobi is itself in a container and is using the host\'s Docker. Plugin containers are started on the host as siblings, so the Host field must be an address the host can reach, and any folder shared with a plugin is read from the host\'s filesystem - not from inside this container.'}</small></div>
+                `}
                 ${detected.length === 0 ? `
                     <div><small>${lang['dockerNoGpuHint'] || 'No GPU was detected on this host, so containers will run on CPU.'}</small></div>
                 ` : `
-                    ${devices.length === 0 ? '' : `
-                        <div class="mt-1 small">
-                            ${lang['Detected Hardware'] || 'Detected Hardware'} :
-                            ${devices.map(function(device){
-                                return `<div><span class="badge badge-primary">${device.acceleration}</span> ${device.name}</div>`
-                            }).join('')}
-                        </div>
-                    `}
                     <div class="mt-1"><small>${lang['dockerGpuHint'] || 'GPU detected. To use it from a container the host needs the following:'}</small></div>
                     <ul class="mb-0 mt-1 small">
                         ${detected.map(function(vendor){
                             var note = GPU_PASSTHROUGH_NOTES[vendor]
-                            return `<li><b>${note.title}</b> (<code>${note.acceleration}</code>) — ${note.requirement}</li>`
+                            // Whether that requirement is actually satisfied is checked on
+                            // the server; until it answers, say nothing rather than guess.
+                            var readiness = acceleratorReadiness[vendor]
+                            var statusHtml = ''
+                            if(readiness){
+                                if(readiness.ready){
+                                    statusHtml = `<span class="badge badge-success">${lang['Installed'] || 'Installed'}</span>`
+                                }else if(readiness.canInstall && !shinobiInContainer){
+                                    statusHtml = `<span class="badge badge-warning">${lang['Not Installed'] || 'Not Installed'}</span>
+                                        <a class="btn btn-xs btn-success ms-1" plugin-manager-action="install-accelerator" data-vendor="${vendor}">
+                                            <i class="fa fa-download"></i> ${lang['Install'] || 'Install'} ${readiness.name}
+                                        </a>`
+                                }else{
+                                    // Either it needs a kernel/driver level change (AMD), or
+                                    // Shinobi is containerized and the install belongs on the
+                                    // host - in both cases a button here would be a lie.
+                                    statusHtml = `<span class="badge badge-warning">${lang['Not Installed'] || 'Not Installed'}</span>
+                                        ${readiness.hint ? `<div class="text-muted">${readiness.hint}</div>` : ''}
+                                        ${shinobiInContainer ? `<div class="text-muted">${lang['acceleratorInContainerText'] || 'Shinobi is running inside a container. This must be installed on the host, where the Docker daemon runs.'}</div>` : ''}`
+                                }
+                            }
+                            return `<li class="mb-1"><b>${note.title}</b> (<code>${note.acceleration}</code>) ${statusHtml}<div>${note.requirement}</div></li>`
                         }).join('')}
                     </ul>
+                `}
+            </div>
+            <div class="docker-install-output d-none"><pre class="text-white mb-2"></pre></div>`)
+    }
+    // The acceleration runtimes as the server found them. Rendered in their own box
+    // because none of this is Docker specific - a plugin installed natively on this
+    // machine runs against these same libraries.
+    function runtimeVersionHtml(runtime){
+        var parts = []
+        if(runtime.version)parts.push(`<b>${runtime.version}</b>`)
+        if(runtime.driverVersion)parts.push(`${lang['Driver'] || 'Driver'} ${runtime.driverVersion}`)
+        if(runtime.toolkitVersion)parts.push(`nvcc ${runtime.toolkitVersion}`)
+        if(runtime.kernelDriver === false)parts.push(`<span class="text-warning">${lang['no /dev/kfd'] || 'no /dev/kfd'}</span>`)
+        if(runtime.renderDevice === false)parts.push(`<span class="text-warning">${lang['no /dev/dri'] || 'no /dev/dri'}</span>`)
+        return parts.join(' &middot; ')
+    }
+    function renderHardwareNotice(){
+        if(hardwareNoticeElement.length === 0)return
+        var devices = gpuVendors.devices || []
+        var runtimes = Object.keys(accelerationRuntimes)
+        if(devices.length === 0 && runtimes.length === 0){
+            hardwareNoticeElement.html(`
+                <div class="alert alert-secondary">
+                    <b><i class="fa fa-microchip"></i> ${lang['Detected Hardware'] || 'Detected Hardware'}</b>
+                    <div><small>${lang['noGpuDetectedHint'] || 'No GPU was detected. Plugins will run on CPU.'}</small></div>
+                </div>`)
+            return
+        }
+        hardwareNoticeElement.html(`
+            <div class="alert alert-secondary">
+                <b><i class="fa fa-microchip"></i> ${lang['Detected Hardware'] || 'Detected Hardware'}</b>
+                <div class="mt-1 small">
+                    ${devices.map(function(device){
+                        return `<div><span class="badge badge-primary">${device.acceleration}</span> ${device.name}</div>`
+                    }).join('')}
+                </div>
+                ${runtimes.length === 0 ? '' : `
+                    <div class="mt-2"><small>${lang['accelerationRuntimesHint'] || 'Acceleration runtimes on this machine. These are used by plugins installed here directly; a plugin run as a container brings its own.'}</small></div>
+                    <div class="mt-1 small">
+                        ${runtimes.map(function(key){
+                            var runtime = accelerationRuntimes[key]
+                            var versionHtml = runtimeVersionHtml(runtime)
+                            return `<div>
+                                <span class="badge ${runtime.installed ? 'badge-success' : 'badge-secondary'}">${runtime.installed ? (lang['Installed'] || 'Installed') : (lang['Not Installed'] || 'Not Installed')}</span>
+                                <b>${runtime.name}</b>
+                                <code>${runtime.acceleration}</code>
+                                ${versionHtml ? `<span class="text-muted">${versionHtml}</span>` : ''}
+                            </div>`
+                        }).join('')}
+                    </div>
                 `}
             </div>`)
     }
@@ -540,6 +621,36 @@ $(document).ready(function(){
         var el = $(this)
         var action = el.attr('plugin-manager-action')
         // Host-level, so it has no `package-name` parent to resolve like the rest do.
+        if(action === 'install-accelerator'){
+            var vendor = el.attr('data-vendor')
+            var readiness = acceleratorReadiness[vendor] || {}
+            $.confirm.create({
+                title: `${lang['Install'] || 'Install'} ${readiness.name || ''}`,
+                body: lang['confirmInstallAccelerator'] || 'This will install the host packages needed to give containers access to this GPU, and may restart the Docker service. Continue?',
+                clickOptions: {
+                    class: 'btn-success',
+                    title: lang.Install,
+                },
+                clickCallback: function(){
+                    $.post(pluginManagerApiPrefix + '/docker/installAccelerator',{
+                        vendor: vendor,
+                    },function(data){
+                        if(!data.ok){
+                            new PNotify({
+                                title: lang['Install'] || 'Install',
+                                text: data.msg || lang['Error'],
+                                type: 'error'
+                            })
+                            return
+                        }
+                        dockerInstallRunning = true
+                        el.addClass('disabled')
+                        dockerNoticeElement.find('.docker-install-output').removeClass('d-none').find('pre').empty()
+                    })
+                }
+            })
+            return
+        }
         if(action === 'docker-install'){
             $.confirm.create({
                 title: lang['Install Docker'] || 'Install Docker',
@@ -825,6 +936,10 @@ $(document).ready(function(){
             dockerAvailable = !!data.dockerAvailable
             gpuVendors = data.gpuVendors || {}
             canInstallDocker = !!data.canInstallDocker
+            shinobiInContainer = !!data.shinobiInContainer
+            acceleratorReadiness = data.acceleratorReadiness || {}
+            accelerationRuntimes = data.accelerationRuntimes || {}
+            renderHardwareNotice()
             renderDockerNotice()
             detectedHostIp = data.detectedHostIp || ''
             loadedModules = data.modules
@@ -872,7 +987,7 @@ $(document).ready(function(){
                             refreshModuleList()
                         }else{
                             // Leave the output on screen to be read, just make the button usable again.
-                            dockerNoticeElement.find('[plugin-manager-action="docker-install"]').removeClass('disabled')
+                            dockerNoticeElement.find('[plugin-manager-action="docker-install"],[plugin-manager-action="install-accelerator"]').removeClass('disabled')
                         }
                     }else if(data.data && data.data !== '#END_PROCESS'){
                         appendLoggerData(data.data,installOutput)

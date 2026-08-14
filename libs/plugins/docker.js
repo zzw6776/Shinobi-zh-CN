@@ -31,6 +31,10 @@ module.exports = (s,config,lang,app,io,helpers) => {
         modifyConfiguration,
     } = require('../system/utils.js')(config)
     const { addPluginManagerRoute } = require('./access.js')(s,config,lang,app)
+    // GPU presence and the acceleration runtimes installed for it are not Docker
+    // concerns - a natively installed plugin uses the same CUDA/ROCm/OpenVINO - so they
+    // live in their own module and are only consumed here.
+    const { detectGpuVendors } = require('./hardware.js')(s)
     const fs = require('fs')
     const containerName = (packageName) => `shinobi-plugin-${packageName}`
     const registryImage = (packageName,variant) => {
@@ -56,47 +60,92 @@ module.exports = (s,config,lang,app,io,helpers) => {
             execFile('docker',['--version'],{timeout:5000},(err) => resolve(!err))
         })
     }
-    // Which GPUs this host actually has. Drives the Plugin Manager's advice about what
-    // a container can be given access to - there is no point telling someone to install
-    // the NVIDIA Container Toolkit on a machine with only an Intel iGPU.
-    // Maps a detected vendor onto the acceleration variant plugin images are published
-    // under (the same keys as ACCELERATION_DOCKER_FLAGS above).
-    const VENDOR_ACCELERATION = {
-        nvidia: 'cuda',
-        amd: 'rocm',
-        intel: 'openvino',
+    // Is Shinobi ITSELF running inside a container. Everything this file offers changes
+    // meaning when it is : `docker` here would talk to the host's daemon (only if its
+    // socket was deliberately mounted in), any container it starts is a sibling on the
+    // host rather than a child, and host paths passed with -v are resolved by the host,
+    // not from this filesystem. Installing Docker in here is never the right answer.
+    const isRunningInContainer = () => {
+        if(process.platform !== 'linux')return false
+        try{
+            if(fs.existsSync('/.dockerenv'))return true
+            const cgroup = fs.readFileSync('/proc/1/cgroup','utf8')
+            return /docker|containerd|kubepods|lxc/.test(cgroup)
+        }catch(err){
+            return false
+        }
     }
-    const vendorOfDevice = (line) => {
-        const text = line.toLowerCase()
-        if(text.indexOf('nvidia') > -1)return 'nvidia'
-        if(/amd|advanced micro devices|ati /.test(text))return 'amd'
-        if(text.indexOf('intel') > -1)return 'intel'
-        return null
+    // A GPU being present is only half of what a container needs. Each acceleration
+    // variant also needs something on the HOST before `docker run` can hand the device
+    // over, and each of those is invisible until a deploy fails with a confusing error.
+    // These are the checks, and (where it is a package install rather than a kernel
+    // driver) the fixed command that installs it.
+    const ACCELERATOR_REQUIREMENTS = {
+        nvidia: {
+            name: 'NVIDIA Container Toolkit',
+            acceleration: 'cuda',
+            // The toolkit registers itself as a docker runtime, which is the thing that
+            // actually has to be true for `--gpus all` to work - more reliable than
+            // looking for the binary, which can be installed but not wired into docker.
+            check: async () => {
+                const info = await new Promise((resolve) => {
+                    execFile('docker',['info','--format','{{json .Runtimes}}'],{timeout:8000},(err,stdout) => resolve(err ? '' : (stdout || '')))
+                })
+                return /nvidia/i.test(info)
+            },
+            install: 'curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg' +
+                ' && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" > /etc/apt/sources.list.d/nvidia-container-toolkit.list' +
+                ' && apt-get update -y && apt-get install -y nvidia-container-toolkit' +
+                ' && nvidia-ctk runtime configure --runtime=docker && systemctl restart docker',
+        },
+        intel: {
+            name: 'Intel Compute Runtime (OpenVINO GPU)',
+            acceleration: 'openvino',
+            // /dev/dri alone is not enough for OpenVINO to pick the GPU - the OpenCL ICD
+            // has to be on the host for the device to be usable once passed through.
+            check: async () => {
+                if(!fs.existsSync('/dev/dri'))return false
+                return [
+                    '/usr/lib/x86_64-linux-gnu/intel-opencl/libigdrcl.so',
+                    '/usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so',
+                ].some((path) => fs.existsSync(path))
+            },
+            install: 'apt-get update -y && apt-get install -y intel-opencl-icd intel-media-va-driver-non-free vainfo',
+        },
+        amd: {
+            name: 'AMD ROCm kernel driver (/dev/kfd)',
+            acceleration: 'rocm',
+            // ROCm's userspace ships inside the plugin image; what the host must provide
+            // is the amdgpu kernel driver exposing /dev/kfd. That is a driver/kernel
+            // change, not an apt package we should be firing off unattended - so this one
+            // reports and explains rather than offering a button.
+            check: async () => fs.existsSync('/dev/kfd'),
+            install: null,
+            hint: 'The ROCm userspace ships inside the plugin image. The host needs the amdgpu kernel driver exposing /dev/kfd - install it with amdgpu-install from AMD\'s repository, then reboot.',
+        },
     }
-    const detectGpuVendors = () => {
-        return new Promise((resolve) => {
-            const none = { nvidia: false, amd: false, intel: false, devices: [] }
-            if(process.platform !== 'linux')return resolve(none)
-            execFile('lspci',[],{timeout:8000},(err,stdout) => {
-                if(err)return resolve(none)
-                const found = Object.assign({},none,{devices:[]})
-                ;(stdout || '').split('\n')
-                    .filter((line) => /vga compatible controller|3d controller|display controller/i.test(line))
-                    .forEach((line) => {
-                        const vendor = vendorOfDevice(line)
-                        if(!vendor)return
-                        found[vendor] = true
-                        found.devices.push({
-                            vendor: vendor,
-                            acceleration: VENDOR_ACCELERATION[vendor],
-                            // Drop the PCI slot and class prefix ("00:02.0 VGA compatible
-                            // controller: ") so what is shown is just the hardware name.
-                            name: line.replace(/^\S+\s+[^:]+:\s*/,'').trim(),
-                        })
-                    })
-                resolve(found)
-            })
-        })
+    const detectAcceleratorReadiness = async (gpuVendors) => {
+        const readiness = {}
+        // Only asked about vendors this machine actually has - checking for the NVIDIA
+        // toolkit on an Intel-only box would just produce noise in the panel.
+        await Promise.all(Object.keys(ACCELERATOR_REQUIREMENTS).map(async (vendor) => {
+            if(!gpuVendors || !gpuVendors[vendor])return
+            const requirement = ACCELERATOR_REQUIREMENTS[vendor]
+            let ready = false
+            try{
+                ready = await requirement.check()
+            }catch(err){
+                s.debugLog(`Accelerator readiness check failed for ${vendor}`,err)
+            }
+            readiness[vendor] = {
+                name: requirement.name,
+                acceleration: requirement.acceleration,
+                ready: ready,
+                canInstall: !!requirement.install,
+                hint: requirement.hint || null,
+            }
+        }))
+        return readiness
     }
     const getContainerStatus = (packageName) => {
         return new Promise((resolve) => {
@@ -233,6 +282,13 @@ module.exports = (s,config,lang,app,io,helpers) => {
             s.closeJsonResponse(res,{ ok: false, msg: lang['Not Supported'] || 'Docker can only be installed from here on Linux.' })
             return
         }
+        // Installing Docker Engine inside Shinobi's own container would need systemd,
+        // would not survive the container being recreated, and is not what the user
+        // wants anyway - the daemon they need is the host's.
+        if(isRunningInContainer()){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['dockerInstallInContainerText'] || 'Shinobi is running inside a container. Install Docker on the host instead.' })
+            return
+        }
         if(dockerInstallRunning){
             s.closeJsonResponse(res,{ ok: false, msg: lang['Please Wait...'] })
             return
@@ -249,6 +305,44 @@ module.exports = (s,config,lang,app,io,helpers) => {
         const installCommand = 'curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && sh /tmp/get-docker.sh'
         const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
         const args = isRoot ? ['-c',installCommand] : ['-c',`sudo -n sh -c '${installCommand}'`]
+        const result = await runStreamed(DOCKER_HOST_LABEL,'sh',args)
+        dockerInstallRunning = false
+        s.tx({
+            f: 'plugin-info',
+            module: DOCKER_HOST_LABEL,
+            process: 'docker-install-complete',
+            ok: result.ok,
+        },'PLUGINMANAGER')
+    })
+    /**
+    * API : Superuser : Install the host side prerequisite for an acceleration variant
+    * (e.g. the NVIDIA Container Toolkit, without which `--gpus all` fails).
+    */
+    addPluginManagerRoute('post','/docker/installAccelerator', async (req,res,resp) => {
+        const vendor = req.body.vendor
+        const requirement = ACCELERATOR_REQUIREMENTS[vendor]
+        // vendor only ever indexes this fixed map, and the command run is the map's own
+        // literal string - nothing from the request reaches the shell.
+        if(!requirement || !requirement.install){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Invalid Data'] })
+            return
+        }
+        if(process.platform !== 'linux'){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Not Supported'] || 'This can only be installed from here on Linux.' })
+            return
+        }
+        if(isRunningInContainer()){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['acceleratorInContainerText'] || 'Shinobi is running inside a container. This must be installed on the host, where the Docker daemon runs.' })
+            return
+        }
+        if(dockerInstallRunning){
+            s.closeJsonResponse(res,{ ok: false, msg: lang['Please Wait...'] })
+            return
+        }
+        dockerInstallRunning = true
+        s.closeJsonResponse(res,{ ok: true })
+        const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+        const args = isRoot ? ['-c',requirement.install] : ['-c',`sudo -n sh -c '${requirement.install.replace(/'/g,`'"'"'`)}'`]
         const result = await runStreamed(DOCKER_HOST_LABEL,'sh',args)
         dockerInstallRunning = false
         s.tx({
@@ -386,6 +480,8 @@ module.exports = (s,config,lang,app,io,helpers) => {
         isDockerAvailable,
         getDockerInfoForModule,
         detectGpuVendors,
+        detectAcceleratorReadiness,
+        isRunningInContainer,
         detectHostIp,
     }
 }

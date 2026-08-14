@@ -407,9 +407,14 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
         return readmeData
     }
     const {
+        detectGpuVendors,
+        detectAccelerationRuntimes,
+    } = require('./hardware.js')(s)
+    const {
         isDockerAvailable,
         getDockerInfoForModule,
-        detectGpuVendors,
+        detectAcceleratorReadiness,
+        isRunningInContainer,
         detectHostIp,
     } = require('./docker.js')(s,config,lang,app,io,{
         getModulePath,
@@ -422,6 +427,7 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
     addPluginManagerRoute('get','/list', async (req,res,resp) => {
         const modules = getModules()
         const dockerAvailable = await isDockerAvailable()
+        const gpuVendors = await detectGpuVendors()
         if(dockerAvailable){
             await Promise.all(Object.values(modules).filter(Boolean).map(async (shinobiModule) => {
                 try{
@@ -437,8 +443,18 @@ module.exports = async (s,config,lang,app,io,currentUse) => {
             dockerAvailable: dockerAvailable,
             // Both halves of the Downloaded tab's Docker notice: whether Docker is here
             // at all, and - when it is - which GPUs it could be given access to.
-            gpuVendors: await detectGpuVendors(),
-            canInstallDocker: process.platform === 'linux',
+            gpuVendors: gpuVendors,
+            // Host side CUDA / ROCm / OpenVINO. Reported regardless of Docker, since a
+            // natively installed plugin runs against these same runtimes.
+            accelerationRuntimes: await detectAccelerationRuntimes(gpuVendors),
+            // Per detected vendor : is the host side prerequisite for its acceleration
+            // variant present, and can this panel install it. Checked only when Docker is
+            // reachable, since every check is about what `docker run` would be able to do.
+            acceleratorReadiness: dockerAvailable ? await detectAcceleratorReadiness(gpuVendors) : {},
+            // Shinobi in a container can neither install Docker for itself nor start
+            // anything that is a child of it - see the notice the frontend draws.
+            shinobiInContainer: isRunningInContainer(),
+            canInstallDocker: process.platform === 'linux' && !isRunningInContainer(),
             detectedHostIp: dockerAvailable ? detectHostIp() : null,
             connectedPlugins: s.connectedDetectorPlugins,
         })

@@ -39,6 +39,10 @@
                         its whole contents when it (re)draws the table - the Docker notice
                         has to sit outside of that to survive a refresh. %>
                     <div class="tab-pane active" id="pluginManagerList">
+                        <%# Hardware first : it describes the machine and applies to any
+                            plugin, native or containerized. The Docker box below is only
+                            about running plugins as containers. %>
+                        <div id="pluginManagerHardwareNotice"></div>
                         <div id="pluginManagerDockerNotice"></div>
                         <div id="pluginManagerListRows"></div>
                     </div>
