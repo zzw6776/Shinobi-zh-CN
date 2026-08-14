@@ -4,6 +4,13 @@
     <form>
         <div class="row" style="display:flex">
             <div class="col-md-12">
+                <%# Shown whether or not the feature is usable - what failover is for is the
+                    first thing missing when you land on this tab. %>
+                <div class="alert alert-info">
+                    <b><i class="fa fa-info-circle"></i> <%- lang['Failover Servers'] %></b>
+                    <div class="mt-1"><small><%- lang.failoverHowTo %></small></div>
+                    <div class="mt-1"><small><a href="https://hub.shinobi.video/articles/view/Wg3wTA7fqbyP4yA" target="_blank" rel="noopener"><%- lang.failoverDocsLink %> <i class="fa fa-external-link"></i></a></small></div>
+                </div>
                 <% if(!config.userHasSubscribed){ %>
                     <div class="card bg-dark text-white mb-4">
                         <div class="card-header">
@@ -25,6 +32,12 @@
                             </div>
                             <div class="form-group">
                                 <input placeholder="<%-lang['Server Key']%>" class="form-control btn btn-dark text-left text-white" type="text" name="peerConnectKey" value="" placeholder="API Key from https://licenses.shinobi.video">
+                            </div>
+                            <%# Its own button rather than only the floating save bar, which
+                                is shared page furniture and does not read as "add this
+                                server to the list below". Same as the Central Management tab. %>
+                            <div>
+                                <a class="btn btn-success btn-block" id="failoverServersAdd"><i class="fa fa-plus"></i> <%- lang['Add Failover Server'] %></a>
                             </div>
                         </div>
                     </div>

@@ -10,8 +10,26 @@ module.exports = (s,app,config,lang) => {
             updateCachedMonitor,
             updateCachedUser,
             closeFailoverConnection,
+            ensureFailoverServerStopped,
             parseNewConnectionAddress,
         } = require('./utilsNormal.js')(s,app,config,lang)
+        // The address is turned into ws://<host>/failover by parseNewConnectionAddress, so
+        // a bare host is fine and expected here - what has to be refused is an empty value
+        // or a scheme that cannot carry a websocket.
+        const MINIMUM_PEER_CONNECT_KEY_LENGTH = 5
+        const validateFailoverServerInput = (failoverServer,peerConnectKey) => {
+            const value = `${failoverServer || ''}`.trim()
+            if(!value || /\s/.test(value)){
+                return lang.failoverBadServerUrl || 'Enter the Failover server address.'
+            }
+            if(value.indexOf('://') > -1 && !/^wss?:\/\//.test(value)){
+                return lang.failoverBadServerUrl || 'The address must use ws:// or wss://'
+            }
+            if(!peerConnectKey || `${peerConnectKey}`.trim().length < MINIMUM_PEER_CONNECT_KEY_LENGTH){
+                return lang.failoverBadPeerKey || 'The Server Key is too short.'
+            }
+            return null
+        }
         s.onMonitorSave((monitorConfig) => {
             runOnFailoverConnections((host, connectionToFailover) => {
                 updateCachedMonitor(connectionToFailover, monitorConfig)
@@ -47,8 +65,15 @@ module.exports = (s,app,config,lang) => {
         */
         app.post(config.webPaths.superApiPrefix+':auth/failover/save', function (req,res){
             s.superAuth(req.params,async (resp) => {
-                const failoverServer = req.body.failoverServer;
-                const peerConnectKey = req.body.peerConnectKey;
+                const failoverServer = `${req.body.failoverServer || ''}`.trim();
+                const peerConnectKey = `${req.body.peerConnectKey || ''}`.trim();
+                // Checked here rather than only in the form : this route is reachable on
+                // its own, and a blank save would add an unusable entry to conf.json.
+                const validationError = validateFailoverServerInput(failoverServer,peerConnectKey)
+                if(validationError){
+                    s.closeJsonResponse(res,{ ok: false, msg: validationError })
+                    return
+                }
                 const response = await addFailoverServer(failoverServer, peerConnectKey)
                 await connectToFailover({ host: response.host, key: response.key })
                 response.failoverServer = response.host
@@ -65,7 +90,15 @@ module.exports = (s,app,config,lang) => {
                 const failoverServer = parseNewConnectionAddress(req.body.failoverServer);
                 const peerConnectKey = req.body.peerConnectKey;
                 const response = await removeFailoverServer(failoverServer, peerConnectKey)
-                await closeFailoverConnection(failoverServer)
+                // Only stop it if it really was removed from the config, and then confirm
+                // it stayed stopped - a queued retry would otherwise bring it back.
+                if(response.ok){
+                    const stopResult = await ensureFailoverServerStopped(failoverServer)
+                    response.stopped = stopResult.stopped
+                    response.neededSecondPass = stopResult.neededSecondPass
+                }else{
+                    await closeFailoverConnection(failoverServer)
+                }
                 s.closeJsonResponse(res,response)
             },res,req)
         })

@@ -8,6 +8,65 @@ module.exports = (s,app,config,lang) => {
     const failoverServerCache = {}
     const writeStreams = {}
     const reconnectTimeouts = {}
+    // Connection state per failover server, for the badge in the Failover Servers tab, and
+    // the flag that stops a removed server from being reconnected by a queued retry.
+    const failoverServerStatus = {}
+    const wantTerminate = {}
+    const CONNECTION_STATES = {
+        connecting: 'connecting',
+        connected: 'connected',
+        retrying: 'retrying',
+        failed: 'failed',
+        disconnected: 'disconnected',
+    }
+    const ATTEMPTS_BEFORE_FAILED = 3
+    const RETRY_INTERVAL = 10000 // as before, between attempts inside a window
+    const RETRY_WINDOW = 60000 // try for a minute...
+    const RETRY_WINDOW_PAUSE = 600000 // ...then wait ten before trying again
+    function getFailoverServerStatus(host){
+        const info = failoverServerStatus[host] || {}
+        return {
+            status: info.status || CONNECTION_STATES.disconnected,
+            attempts: info.attempts || 0,
+            lastError: info.lastError || null,
+            since: info.since || null,
+            nextAttemptAt: info.nextAttemptAt || null,
+        }
+    }
+    function getFailoverServerStatuses(){
+        const statuses = {}
+        for(const host in failoverServerStatus){
+            statuses[host] = getFailoverServerStatus(host)
+        }
+        return statuses
+    }
+    // Pushed to the Superuser room so the tab does not have to poll for this.
+    function broadcastFailoverServerStatus(host,removed){
+        try{
+            s.tx({
+                f: 'failover-status',
+                failoverServer: host,
+                removed: !!removed,
+                status: removed ? null : getFailoverServerStatus(host),
+            },'$')
+        }catch(err){
+            s.debugLog('broadcastFailoverServerStatus ERR',err)
+        }
+    }
+    function setFailoverServerStatus(host,status,extra){
+        const info = failoverServerStatus[host] || (failoverServerStatus[host] = {})
+        info.status = status
+        info.since = new Date().toISOString()
+        if(extra && extra.lastError !== undefined)info.lastError = extra.lastError
+        if(extra && extra.nextAttemptAt !== undefined)info.nextAttemptAt = extra.nextAttemptAt
+        if(status === CONNECTION_STATES.connected){
+            info.attempts = 0
+            info.lastError = null
+            info.nextAttemptAt = null
+            info.retryWindowStartedAt = null
+        }
+        broadcastFailoverServerStatus(host)
+    }
     const {
         getVideoFilePath,
     } = require('./utils.js')(s,app,config,lang)
@@ -192,33 +251,67 @@ module.exports = (s,app,config,lang) => {
     }
     function connectToFailover({ host, key }){
         clearTimeout(reconnectTimeouts[host])
+        // A previous removal may have flagged this host; connecting again clears it.
+        delete(wantTerminate[host])
         const parsedIp = parseNewConnectionAddress(host)
         s.systemLog('Attempting Connection to Failover at ', parsedIp)
+        const previousInfo = failoverServerStatus[host] || {}
+        setFailoverServerStatus(host, (previousInfo.attempts || 0) > 0 ? CONNECTION_STATES.retrying : CONNECTION_STATES.connecting)
         const clientConnection = createWebSocketClient(parsedIp)
         function reconnectOnFailure(){
-            s.systemLog('Failover Connection Failed, Trying again...', host)
             try{
                 failoverServerConnections[host].terminate()
             }catch(err){}
             delete(failoverServerConnections[host])
             delete(failoverServerCache[host])
             clearTimeout(reconnectTimeouts[host])
+            // The server was removed (or is being replaced) - reconnecting here is exactly
+            // the "deleted but still hammering" behaviour, so stop.
+            if(wantTerminate[host]){
+                s.systemLog('Failover Connection Closed, NOT Trying again (removed) : ', host)
+                setFailoverServerStatus(host, CONNECTION_STATES.disconnected)
+                return
+            }
+            const info = failoverServerStatus[host] || (failoverServerStatus[host] = {})
+            info.attempts = (info.attempts || 0) + 1
+            const now = Date.now()
+            if(!info.retryWindowStartedAt)info.retryWindowStartedAt = now
+            let delay = RETRY_INTERVAL
+            // A minute of attempts with nothing to show for it - wait out a long pause
+            // rather than reconnecting every 10s forever, then start a fresh minute.
+            if(now - info.retryWindowStartedAt >= RETRY_WINDOW){
+                delay = RETRY_WINDOW_PAUSE
+                info.retryWindowStartedAt = null
+            }
+            s.systemLog(`Failover Connection Failed, Trying again in ${Math.round(delay / 1000)}s : `, host)
+            setFailoverServerStatus(host,
+                info.attempts >= ATTEMPTS_BEFORE_FAILED ? CONNECTION_STATES.failed : CONNECTION_STATES.retrying,
+                { nextAttemptAt: new Date(now + delay).toISOString() }
+            )
             reconnectTimeouts[host] = setTimeout(function(){
+                // Re-checked : the server may have been removed during the wait.
+                if(wantTerminate[host])return
                 connectToFailover({ host, key })
-            },10000)
+            },delay)
         }
         clientConnection.onclose = reconnectOnFailure
         clientConnection.on('open', () => {
             s.systemLog('Connected to Failover, Attempting Authentication... ', host)
+            setFailoverServerStatus(host, CONNECTION_STATES.connecting)
             sendMessage(clientConnection, { key })
         })
         clientConnection.on('error', (data) => {
             s.systemLog('Failover Connection Error : ', data)
+            const info = failoverServerStatus[host] || (failoverServerStatus[host] = {})
+            info.lastError = `${(data && data.message) || data}`
+            broadcastFailoverServerStatus(host)
         })
         clientConnection.on('message', async (message) => {
             const data = bson.deserialize(Buffer.from(message))
             switch(data.f){
                 case'init':
+                    // The failover only sends this once it has accepted the key.
+                    setFailoverServerStatus(host, CONNECTION_STATES.connected)
                     s.systemLog('Initializing Failover at ', host)
                     await cachePermissions(clientConnection)
                     await cacheUsers(clientConnection)
@@ -275,8 +368,25 @@ module.exports = (s,app,config,lang) => {
     function getFailoverConnection(host){
         return failoverServerConnections[host]
     }
-    function closeFailoverConnection(host){
+    // `purge` also drops the status record, for when the server is being removed rather
+    // than reconnected.
+    function closeFailoverConnection(host, options){
+        const purge = !!(options && options.purge)
         sendFailoverServerCache()
+        // Both of these are what kept a deleted server alive : a retry queued by an earlier
+        // failure would fire on its own timer and reconnect, and nothing marked the host as
+        // deliberately closed, so the next onclose would queue another one.
+        wantTerminate[host] = true
+        clearTimeout(reconnectTimeouts[host])
+        delete(reconnectTimeouts[host])
+        setFailoverServerStatus(host, CONNECTION_STATES.disconnected)
+        const finish = () => {
+            if(purge){
+                delete(failoverServerStatus[host])
+                delete(wantTerminate[host])
+                broadcastFailoverServerStatus(host,true)
+            }
+        }
         if(failoverServerConnections[host]){
             return new Promise(function(resolve){
                 try{
@@ -284,15 +394,41 @@ module.exports = (s,app,config,lang) => {
                     failoverServerConnections[host].onclose = (event) => {
                         delete(failoverServerConnections[host])
                         delete(failoverServerCache[host])
+                        finish()
                         resolve()
                     }
                     failoverServerConnections[host].terminate()
                 }catch(err){
                     s.systemLog(err)
+                    finish()
                     resolve()
                 }
             })
         }
+        finish()
+    }
+    // Removing a failover server has to actually stop it and stay stopped - a retry that
+    // fired in the gap would otherwise reconnect to a server the user has deleted.
+    const STOP_VERIFY_DELAY = 3000
+    function ensureFailoverServerStopped(host){
+        return new Promise(async (resolve) => {
+            await closeFailoverConnection(host,{ purge: true })
+            setTimeout(() => {
+                const stillConnected = !!failoverServerConnections[host]
+                const stillTracked = !!failoverServerStatus[host]
+                if(!stillConnected && !stillTracked){
+                    resolve({ ok: true, stopped: true, neededSecondPass: false })
+                    return
+                }
+                s.systemLog('Failover : connection re-appeared after removal, stopping again',{ host })
+                closeFailoverConnection(host,{ purge: true })
+                resolve({
+                    ok: !failoverServerConnections[host],
+                    stopped: !failoverServerConnections[host],
+                    neededSecondPass: true,
+                })
+            },STOP_VERIFY_DELAY)
+        })
     }
     async function connectFailoverServers(){
         if(config.failoverServers){
@@ -315,6 +451,7 @@ module.exports = (s,app,config,lang) => {
     function getFailoverServers(){
         const response = { ok: true }
         response.failoverServers = config.failoverServers || {};
+        response.statuses = getFailoverServerStatuses();
         return response
     }
     async function addFailoverServer(serverIp, p2pKey){
@@ -385,6 +522,8 @@ module.exports = (s,app,config,lang) => {
         addFailoverServer,
         removeFailoverServer,
         closeFailoverConnection,
+        ensureFailoverServerStopped,
+        getFailoverServerStatuses,
         parseNewConnectionAddress,
     }
 }
