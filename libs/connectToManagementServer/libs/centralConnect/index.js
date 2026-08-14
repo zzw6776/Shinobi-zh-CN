@@ -14,6 +14,12 @@ const SOCKET_CHECK_INTERVAL = 20000; // 20 seconds
 const RECONNECT_DELAY = 2000; // 2 seconds
 const HEARTBEAT_TIMEOUT_MULTIPLIER = 1.5;
 const MAX_RECONNECT_DELAY = 30000;
+// Retry shape : keep trying for a minute, and if the server is still not there, stop
+// hammering it and wait ten minutes before starting another minute of attempts. An
+// unreachable management server is usually down for maintenance or gone for good, and
+// either way reconnecting every 30s forever helps nobody.
+const RETRY_WINDOW = 60000; // 1 minute of attempts
+const RETRY_WINDOW_PAUSE = 600000; // then 10 minutes of waiting
 
 // Error handling
 process.on("uncaughtException", (error) => {
@@ -36,6 +42,11 @@ class CentralConnection {
     this.allMessageHandlers = [];
     this.internalEvents = new EventEmitter();
     this.reconnectAttempts = 0;
+    this.retryWindowStartedAt = null;
+    // reconnectAttempts drives the backoff curve and restarts with each 1-minute window;
+    // this one is the running total since the last good connection, which is what decides
+    // whether the panel says "Retrying" or "Failed Connection".
+    this.failedAttemptsSinceConnected = 0;
 
     this.initConfig();
     this.initLogging();
@@ -178,12 +189,19 @@ class CentralConnection {
 
   onWebsocketOpen() {
     this.reconnectAttempts = 0; // Reset backoff on successful connection
+    this.retryWindowStartedAt = null; // and the 1-minute-then-pause cycle starts over
+    this.failedAttemptsSinceConnected = 0;
     this.logger.main('Central : Connected! Authenticating...');
+    // The parent tracks connection state for the Central Management tab's badge. This
+    // worker retries internally and never exits while doing so, so without these the
+    // parent would only ever see the very first "connecting".
+    parentPort.postMessage({ f: 'connectionState', state: 'authenticating' });
     this.authenticateConnection();
   }
 
   onWebsocketError(err) {
     this.logger.main(`Central tunnelToCentral Error: ${err.toString()}`);
+    parentPort.postMessage({ f: 'connectionState', state: 'error', error: err.toString() });
     // Don't call disconnectedConnection here — onWebsocketClose will fire after
   }
 
@@ -191,14 +209,42 @@ class CentralConnection {
     this.logger.main('Central Connection Closed!');
     this.clearAllTimers();
 
-    if (this.stayDisconnected) return;
+    if (this.stayDisconnected) {
+      parentPort.postMessage({ f: 'connectionState', state: 'disconnected' });
+      return;
+    }
 
-    const delay = Math.min(
-      RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
-      MAX_RECONNECT_DELAY
-    );
-    this.reconnectAttempts++;
-    this.logger.main(`Central : Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+    const now = Date.now();
+    if (!this.retryWindowStartedAt) this.retryWindowStartedAt = now;
+    const windowElapsed = now - this.retryWindowStartedAt;
+    let delay;
+    let isPausing = false;
+    if (windowElapsed >= RETRY_WINDOW) {
+      // A minute of attempts has not got us connected - back off for a long wait, then
+      // begin a fresh minute (the next close after this one starts a new window).
+      delay = RETRY_WINDOW_PAUSE;
+      isPausing = true;
+      this.retryWindowStartedAt = null;
+      // The next window should open with quick attempts again, not at the 30s cap.
+      this.reconnectAttempts = 0;
+    } else {
+      delay = Math.min(
+        RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
+        MAX_RECONNECT_DELAY
+      );
+    }
+    if (!isPausing) this.reconnectAttempts++;
+    this.failedAttemptsSinceConnected++;
+    this.logger.main(isPausing
+      ? `Central : No connection after ${Math.round(RETRY_WINDOW / 1000)}s, pausing ${Math.round(delay / 60000)} minutes before trying again...`
+      : `Central : Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+    parentPort.postMessage({
+      f: 'connectionState',
+      state: isPausing ? 'paused' : 'retrying',
+      attempts: this.failedAttemptsSinceConnected,
+      delay,
+      nextAttemptAt: new Date(now + delay).toISOString(),
+    });
 
     this.timers.onClosed = setTimeout(() => {
       this.startWebsocketConnection();

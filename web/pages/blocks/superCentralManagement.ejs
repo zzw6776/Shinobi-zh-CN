@@ -4,19 +4,34 @@
     <form>
         <div class="row" style="display:flex">
             <div class="col-md-12">
-                <% if(!config.enableMgmtConnect || !config.userHasSubscribed){ %>
-                    <div class="card bg-dark text-white mb-4">
-                        <div class="card-header">
-                            <%- lang['Central Management'] %>
+                <%# Both states are rendered and switched client side from /mgmt/status.
+                    Enabling used to mean editing conf.json by hand and restarting, and even
+                    after activating, this tab kept showing the "not enabled" notice until
+                    the whole page was reloaded. %>
+                <div id="centralManagementSetup" class="card bg-dark text-white mb-4 d-none">
+                    <div class="card-header">
+                        <%- lang['Central Management'] %>
+                    </div>
+                    <div class="card-body">
+                        <div id="centralManagementNeedsActivation" class="d-none">
+                            <div class="text-center mb-2"><%- lang.centralManagementNeedsActivation %></div>
+                            <div class="text-center">
+                                <a class="btn btn-sm btn-default" id="centralManagementRecheck"><i class="fa fa-refresh"></i> <%- lang['Check Again'] %></a>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <div class="text-center"><%- lang.centralManagementNotEnabled %></div>
+                        <div id="centralManagementCanEnable" class="d-none">
+                            <div class="text-center mb-3"><%- lang.centralManagementEnableText %></div>
+                            <div class="text-center">
+                                <a class="btn btn-success" id="centralManagementEnable"><i class="fa fa-power-off"></i> <%- lang['Enable Central Management'] %></a>
+                            </div>
                         </div>
                     </div>
-                <% } else { %>
+                </div>
+                <div id="centralManagementSettings" class="d-none">
                     <div class="card bg-dark text-white mb-4">
                         <div class="card-header">
                             <%- lang['Central Management'] %>
+                            <a class="btn btn-sm btn-default float-end" id="centralManagementDisable"><%- lang['Disable'] %></a>
                         </div>
                         <div class="card-body">
                             <div class="form-group">
@@ -24,6 +39,13 @@
                             </div>
                             <div class="form-group">
                                 <input placeholder="<%-lang['P2P API Key']%>" class="form-control btn btn-dark text-left text-white" type="text" name="peerConnectKey" value="<%- config.peerConnectKey %>" placeholder="API Key from https://licenses.shinobi.video">
+                            </div>
+                            <%# Its own Add button rather than relying on the floating save
+                                bar : the bar is shared page furniture that this tab hides
+                                until the feature is on, and "Save" never read as "add this
+                                server to the list below" anyway. %>
+                            <div>
+                                <a class="btn btn-success btn-block" id="centralManagementAdd"><i class="fa fa-plus"></i> <%- lang['Add Management Server'] %></a>
                             </div>
                         </div>
                     </div>
@@ -34,7 +56,7 @@
                             </table>
                         </div>
                     </div>
-                <% } %>
+                </div>
             </div>
         </div>
     <%- include('super/stickySubmitBar'); %>
