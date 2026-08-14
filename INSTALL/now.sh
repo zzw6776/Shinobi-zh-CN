@@ -12,6 +12,7 @@ echo "5. MacOS"
 echo "6. FreeBSD"
 echo "7. OpenSUSE"
 echo "8. Arch Linux - Fast and Touchless"
+echo "9. Bazzite / Fedora Atomic - Rootless Podman (Experimental)"
 echo "========"
 read oschoicee
 case $oschoicee in
@@ -46,6 +47,25 @@ sh INSTALL/opensuse.sh
 "8")
 chmod +x INSTALL/arch.sh
 bash INSTALL/arch.sh
+  ;;
+"9")
+echo "========"
+echo "EXPERIMENTAL : Bazzite and other Fedora Atomic systems are immutable, so"
+echo "Shinobi is not installed onto the host. It runs as a rootless Podman"
+echo "container managed by systemd, with all data kept in your home folder."
+echo "This installer is new and less tested than the others."
+echo "========"
+printf "Continue? (y/N) : "
+read bazziteConfirm
+case $bazziteConfirm in
+"y"|"Y"|"yes"|"YES")
+chmod +x INSTALL/bazzite.sh
+bash INSTALL/bazzite.sh
+  ;;
+*)
+  echo "Cancelled."
+  ;;
+esac
   ;;
 
 *)
