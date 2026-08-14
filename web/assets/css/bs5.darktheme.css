@@ -8,6 +8,18 @@
     border-color: #c49a68;
 }
 .dark .table-striped>tbody>tr>td{border-color:#222;color:#fff}
+/* Table headers never got a dark-theme colour. Bootstrap 5 defaults `--bs-table-color` to
+   the LIGHT theme body colour (#212529), so on these dark cards the header row rendered as
+   near-black text on a near-black background - the Logs table header in Controls and Logs
+   was effectively invisible. Scoped to the dark card as well as the `.dark` page class,
+   because the dashboard renders the same blocks on a body that has no `.dark`. */
+.dark .table>thead>tr>th,
+.dark .table>thead>tr>td,
+.card.bg-dark .table>thead>tr>th,
+.card.bg-dark .table>thead>tr>td{
+    color:#fff;
+    border-color:#444;
+}
 .dark code{color: #c49a68;background-color: #36333d;}
 .dark a:not(.btn,.dropdown-item){color: #c49a68;}
 
