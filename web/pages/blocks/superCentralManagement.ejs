@@ -8,6 +8,13 @@
                     Enabling used to mean editing conf.json by hand and restarting, and even
                     after activating, this tab kept showing the "not enabled" notice until
                     the whole page was reloaded. %>
+                <%# Shown in every state - what the feature is for is the first thing missing
+                    when you land on this tab, whether it is switched on or not. %>
+                <div class="alert alert-info">
+                    <b><i class="fa fa-info-circle"></i> <%- lang['Central Management'] %></b>
+                    <div class="mt-1"><small><%- lang.centralManagementHowTo %></small></div>
+                    <div class="mt-1"><small><a href="https://docs.shinobi.video/system/central-management" target="_blank" rel="noopener"><%- lang.centralManagementDocsLink %> <i class="fa fa-external-link"></i></a></small></div>
+                </div>
                 <div id="centralManagementSetup" class="card bg-dark text-white mb-4 d-none">
                     <div class="card-header">
                         <%- lang['Central Management'] %>
