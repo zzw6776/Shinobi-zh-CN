@@ -66,6 +66,20 @@ RUN sed -i -e 's/\r//g' /home/Shinobi/Docker/init.sh
 RUN apt-get update -y --fix-missing
 RUN apt-get upgrade -y
 
+# The startup files must live OUTSIDE /home/Shinobi. That path is a documented
+# mount point, and a bind mount of an empty host directory hides everything the
+# image put there -- including the entrypoint itself, which used to fail with a
+# bare "exec /home/Shinobi/Docker/init.sh failed: No such file or directory".
+RUN mkdir -p /usr/local/share/shinobi \
+    && cp /home/Shinobi/Docker/init.sh /usr/local/bin/shinobi-init.sh \
+    && cp /home/Shinobi/Docker/pm2.yml /usr/local/share/shinobi/pm2.yml \
+    && chmod 755 /usr/local/bin/shinobi-init.sh
+
+# Pristine copy of the application used to seed an empty /home/Shinobi mount on
+# first start. cp -al hardlinks rather than duplicating, so this costs no
+# meaningful disk space in the image.
+RUN cp -al /home/Shinobi /opt/shinobi-defaults
+
 VOLUME ["/home/Shinobi"]
 VOLUME ["/var/lib/mysql"]
 
@@ -74,6 +88,6 @@ EXPOSE 8080 443 21 25
 # Run under tini as PID 1 so orphaned/reparented child processes (e.g. ffmpeg
 # left behind when a camera thread is force-killed) are reaped instead of
 # piling up as <defunct> zombies over time. (#461)
-ENTRYPOINT ["/usr/bin/tini", "--", "/home/Shinobi/Docker/init.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/shinobi-init.sh"]
 
-CMD [ "pm2-docker", "/home/Shinobi/Docker/pm2.yml" ]
+CMD [ "pm2-docker", "/usr/local/share/shinobi/pm2.yml" ]

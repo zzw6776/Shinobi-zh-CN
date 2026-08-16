@@ -1,6 +1,29 @@
 #!/bin/sh
 set -e
 
+# Seed /home/Shinobi when it has been mounted over with an empty host directory.
+# A bind mount (-v "$HOME/Shinobi":/home/Shinobi) hides the application that the
+# image shipped at that path, and Docker only auto-populates *named* volumes --
+# never bind mounts. Without this, a fresh install dies before it starts.
+SHINOBI_DEFAULTS="/opt/shinobi-defaults"
+if [ ! -f /home/Shinobi/camera.js ]; then
+    if [ -f "$SHINOBI_DEFAULTS/camera.js" ]; then
+        echo "Empty /home/Shinobi detected, seeding it from the image ..."
+        mkdir -p /home/Shinobi
+        cp -a "$SHINOBI_DEFAULTS/." /home/Shinobi/
+    else
+        echo "FATAL: /home/Shinobi does not contain Shinobi (camera.js is missing)" >&2
+        echo "and no seed copy was found at $SHINOBI_DEFAULTS." >&2
+        echo "If you mounted a host directory at /home/Shinobi, it is hiding the" >&2
+        echo "application shipped in the image. Mount the data subdirectories" >&2
+        echo "instead -- see Docker/README.md." >&2
+        exit 1
+    fi
+fi
+
+# /config is written to when SSL_ENABLED=true; make sure it exists either way.
+mkdir -p /config
+
 OLD_SQL_USER_TAG="ccio"
 NEW_SQL_USER_TAG="$DB_DATABASE"
 if [ "$SSL_ENABLED" = "true" ]; then

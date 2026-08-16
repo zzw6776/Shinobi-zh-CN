@@ -83,6 +83,22 @@ docker run -d --name='Shinobi' --memory=2g -p '8080:8080/tcp' -p '21:21/tcp' -v 
  | $HOME/Shinobi | Maps to the `/home/Shinobi` folder for the `customAutoLoad`, `plugins`, and `videos` folders inside and other files. Additionally you can edit the conf.json and super.json here. |
  | $HOME/ShinobiDatabase       | A map to `/var/lib/mysql` in the container. This is the database's core files.                                                                      |
 
+> **Note on the `$HOME/Shinobi` mount.** `/home/Shinobi` is where the application itself lives inside the image. Mounting a host directory there hides the application, and Docker only copies image content into *named* volumes -- never into bind mounts. On first start the container detects an empty mount and seeds it with a copy of the application from the image, which is why the command above works on a brand new host directory.
+>
+> If you would rather not have a copy of the application source on the host, mount only the folders you actually want to persist instead:
+>
+> ```
+> docker run -d --name='Shinobi' --memory=2g -p '8080:8080/tcp' -p '21:21/tcp' \
+>   -v "$HOME/ShinobiDatabase":'/var/lib/mysql':'rw' \
+>   -v "$HOME/Shinobi/videos":'/home/Shinobi/videos':'rw' \
+>   -v "$HOME/Shinobi/plugins":'/home/Shinobi/plugins':'rw' \
+>   -v "$HOME/Shinobi/customAutoLoad":'/home/Shinobi/libs/customAutoLoad':'rw' \
+>   -v "$HOME/Shinobi/config":'/config':'rw' \
+>   registry.gitlab.com/shinobi-systems/shinobi:dev
+> ```
+>
+> With this layout `conf.json` and `super.json` stay inside the container, so edit them with `docker exec` or switch back to the full `/home/Shinobi` mount.
+
 ### Environment Variables
 
 > Environment Variables have been disabled. You must now make changes in the conf.json itself when it is mounted on the host.
