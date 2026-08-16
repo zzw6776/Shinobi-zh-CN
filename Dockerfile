@@ -75,9 +75,12 @@ RUN mkdir -p /usr/local/share/shinobi \
     && cp /home/Shinobi/Docker/pm2.yml /usr/local/share/shinobi/pm2.yml \
     && chmod 755 /usr/local/bin/shinobi-init.sh
 
-# Pristine copy of the application used to seed an empty /home/Shinobi mount on
-# first start. cp -al hardlinks rather than duplicating, so this costs no
-# meaningful disk space in the image.
+# Pristine copy of the application, used to seed an empty /home/Shinobi bind
+# mount on first start. Note this DOES grow the image (~890MB measured): the
+# hardlinks land in a new overlayfs layer, which forces a copy-up of every file
+# from the layers below, so -al saves nothing here. The cost is deliberate --
+# it is what makes the documented "-v $HOME/Shinobi:/home/Shinobi" run command
+# work against a new host directory.
 RUN cp -al /home/Shinobi /opt/shinobi-defaults
 
 VOLUME ["/home/Shinobi"]
