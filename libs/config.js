@@ -29,7 +29,7 @@ module.exports = function(s){
     if(config.systemLog === undefined){config.systemLog=true}
     if(config.deleteCorruptFiles === undefined){config.deleteCorruptFiles=true}
     if(config.restart.onVideoNotExist === undefined){config.restart.onVideoNotExist=true}
-    if(config.ip === undefined||config.ip===''||config.ip.indexOf('0.0.0.0')>-1){config.ip='localhost'}else{config.bindip=config.ip};
+    if(config.ip === undefined||config.ip===''||config.ip.indexOf('0.0.0.0')>-1||config.ip==='localhost'){config.ip='localhost'}else{config.bindip=config.ip};
     if(config.cron === undefined)config.cron={};
     if(config.cron.enabled === undefined)config.cron.enabled=true;
     if(config.cron.deleteOld === undefined)config.cron.deleteOld=true;

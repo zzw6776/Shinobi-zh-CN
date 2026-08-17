@@ -2272,7 +2272,7 @@
    "databaseLogsDes": "Logs every database query. Very verbose, only intended for debugging database issues.",
 
    "ip": "Server IP / Bind Address",
-   "ipDes": "The IP address the web server binds to. Leave as localhost/0.0.0.0 to bind to all interfaces.",
+   "ipDes": "The IP address the web server binds to. Leave as 0.0.0.0 (or localhost) to bind to all interfaces. Use 127.0.0.1 to bind to loopback only.",
    "baseURL": "Base URL",
    "baseURLDes": "Overrides the URL prefix used when Shinobi is served behind a reverse proxy at a sub-path.",
    "notificationBaseUrl": "Notification Base URL",

@@ -292,7 +292,7 @@ still valid `conf.json` keys:
 |---|---|
 | `webPaths.*` | URL path prefixes (`home`, `admin`, `super`, `libs`, `apiPrefix`, `adminApiPrefix`, `superApiPrefix`). |
 | `renderPaths.*` | Server-side template names for each page (login, dashboard, admin, super, etc). |
-| `bindip` | Derived from `ip`; the actual address the HTTP server binds to. |
+| `bindip` | Derived from `ip`; the actual address the HTTP server binds to. Left unset (bind all interfaces) when `ip` is empty, `0.0.0.0`, or `localhost`. Set `ip` to `127.0.0.1` for a loopback-only bind. |
 | `availableHWAccels` | Hardware acceleration methods detected on this machine. |
 | `timeZones` | Static list used to populate timezone dropdowns in the UI. |
 | `webBlocksPreloaded` | Which dashboard "web blocks" (widgets) are preloaded on login. |

@@ -118,7 +118,7 @@ $(document).ready(function () {
         "title": lang["ip"],
         "type": "string",
         "description": lang["ipDes"],
-        "default": "localhost"
+        "default": "0.0.0.0"
       },
       "baseURL": {
         "title": lang["baseURL"],
