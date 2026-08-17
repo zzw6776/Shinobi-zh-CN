@@ -65,7 +65,7 @@ module.exports = function(s){
         //child node connection port
         if(config.childNodes.port === undefined)config.childNodes.port = 8288;
         //child node connection key
-        if(config.childNodes.key === undefined){
+        if(config.childNodes.key === undefined || config.childNodes.key === '' || (config.childNodes.key instanceof Array && config.childNodes.key.filter(key => !!key).length === 0)){
             const generatedKey = require('crypto').randomBytes(32).toString('hex')
             config.childNodes.key = [generatedKey]
             if(config.childNodes.enabled)console.warn('\n[SECURITY] childNodes.key not set in conf.json — a random key was generated for this session only.\nTo persist it, add the following to conf.json under "childNodes":\n  "key": ["' + generatedKey + '"]\nChild nodes must be configured with the same key.\n')

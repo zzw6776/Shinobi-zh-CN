@@ -428,7 +428,7 @@ $(document).ready(function () {
       "detectorMergePamRegionTriggers": {
         "title": lang["detectorMergePamRegionTriggers"],
         "type": "boolean",
-        "default": true
+        "default": false
       },
       "doSnapshot": {
         "title": lang["doSnapshot"],
@@ -797,7 +797,10 @@ $(document).ready(function () {
           },
           "key": {
             "title": lang["Key"],
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "masterDoWorkToo": {
             "title": lang["childNodesMasterDoWorkToo"],
