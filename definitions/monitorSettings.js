@@ -2772,7 +2772,7 @@ module.exports = (s,config,lang) => {
                            "name": "detail=detector_motion_tile_mode",
                            "field": lang['Accuracy Mode'],
                            "selector": "h_det_tile_mode",
-                           "default": "1",
+                           "default": "0",
                            "example": "",
                            "fieldType": "select",
                            "possible": yesNoPossibility
