@@ -688,26 +688,36 @@ function launchImportMonitorWindow(callback){
     });
 }
 function redAlertNotify({ title, text, type, hide = false }) {
+    var options = {
+        title: title,
+        text: text,
+        type: type,
+        hide: hide,
+        delay: 30000
+    };
     var redAlertNotice = redAlertNotices[title];
-    if (redAlertNotice) {
-        redAlertNotice.update({
-            title: title,
-            text: text,
-            type: type,
-            hide: hide,
-            delay: 30000
-        });
+    // PNotify 3 notices are not event emitters, so the old `.on('close')` call
+    // here threw every time a notice was created. The cached notice was never
+    // cleared as a result, and once it had been dismissed every later call just
+    // updated a dead notice - the notification silently stopped appearing (seen
+    // on the second and later monitor saves). Detect a spent notice instead.
+    // `state` is authoritative: while a notice fades out it is still in the DOM
+    // but already 'closing', and updating it would make the message disappear.
+    var noticeElement = redAlertNotice && redAlertNotice.elem ? redAlertNotice.elem[0] : null;
+    var canReuseNotice = !!noticeElement &&
+        typeof redAlertNotice.update === 'function' &&
+        (redAlertNotice.state === 'open' || redAlertNotice.state === 'opening') &&
+        document.body.contains(noticeElement);
+    if (canReuseNotice) {
+        redAlertNotice.update(options);
+        // restart the auto-hide countdown so a repeat notification is not
+        // dismissed early on the original notice's timer
+        if (hide && typeof redAlertNotice.queueRemove === 'function') {
+            redAlertNotice.cancelRemove();
+            redAlertNotice.queueRemove();
+        }
     } else {
-        redAlertNotices[title] = new PNotify({
-            title: title,
-            text: text,
-            type: type,
-            hide: hide,
-            delay: 30000
-        });
-        redAlertNotices[title].on('close', function() {
-            redAlertNotices[title] = null;
-        });
+        redAlertNotices[title] = new PNotify(options);
     }
 }
 function buildPosePoints(bodyParts, x, y){
