@@ -115,6 +115,36 @@ module.exports = function(s,config,lang,io){
         })
     }
 
+    // One browser opens several sockets on the same auth token (the dashboard
+    // socket plus each live view / embed iframe). The cached user record in
+    // s.group[ke].users[auth] is shared by all of them, so it must only be
+    // dropped once the last of those connections has gone - otherwise a closing
+    // iframe logs the dashboard out and its next request is "Not Authorized".
+    const socketAuthConnections = {}
+    function getAuthRefKey(groupKey,authKey){
+        return `${groupKey}_${authKey}`
+    }
+    function addSocketAuthRef(groupKey,authKey,connectionId){
+        if(!groupKey || !authKey || !connectionId)return;
+        const refKey = getAuthRefKey(groupKey,authKey)
+        if(!socketAuthConnections[refKey])socketAuthConnections[refKey] = {}
+        socketAuthConnections[refKey][connectionId] = true
+    }
+    // returns how many connections are still using this auth token
+    function removeSocketAuthRef(groupKey,authKey,connectionId){
+        if(!groupKey || !authKey)return 0;
+        const refKey = getAuthRefKey(groupKey,authKey)
+        const refs = socketAuthConnections[refKey]
+        if(!refs)return 0;
+        delete(refs[connectionId])
+        const remaining = Object.keys(refs).length
+        if(remaining === 0)delete(socketAuthConnections[refKey]);
+        return remaining
+    }
+    s.getSocketAuthConnectionCount = function(groupKey,authKey){
+        const refs = socketAuthConnections[getAuthRefKey(groupKey,authKey)]
+        return refs ? Object.keys(refs).length : 0
+    }
     const validatedAndBindAuthenticationToSocketConnection = (cn,d,removeListenerOnDisconnect) => {
         if(d.channel){
             cn.channel = parseInt(d.channel)+config.pipeAddition;
@@ -127,6 +157,9 @@ module.exports = function(s,config,lang,io){
         cn.auth = d.auth;
         cn.removeListenerOnDisconnect = removeListenerOnDisconnect;
         cn.socketVideoStream = d.id;
+        // video stream sockets are not flagged `embedded`, so without a claim of
+        // their own their disconnect would tear down the dashboard's session
+        addSocketAuthRef(d.ke,d.auth,cn.id)
     }
 
     const createStreamEmitter = (d,cn) => {
@@ -402,6 +435,7 @@ module.exports = function(s,config,lang,io){
                         logged_in_at: s.timeObject(new Date).format(),
                         login_type: 'Dashboard'
                     }
+                    addSocketAuthRef(d.ke,d.auth,cn.id)
                     s.clientSocketConnection[cn.id] = cn
                     try{s.group[d.ke].users[d.auth].details=JSON.parse(r.details)}catch(er){}
                     if(s.group[d.ke].users[d.auth].details.get_server_log!=='0'){
@@ -934,6 +968,7 @@ module.exports = function(s,config,lang,io){
                         r = r[0];
                         if(!s.group[d.ke]){s.group[d.ke]={users:{}}}
                         if(!s.group[d.ke].users[d.auth]){s.group[d.ke].users[d.auth]={cnid:cn.id,uid:d.uid,ke:d.ke,auth:d.auth}}
+                        addSocketAuthRef(d.ke,d.auth,cn.id)
                         try{s.group[d.ke].users[d.auth].details=JSON.parse(r.details)}catch(er){}
                         cn.join('ADM_'+d.ke);
                         cn.ke=d.ke;
@@ -979,6 +1014,7 @@ module.exports = function(s,config,lang,io){
                             logged_in_at:s.timeObject(new Date).format(),
                             login_type:'Streamer'
                         }
+                        addSocketAuthRef(d.ke,d.auth,cn.id)
                         s.group[d.ke].dashcamUsers[d.auth] = s.group[d.ke].users[d.auth]
                         if(s.group[d.ke].activeMonitors){
                             Object.keys(s.group[d.ke].activeMonitors).forEach(function(monitorId){
@@ -1073,6 +1109,9 @@ module.exports = function(s,config,lang,io){
                 return
             }
             if(cn.ke){
+                // always drop this connection's claim on the auth token, even for
+                // the watching/embedded paths below, so the count stays accurate
+                const remainingAuthConnections = removeSocketAuthRef(cn.ke,cn.auth,cn.id)
                 if(cn.monitorsCurrentlyWatching){
                     cn.monitor_count=Object.keys(cn.monitorsCurrentlyWatching)
                     if(cn.monitor_count.length>0){
@@ -1080,7 +1119,12 @@ module.exports = function(s,config,lang,io){
                             s.camera('watch_off',{id:v,ke:cn.monitorsCurrentlyWatching[v].ke},{id:cn.id,ke:cn.ke,uid:cn.uid})
                         })
                     }
-                }else if(!cn.embedded){
+                }
+                // Released only once the last socket using this auth token has
+                // gone. Deliberately not chained to the watching check above: the
+                // final socket to close is often one that was watching monitors,
+                // and skipping cleanup for it would strand the session forever.
+                if(!cn.embedded && remainingAuthConnections === 0){
                     if(s.group[cn.ke] && s.group[cn.ke].users && s.group[cn.ke].users[cn.auth]){
                         s.tx({f:'user_status_change',ke:cn.ke,uid:cn.uid,status:0})
                         s.userLog({ke:cn.ke,mid:'$USER'},{type:lang['Websocket Disconnected'],msg:{mail:s.group[cn.ke].users[cn.auth].mail,id:cn.uid,ip:cn.ip}})
