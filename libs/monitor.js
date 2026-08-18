@@ -28,6 +28,8 @@ module.exports = function(s,config,lang){
         monitorRemoveViewer,
         getMonitorConfiguration,
         copyMonitorConfiguration,
+        getMonitorEditScope,
+        updateLiveDetectionSettings,
         checkObjectsInMonitorDetails,
         spawnSubstreamProcess,
     } = require('./monitor/utils.js')(s,config,lang)
@@ -628,6 +630,10 @@ module.exports = function(s,config,lang){
         } = await getWarningChangesForMonitor(form)
         applyPartialToConfiguration(form,configPartial)
         form = s.cleanMonitorObjectForDatabase(form)
+        // if the edit only moved detection regions or changed the min/max change
+        // values we can hand them to the running camera thread instead of tearing
+        // the ffmpeg process down.
+        const editScope = monitorExists ? getMonitorEditScope(selectResponse.rows[0],form) : { canUpdateLive: false };
         //
         if(monitorExists){
             txData.new = false
@@ -694,6 +700,11 @@ module.exports = function(s,config,lang){
             s.group[form.ke].rawMonitorConfigurations[form.mid] = s.cleanMonitorObject(form)
             if(form.mode === 'stop'){
                 await s.camera('stop',form)
+            }else if(editScope.canUpdateLive && updateLiveDetectionSettings(form.ke,form.mid,editScope.changedDetails)){
+                s.userLog({
+                    ke: form.ke,
+                    mid: form.mid
+                },{type:lang['Monitor Updated'],msg:lang.detectionSettingsUpdatedWithoutRestart || 'Detection settings updated without restarting the monitor.'})
             }else{
                 let monitorConfig = copyMonitorConfiguration(form.ke,form.mid)
                 await s.camera('stop',monitorConfig);

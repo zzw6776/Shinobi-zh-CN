@@ -14,44 +14,77 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
     const monitorDetails = completeMonitorConfig.details
     const triggerTimer = {}
     let regionJson
-    try{
-        regionJson = JSON.parse(monitorDetails.cords)
-    }catch(err){
-        regionJson = monitorDetails.cords
-    }
     let fullFrame = null
     const pamDetectorIsEnabled = monitorDetails.detector_pam === '1'
     const width = parseInt(monitorDetails.detector_scale_x) || 640
     const height = parseInt(monitorDetails.detector_scale_y) || 480
-    const globalSensitivity = parseInt(monitorDetails.detector_sensitivity) || 10
-    const globalMaxSensitivity = parseInt(monitorDetails.detector_max_sensitivity) || 100
-    const globalColorThreshold = parseInt(monitorDetails.detector_color_threshold) || 9
-    const globalThreshold = parseInt(monitorDetails.detector_threshold) || 1
     const detectorFrameRate = parseInt(monitorDetails.detector_fps) || 2
-    const regionsAreMasks = monitorDetails.detector_frame !== '1' && monitorDetails.inverse_trigger === '1';
+    // everything below is re-derived by buildDetectionSettings() so that region
+    // coordinates and the min/max change values can be swapped at runtime without
+    // restarting the ffmpeg process. see updateDetectionSettings().
+    let globalSensitivity
+    let globalMaxSensitivity
+    let globalColorThreshold
+    let globalThreshold
+    let regionsAreMasks
+    let regions
     const regionConfidenceMinimums = {}
     const regionConfidenceMaximums = {}
     const regionTriggerThresholds = {}
     const mergeTriggers = config.detectorMergePamRegionTriggers
-    if(Object.keys(regionJson).length === 0 || monitorDetails.detector_frame === '1'){
-        fullFrame = {
-            name:'FULL_FRAME',
-            sensitivity: globalSensitivity,
-            color_threshold: globalColorThreshold,
-            points:[
-                [0,0],
-                [0,height],
-                [width,height],
-                [width,0]
-            ]
+    function buildDetectionSettings(){
+        try{
+            regionJson = JSON.parse(monitorDetails.cords)
+        }catch(err){
+            regionJson = monitorDetails.cords
         }
+        if(!regionJson || typeof regionJson !== 'object')regionJson = {};
+        globalSensitivity = parseInt(monitorDetails.detector_sensitivity) || 10
+        globalMaxSensitivity = parseInt(monitorDetails.detector_max_sensitivity) || 100
+        globalColorThreshold = parseInt(monitorDetails.detector_color_threshold) || 9
+        globalThreshold = parseInt(monitorDetails.detector_threshold) || 1
+        regionsAreMasks = monitorDetails.detector_frame !== '1' && monitorDetails.inverse_trigger === '1';
+        fullFrame = null
+        if(Object.keys(regionJson).length === 0 || monitorDetails.detector_frame === '1'){
+            fullFrame = {
+                name:'FULL_FRAME',
+                sensitivity: globalSensitivity,
+                color_threshold: globalColorThreshold,
+                points:[
+                    [0,0],
+                    [0,height],
+                    [width,height],
+                    [width,0]
+                ]
+            }
+        }
+        regions = createPamDiffRegionArray(regionJson,globalColorThreshold,globalSensitivity,fullFrame)
+        const regionNames = Object.keys(regions.notForPam)
+        // drop state belonging to regions that no longer exist
+        ;[regionConfidenceMinimums,regionConfidenceMaximums,regionTriggerThresholds].forEach(function(theMap){
+            Object.keys(theMap).forEach(function(name){
+                if(regionNames.indexOf(name) === -1)delete(theMap[name]);
+            })
+        })
+        Object.keys(noiseFilterArray).forEach(function(name){
+            if(regionNames.indexOf(name) === -1)delete(noiseFilterArray[name]);
+        })
+        Object.keys(triggerTimer).forEach(function(name){
+            if(regionNames.indexOf(name) === -1){
+                if(triggerTimer[name] && triggerTimer[name].timeout)clearTimeout(triggerTimer[name].timeout);
+                delete(triggerTimer[name])
+            }
+        })
+        Object.values(regions.notForPam).forEach(function(region){
+            regionConfidenceMinimums[region.name] = parseInt(region.sensitivity) || globalSensitivity;
+            regionConfidenceMaximums[region.name] = parseInt(region.max_sensitivity) || globalMaxSensitivity;
+            regionTriggerThresholds[region.name] = parseInt(region.threshold) || globalThreshold;
+        })
+        regionNames.forEach(function(name){
+            if(!noiseFilterArray[name])noiseFilterArray[name] = []
+        })
     }
-    const mask = {
-        name: 'theMask',
-        max_sensitivity : globalSensitivity,
-        threshold : globalThreshold,
-    }
-    const regions = createPamDiffRegionArray(regionJson,globalColorThreshold,globalSensitivity,fullFrame)
+    buildDetectionSettings()
     const pamDiffOptions = {
         mask: regionsAreMasks,
         grayscale: 'luminosity',
@@ -62,14 +95,21 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
     }
     const pamDiff = new PamDiff(pamDiffOptions)
     const p2p = new P2P()
-    Object.values(regionJson).forEach(function(region){
-        regionConfidenceMinimums[region.name] = parseInt(region.sensitivity) || globalSensitivity;
-        regionConfidenceMaximums[region.name] = parseInt(region.max_sensitivity) || globalMaxSensitivity;
-        regionTriggerThresholds[region.name] = parseInt(region.threshold) || globalThreshold;
-    })
-    Object.keys(regions.notForPam).forEach(function(name){
-        if(!noiseFilterArray[name])noiseFilterArray[name] = []
-    })
+    /**
+     * Apply new region coordinates and/or min/max change values to the running
+     * detector. `newDetails` is a partial monitor `details` object.
+     */
+    function updateDetectionSettings(newDetails){
+        if(!newDetails || typeof newDetails !== 'object')return false;
+        Object.assign(monitorDetails,newDetails)
+        buildDetectionSettings()
+        pamDiff.mask = regionsAreMasks
+        pamDiff.difference = globalColorThreshold
+        pamDiff.percent = config.sendDetectionDataWithoutTrigger ? 1 : globalSensitivity
+        pamDiff.regions = regions.forPam
+        logData(`Detection settings updated without restart : ${monitorName}`)
+        return true
+    }
     if(typeof pamDiffResponder === 'function'){
       var sendDetectedData = function(detectorObject){
         pamDiffResponder(detectorObject)
@@ -204,11 +244,9 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
         const detectorObject = buildDetectorObject(data)
         sendDetectedData(detectorObject)
     }
-    function attachPamPipeDrivers(cameraProcess,onEvent){
+    function buildDefaultMotionAnalyzer(){
         let pamAnalyzer = function(){}
-        if(typeof onEvent === 'function'){
-            pamAnalyzer = onEvent
-        }else{
+        {
             if(mergeTriggers === true){
                 // merge pam triggers for performance boost
                 if(monitorDetails.detector_noise_filter === '1'){
@@ -246,7 +284,22 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
                 }
             }
         }
-        pamDiff.on('diff',pamAnalyzer)
+        return pamAnalyzer
+    }
+    let currentMotionAnalyzer = null
+    /**
+     * Swap the 'diff' handler. Passing a function uses it directly (accuracy/tile
+     * mode), passing nothing falls back to the standard per-region analyzer. Used
+     * to toggle accuracy mode on a running detector.
+     */
+    function setMotionAnalyzer(onEvent){
+        const pamAnalyzer = typeof onEvent === 'function' ? onEvent : buildDefaultMotionAnalyzer()
+        if(currentMotionAnalyzer)pamDiff.removeListener('diff',currentMotionAnalyzer);
+        currentMotionAnalyzer = pamAnalyzer
+        pamDiff.on('diff',currentMotionAnalyzer)
+    }
+    function attachPamPipeDrivers(cameraProcess,onEvent){
+        setMotionAnalyzer(onEvent)
         cameraProcess.stdio[3].pipe(p2p).pipe(pamDiff)
     }
     function getTileMotionEvent(){
@@ -401,6 +454,8 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
         sendDetectedData,
         buildTriggerEvent,
         attachPamPipeDrivers,
+        setMotionAnalyzer,
+        buildDefaultMotionAnalyzer,
         createPamDiffRegionArray,
         checkTriggerThreshold,
         mergePamTriggers,
@@ -408,6 +463,8 @@ module.exports = function(jsonData,pamDiffResponder,alternatePamDiff){
         createMatricesFromBlobs,
         logData,
         getTileMotionEvent,
+        buildDetectionSettings,
+        updateDetectionSettings,
         // parameters
         pamDetectorIsEnabled,
         noiseFilterArray,

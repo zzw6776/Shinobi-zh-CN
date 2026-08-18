@@ -1366,6 +1366,7 @@
    "monitorEditText2": "Invalid Details String. Check to see it is a JSON string and not a regular object being passed.",
    "Monitor Added": "Monitor Added",
    "Monitor Updated": "Monitor Updated",
+   "detectionSettingsUpdatedWithoutRestart": "Detection settings updated without restarting the monitor.",
    "modified by user": "modified by user",
    "added by user": "added by user",
    "Monitor Updated by user": "Monitor Updated by user.",

@@ -139,6 +139,25 @@ if(rawMonitorConfig.details.detector === '1' && rawMonitorConfig.details.detecto
         dataPort.send(JSON.stringify(detectorObject))
     },dataPort)
     attachPamDetector(cameraProcess)
+    // the parent can push new regions / min-max change values down the dataPort
+    // so that they take effect without restarting this thread.
+    dataPort.on('message',(message) => {
+        let data
+        try{
+            data = JSON.parse(message)
+        }catch(err){
+            return
+        }
+        if(!data || data.f !== 'updateDetectionSettings')return;
+        try{
+            if(typeof attachPamDetector.updateDetectionSettings !== 'function'){
+                return writeToStderr('Detector daemon does not support live detection setting updates')
+            }
+            attachPamDetector.updateDetectionSettings(data.details)
+        }catch(err){
+            writeToStderr(err.stack)
+        }
+    })
   }catch(err){
     writeToStderr(err.stack)
   }

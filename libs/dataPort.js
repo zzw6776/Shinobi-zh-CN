@@ -4,6 +4,20 @@ module.exports = function(s,config,lang,app,io){
         triggerEvent,
     } = require('./events/utils.js')(s,config,lang)
     s.dataPortTokens = {}
+    // authenticated camera thread sockets, keyed `${groupKey}${monitorId}`, so the
+    // parent can push updates (new detection regions, etc) into a running thread.
+    s.dataPortClients = {}
+    s.sendToCameraThread = function(groupKey,monitorId,data){
+        const client = s.dataPortClients[`${groupKey}${monitorId}`]
+        if(!client)return false;
+        try{
+            client.send(JSON.stringify(data))
+            return true
+        }catch(err){
+            s.debugLog('dataPort: failed to send to camera thread', err)
+            return false
+        }
+    }
     const theWebSocket = createWebSocketServer()
     s.dataPortServer = theWebSocket;
     function setClientKillTimerIfNotAuthenticatedInTime(client){
@@ -17,12 +31,18 @@ module.exports = function(s,config,lang,app,io){
     theWebSocket.on('connection',(client) => {
         // client.send(someDataToSendAsStringOrBinary)
         setClientKillTimerIfNotAuthenticatedInTime(client)
+        let clientKey = null
         function onAuthenticate(data){
             clearKillTimer(client)
             if(data in s.dataPortTokens){
+                const tokenInfo = s.dataPortTokens[data]
                 client.removeListener('message', onAuthenticate);
                 client.on('message', onAuthenticatedData)
                 delete(s.dataPortTokens[data]);
+                if(tokenInfo && tokenInfo.type === 'cameraThread'){
+                    clientKey = `${tokenInfo.ke}${tokenInfo.mid}`
+                    s.dataPortClients[clientKey] = client
+                }
             }else{
                 client.removeListener('message', onAuthenticate)  // <-- add this
                 client.terminate()
@@ -59,7 +79,8 @@ module.exports = function(s,config,lang,app,io){
         client.on('message', onAuthenticate)
         client.on('close', () => {
             clearTimeout(client.killTimer)
-            client.removeAllListeners() 
+            if(clientKey && s.dataPortClients[clientKey] === client)delete(s.dataPortClients[clientKey]);
+            client.removeAllListeners()
         })
     })
     s.onHttpRequestUpgrade('/dataPort',(request, socket, head) => {

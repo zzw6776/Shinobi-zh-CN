@@ -238,6 +238,114 @@ module.exports = (s,config,lang) => {
             }
         }
     }
+    // `details` fields the running camera thread can swap in without a restart.
+    // None of these appear in the ffmpeg command string, they are only read by the
+    // pam detector. Anything outside this list still forces a process restart.
+    const LIVE_UPDATABLE_DETAIL_FIELDS = [
+        'cords',
+        'detector_sensitivity',
+        'detector_max_sensitivity',
+        'detector_color_threshold',
+        'detector_threshold',
+        // accuracy mode, tiles are cut from the regions inside the camera thread
+        'detector_motion_tile_mode',
+        'detector_tile_size',
+    ]
+    const MONITOR_COLUMNS_REQUIRING_RESTART = [
+        'name','type','ext','protocol','host','path','port','fps','mode','saveDir','width','height'
+    ]
+    function parseMonitorDetails(monitor){
+        const details = monitor ? monitor.details : null
+        if(!details)return {};
+        if(typeof details === 'object')return details;
+        try{
+            return JSON.parse(details) || {}
+        }catch(err){
+            return {}
+        }
+    }
+    function valuesAreEqual(a,b){
+        if(a === b)return true;
+        const normalize = (value) => {
+            if(value === undefined || value === null)return '';
+            if(typeof value === 'object')return JSON.stringify(value);
+            if(typeof value === 'string'){
+                // cords arrive as a JSON string in the db and as an object from the form
+                const trimmed = value.trim()
+                if(trimmed.startsWith('{') || trimmed.startsWith('[')){
+                    try{
+                        return JSON.stringify(JSON.parse(trimmed))
+                    }catch(err){
+                        return trimmed
+                    }
+                }
+                return trimmed
+            }
+            return `${value}`
+        }
+        return normalize(a) === normalize(b)
+    }
+    /**
+     * Work out whether an edit only touched detection values the running thread can
+     * absorb live. Returns { canUpdateLive, changedDetails } where changedDetails is
+     * the partial `details` object to push into the camera thread.
+     */
+    function getMonitorEditScope(oldMonitor,newMonitor){
+        const changedDetails = {}
+        let canUpdateLive = true
+        if(!oldMonitor)return { canUpdateLive: false, changedDetails };
+        MONITOR_COLUMNS_REQUIRING_RESTART.forEach(function(column){
+            if(newMonitor[column] === undefined)return;
+            if(!valuesAreEqual(oldMonitor[column],newMonitor[column]))canUpdateLive = false;
+        })
+        const oldDetails = parseMonitorDetails(oldMonitor)
+        const newDetails = parseMonitorDetails(newMonitor)
+        const allKeys = Object.keys(oldDetails).concat(Object.keys(newDetails))
+        allKeys.forEach(function(key){
+            if(valuesAreEqual(oldDetails[key],newDetails[key]))return;
+            if(LIVE_UPDATABLE_DETAIL_FIELDS.indexOf(key) > -1){
+                changedDetails[key] = newDetails[key]
+            }else{
+                canUpdateLive = false
+            }
+        })
+        if(Object.keys(changedDetails).length === 0)canUpdateLive = false;
+        return { canUpdateLive, changedDetails }
+    }
+    /**
+     * Push new detection regions / min-max change values into the live camera thread.
+     * Returns false when there is no thread able to take them, in which case the
+     * caller must fall back to restarting the monitor.
+     */
+    function updateLiveDetectionSettings(groupKey,monitorId,changedDetails){
+        const activeMonitor = s.group[groupKey] && s.group[groupKey].activeMonitors ? s.group[groupKey].activeMonitors[monitorId] : null
+        if(!activeMonitor || !activeMonitor.isStarted || activeMonitor.childNode)return false;
+        const monitorConfig = getMonitorConfiguration(groupKey,monitorId)
+        if(!monitorConfig || !monitorConfig.details)return false;
+        // this runs straight off the submitted form, before the start path has run
+        // checkDetails/convertNumbersToStrings, so values may still be numbers.
+        if(`${monitorConfig.details.detector}` !== '1' || `${monitorConfig.details.detector_pam}` !== '1')return false;
+        // always ship the untiled regions. in accuracy mode the thread holds a tiled
+        // copy of `cords`, so toggling accuracy mode or changing the tile size needs
+        // the originals to cut from (or to restore when accuracy mode is turned off).
+        const detailsToSend = Object.assign({
+            cords: monitorConfig.details.cords,
+        },changedDetails)
+        // the camera thread compares these against strings ('1', '0'), match what it
+        // would have received had the monitor been started fresh.
+        Object.keys(detailsToSend).forEach(function(key){
+            if(typeof detailsToSend[key] === 'number')detailsToSend[key] = `${detailsToSend[key]}`;
+        })
+        const sent = s.sendToCameraThread(groupKey,monitorId,{
+            f: 'updateDetectionSettings',
+            details: detailsToSend,
+        })
+        if(sent){
+            // refresh the main process' cached regions used for object detection filtering
+            checkObjectsInMonitorDetails(monitorConfig)
+        }
+        return sent
+    }
     function copyMonitorConfiguration(groupKey,monitorId){
         return Object.assign({},s.group[groupKey].rawMonitorConfigurations[monitorId])
     }
@@ -2143,6 +2251,8 @@ module.exports = (s,config,lang) => {
         getStreamDirectory,
         copyMonitorConfiguration,
         getMonitorConfiguration,
+        getMonitorEditScope,
+        updateLiveDetectionSettings,
         isGroupBelowMaxMonitorCount,
         setNoEventsDetector,
         cameraDestroy: cameraDestroy,
