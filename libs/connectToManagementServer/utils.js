@@ -172,7 +172,9 @@ module.exports = (s,config,lang) => {
             console.error('cameraPeer SSH Error', serverIp, err)
         });
         worker.on('exit', (code) => {
-            if(!s.connectedMgmtServers[serverIp].wantTerminate){
+            // The entry is gone if the server was removed while this worker was still
+            // running - reading .wantTerminate off undefined threw out of the handler.
+            if(!(s.connectedMgmtServers[serverIp] || {}).wantTerminate){
                 console.log('cameraPeer SSH Exited, Restarting...', serverIp, code)
                 // s.connectedMgmtServers[serverIp].sshWorker = provideSshToManagement(serverIp, p2pKey)
             }else{
@@ -250,7 +252,13 @@ module.exports = (s,config,lang) => {
                 case'authenticated':
                     setManagementServerStatus(serverIp, CONNECTION_STATES.connected)
                     const sshWorker = await provideSshToManagement(serverIp, p2pKey)
-                    s.connectedMgmtServers[serverIp].sshWorker = sshWorker;
+                    // Same race : the server may have been removed during the await, and
+                    // this handler is async so a throw here becomes an unhandled rejection.
+                    if(s.connectedMgmtServers[serverIp]){
+                        s.connectedMgmtServers[serverIp].sshWorker = sshWorker;
+                    }else if(sshWorker){
+                        try{ sshWorker.terminate() }catch(err){}
+                    }
                 break;
                 case'connectDetailsRequest':
                     var mail = data.mail

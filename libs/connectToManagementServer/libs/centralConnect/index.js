@@ -20,6 +20,13 @@ const MAX_RECONNECT_DELAY = 30000;
 // either way reconnecting every 30s forever helps nobody.
 const RETRY_WINDOW = 60000; // 1 minute of attempts
 const RETRY_WINDOW_PAUSE = 600000; // then 10 minutes of waiting
+// Authentication is the one phase with no heartbeat behind it - the heartbeat only starts
+// once it has finished. If `init` does not come back within this, the connection is hung
+// and has to be torn down, or it sits open forever and only a restart of Shinobi fixes it.
+const AUTH_TIMEOUT = 30000;
+// The parent reads the database to build these. That can stall (an exhausted knex pool,
+// typically, which is exactly what happens when a lot of servers reconnect at once).
+const CONNECT_DETAILS_TIMEOUT = 20000;
 
 // Error handling
 process.on("uncaughtException", (error) => {
@@ -36,7 +43,8 @@ class CentralConnection {
       socketCheck: null,
       heartbeat: null,
       heartbeatCheck: null,
-      onClosed: null
+      onClosed: null,
+      authCheck: null
     };
     this.stayDisconnected = false;
     this.allMessageHandlers = [];
@@ -126,8 +134,28 @@ class CentralConnection {
       socketCheck: null,
       heartbeat: null,
       heartbeatCheck: null,
-      onClosed: null
+      onClosed: null,
+      authCheck: null
     };
+  }
+
+  // Tears the tunnel down *through* its own close handler, so the backoff, the retry
+  // window and the status reported to the parent all stay in one place. Closing without
+  // this - or calling startWebsocketConnection directly - skips the backoff entirely.
+  forceReconnect(reason) {
+    this.logger.main(`Central : ${reason}`);
+    this.clearAllTimers();
+    try {
+      if (this.tunnelToP2P && this.tunnelToP2P.readyState === 1) {
+        // Listeners are deliberately left attached : 'close' is what drives the reconnect.
+        this.tunnelToP2P.close();
+        return;
+      }
+    } catch (err) {
+      this.logger.debugLog('forceReconnect', err);
+    }
+    // Not open, so no 'close' is coming - go around again directly.
+    this.onWebsocketClose();
   }
 
   getServerIPAddresses() {
@@ -144,17 +172,32 @@ class CentralConnection {
     return addresses;
   }
 
+  // The stub stands in for a request that has already gone away. `write` must report a
+  // successful flush : returning undefined here made writeToServer send a `pause` upstream
+  // for every write to a dead connection, and nothing was ever going to send the `resume`.
   getRequestConnection(requestId) {
     return this.requestConnections[requestId] || {
-      write: () => {}
+      write: () => true,
+      end: () => {},
+      pause: () => {},
+      resume: () => {}
     };
   }
 
+  // The parent builds these from the database, and that can stall without ever answering.
+  // Bounded, and the listener is always removed - otherwise a late reply would be picked
+  // up by whichever attempt happened to be waiting by then.
   async getConnectionDetails(targetUser) {
-    return new Promise((resolve) => {
-      this.internalEvents.once('connectDetails', (data) => {
+    return new Promise((resolve, reject) => {
+      const onDetails = (data) => {
+        clearTimeout(timeout);
         resolve(data);
-      });
+      };
+      const timeout = setTimeout(() => {
+        this.internalEvents.removeListener('connectDetails', onDetails);
+        reject(new Error('timed out waiting for connectDetails'));
+      }, CONNECT_DETAILS_TIMEOUT);
+      this.internalEvents.once('connectDetails', onDetails);
       parentPort.postMessage({ f: 'connectDetailsRequest', mail: targetUser });
     });
   }
@@ -196,7 +239,15 @@ class CentralConnection {
     // worker retries internally and never exits while doing so, so without these the
     // parent would only ever see the very first "connecting".
     parentPort.postMessage({ f: 'connectionState', state: 'authenticating' });
-    this.authenticateConnection();
+    // Nothing else is watching this phase - the heartbeat does not start until it has
+    // finished, so without this a stalled authentication holds an open, useless tunnel
+    // forever and the worker never exits for the parent to restart it.
+    this.timers.authCheck = setTimeout(() => {
+      this.forceReconnect('Authentication timed out, reconnecting...');
+    }, AUTH_TIMEOUT);
+    this.authenticateConnection().catch((err) => {
+      this.forceReconnect(`Authentication failed (${err && err.message ? err.message : err}), reconnecting...`);
+    });
   }
 
   onWebsocketError(err) {
@@ -266,6 +317,8 @@ class CentralConnection {
 
     this.setupHeartbeat();
     this.scheduleHeartbeatCheck();
+    // Was written but never called, leaving the heartbeat as the only liveness check.
+    this.setupSocketCheckTimer();
   }
 
   sendDataToTunnel(data, logFailureToSend) {
@@ -279,8 +332,7 @@ class CentralConnection {
   setupSocketCheckTimer() {
     this.timers.socketCheck = setInterval(() => {
       if (this.tunnelToP2P.readyState !== 1) {
-        this.logger.main('Tunnel NOT Ready! Reconnecting...');
-        this.disconnectedConnection();
+        this.forceReconnect('Tunnel NOT Ready! Reconnecting...');
       }
     }, SOCKET_CHECK_INTERVAL);
   }
@@ -291,10 +343,11 @@ class CentralConnection {
 
     this.timers.heartbeat = setInterval(() => {
       this.sendDataToTunnel({ f: 'ping' });
-      // Start a timeout — if no pong arrives, reconnect
+      // Start a timeout — if no pong arrives, reconnect. The previous one is cleared
+      // first : overwriting the handle orphaned a timer that would still fire later.
+      if (this.timers.heartbeatCheck) clearTimeout(this.timers.heartbeatCheck);
       this.timers.heartbeatCheck = setTimeout(() => {
-        this.logger.main('Central : Heartbeat timeout, reconnecting...');
-        this.startWebsocketConnection();
+        this.forceReconnect('Heartbeat timeout, reconnecting...');
       }, HEARTBEAT_INTERVAL * HEARTBEAT_TIMEOUT_MULTIPLIER);
     }, HEARTBEAT_INTERVAL);
   }
@@ -374,6 +427,9 @@ class CentralConnection {
 
     remoteSocket.on('close', () => {
       delete this.requestConnectionsData[requestId];
+      // Without this every proxied request left a dead socket in the map for the life of
+      // the worker.
+      delete this.requestConnections[requestId];
       responseTunnel.send('end', {});
       setTimeout(() => {
         if (responseTunnel && (responseTunnel.readyState === 0 || responseTunnel.readyState === 1)) {
@@ -388,7 +444,17 @@ class CentralConnection {
   }
 
   writeToServer(data, requestId) {
-    const flushed = this.getRequestConnection(requestId).write(data.buffer);
+    const connection = this.getRequestConnection(requestId);
+    // The local service may have closed its side while this chunk was in flight over the
+    // tunnel. Writing anyway throws EPIPE / write-after-end, so drop the connection and
+    // tell the far end to stop sending instead.
+    if (connection.destroyed || connection.writable === false) {
+      delete this.requestConnections[requestId];
+      delete this.requestConnectionsData[requestId];
+      this.outboundMessage('end', {}, requestId);
+      return;
+    }
+    const flushed = connection.write(data.buffer);
     if (!flushed) {
       this.outboundMessage('pause', {}, requestId);
     }
@@ -476,8 +542,10 @@ class CentralConnection {
     });
 
     this.onIncomingMessage('data', (data, requestId) => this.writeToServer(data, requestId));
-    this.onIncomingMessage('resume', (data, requestId) => this.requestConnections[requestId].resume());
-    this.onIncomingMessage('pause', (data, requestId) => this.requestConnections[requestId].pause());
+    // Via getRequestConnection : a flow-control message can arrive after the socket is
+    // gone, and a TypeError here would abort the rest of the handler loop for that frame.
+    this.onIncomingMessage('resume', (data, requestId) => this.getRequestConnection(requestId).resume());
+    this.onIncomingMessage('pause', (data, requestId) => this.getRequestConnection(requestId).pause());
     this.onIncomingMessage('pong', () => {
       if (this.timers.heartbeatCheck) {
         clearTimeout(this.timers.heartbeatCheck);
@@ -487,6 +555,8 @@ class CentralConnection {
 
     this.onIncomingMessage('init', () => {
       this.logger.main('Central : Authenticated!');
+      clearTimeout(this.timers.authCheck);
+      this.timers.authCheck = null;
       parentPort.postMessage({ f: 'authenticated' });
     });
 
@@ -508,9 +578,10 @@ class CentralConnection {
       } catch (err) {
         this.logger.debugLog(`Request Failed to END ${requestId}`);
         this.logger.debugLog(`Failed Request ${this.requestConnectionsData[requestId]}`);
-        delete this.requestConnectionsData[requestId];
         this.logger.debugLog(err);
       }
+      delete this.requestConnections[requestId];
+      delete this.requestConnectionsData[requestId];
     });
 
     this.onIncomingMessage('disconnect', (data) => {
