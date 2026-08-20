@@ -134,6 +134,15 @@ $(document).ready(function(e){
         if(initiateAfter)initiateLiveGridPlayer(monitor,subStreamChannel)
         resetLiveGridDimensionsInMemory(monitorId)
     }
+    function isStreamWindowButtonAllowed(button,monitor,monitorId,monitorDetails){
+        if(!button.eval)return true;
+        try{
+            return !!eval(button.eval)
+        }catch(err){
+            console.error(`Failed to evaluate Monitor Stream Window button condition`,button.eval,err)
+            return false
+        }
+    }
     function replaceMonitorInfoInHtml(htmlString,monitor){
         var monitorMutes = dashboardOptions().monitorMutes || {}
         return htmlString
@@ -164,7 +173,7 @@ $(document).ready(function(e){
         var detectionDrawDelay = detectionDrawDelays[monitorId];
         var quickLinkHtml = ''
         $.each(streamBlockInfo.quickLinks,function(n,button){
-            if(button.eval && !eval(button.eval))return;
+            if(!isStreamWindowButtonAllowed(button,monitor,monitorId,monitorDetails))return;
             quickLinkHtml += `<a title="${button.label}" class="badge mr-1 mb-0 cursor-pointer text-${button.class}" ${button.attr || ''}><i class="fa fa-${button.icon}"></i></a>`
         })
         var baseHtml = `<div
@@ -203,7 +212,7 @@ $(document).ready(function(e){
                 <ul class="mdl-overlay-menu list-group">`
                 var buttons = streamBlockInfo.links
                 $.each(buttons,function(n,button){
-                    if(button.eval && !eval(button.eval))return;
+                    if(!isStreamWindowButtonAllowed(button,monitor,monitorId,monitorDetails))return;
                     baseHtml += `<li class="list-item cursor-pointer ${button.class}" title="${button.label}" ${button.attr}><i class="fa fa-${button.icon}"></i> ${button.label}</li>`
                 })
                 baseHtml += `</ul>

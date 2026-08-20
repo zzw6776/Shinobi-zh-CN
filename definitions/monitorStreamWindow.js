@@ -59,7 +59,7 @@ module.exports = (s,config,lang) => {
                "label": lang['Monitor Settings'],
                "class": "default open-monitor-settings",
                "icon": "wrench",
-               eval: `!isSubAccount || isSubAccount && shinobiServer.permissionCheck('monitor_edit',monitorId)`,
+               eval: `!isSubAccount || isSubAccount && permissionCheck('monitor_edit',monitorId)`,
             },
             "Timeline": {
                "label": lang['Timeline'],
@@ -75,7 +75,7 @@ module.exports = (s,config,lang) => {
                "label": lang['Videos List'],
                "class": "default open-videosTable",
                "icon": "film",
-               eval: `!isSubAccount || isSubAccount && shinobiServer.permissionCheck('video_view',monitorId)`,
+               eval: `!isSubAccount || isSubAccount && permissionCheck('video_view',monitorId)`,
             },
             "Reconnect Stream": {
                "label": lang['Reconnect Stream'],
@@ -151,19 +151,19 @@ module.exports = (s,config,lang) => {
               "attr": `monitor="timelapseJpeg"`,
               "class": "default",
               "icon": "angle-double-right",
-              eval: `!isSubAccount || isSubAccount && shinobiServer.permissionCheck('video_view',monitorId)`,
+              eval: `!isSubAccount || isSubAccount && permissionCheck('video_view',monitorId)`,
            },
            "Videos List": {
               "label": lang['Videos List'],
               "class": "default open-videosTable",
               "icon": "film",
-              eval: `!isSubAccount || isSubAccount && shinobiServer.permissionCheck('video_view',monitorId)`,
+              eval: `!isSubAccount || isSubAccount && permissionCheck('video_view',monitorId)`,
            },
            "Monitor Settings": {
               "label": lang['Monitor Settings'],
               "class": "default open-monitor-settings",
               "icon": "wrench",
-              eval: `!isSubAccount || isSubAccount && shinobiServer.permissionCheck('monitor_edit',monitorId)`,
+              eval: `!isSubAccount || isSubAccount && permissionCheck('monitor_edit',monitorId)`,
            },
            "Fullscreen": {
               "label": lang['Fullscreen'],
