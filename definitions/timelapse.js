@@ -65,22 +65,25 @@ module.exports = (s,config,lang,Theme) => {
                       </ul>`
                    },
                    {
-                      "fieldType": "btn-group",
-                      "form-group-class-pre-layer": "me-3 mb-0",
-                      "btns": [
+                      "fieldType": "div",
+                      "form-group-class-pre-layer": "mb-0",
+                      "info": [
                           {
                               "fieldType": "btn",
-                              "class": `btn-primary playPause playPauseText`,
+                              "noBtnBlock": true,
+                              "class": `btn-primary me-2 playPause playPauseText`,
                               "btnContent": `<i class="fa fa-play"></i> ${lang['Play']}`,
                           },
                           {
                               "fieldType": "btn",
-                              "class": `btn-secondary download_mp4`,
+                              "noBtnBlock": true,
+                              "class": `btn-secondary me-2 download_mp4`,
                               "btnContent": `${lang['Build Video']}`,
                           },
                           {
                               "fieldType": "btn",
-                              "class": `btn-danger cancel_mp4 d-none`,
+                              "noBtnBlock": true,
+                              "class": `btn-danger me-2 cancel_mp4 d-none`,
                               "btnContent": `<i class="fa fa-times"></i> ${lang['Cancel']}`,
                           },
                       ],

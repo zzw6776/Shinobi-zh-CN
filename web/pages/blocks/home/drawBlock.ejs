@@ -176,7 +176,7 @@ drawBlock = function(theBlock){
              break;
              case'btn':
                    baseElement = field.forForm ? 'button' : 'a'
-                   fieldElement = `<${baseElement} class="btn btn-block ${fieldClass.join(' ')}" ${attributes.join(' ')}>${field.btnContent}</${baseElement}>`
+                   fieldElement = `<${baseElement} class="btn ${field.noBtnBlock ? '' : 'btn-block'} ${fieldClass.join(' ')}" ${attributes.join(' ')}>${field.btnContent}</${baseElement}>`
              break;
              case'ul':
                    fieldElement = `<ul ${attributes.join(' ')} class="${fieldClass.join(' ')}" ></ul>`
