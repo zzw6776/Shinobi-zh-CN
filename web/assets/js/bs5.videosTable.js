@@ -224,6 +224,9 @@ $(document).ready(function(e){
                 ke: groupKey,
                 time: time,
                 filename: filename,
+                // needed so bulk actions can hit the cloudVideos endpoint with the uploader type
+                type: type,
+                videoSet: wantCloudVideos() ? 'cloudVideos' : null,
             })
         })
         return rowsSelected

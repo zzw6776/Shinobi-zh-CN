@@ -605,10 +605,20 @@ function getEvents(options,callback){
         })
     })
 }
+function buildVideoEndpoint(video){
+    // cloud videos live in a different table and are keyed by uploader `type`,
+    // so the endpoint must carry both or the server answers "No such file".
+    var isCloudVideo = video.videoSet === 'cloudVideos'
+    var videoEndpoint = getApiPrefix(video.videoSet || 'videos') + '/' + video.mid + '/' + video.filename
+    return {
+        videoEndpoint: videoEndpoint,
+        endpointType: isCloudVideo ? `?type=${video.type}` : ''
+    }
+}
 function deleteVideo(video,callback){
     return new Promise((resolve,reject) => {
-        var videoEndpoint = getApiPrefix(`videos`) + '/' + video.mid + '/' + video.filename
-        $.getJSON(videoEndpoint + '/delete',function(data){
+        var { videoEndpoint, endpointType } = buildVideoEndpoint(video)
+        $.getJSON(videoEndpoint + '/delete' + endpointType,function(data){
             notifyIfActionFailed(data)
             if(callback)callback(data)
             resolve(data)
@@ -622,8 +632,8 @@ async function deleteVideos(videos){
     }
 }
 function downloadVideo(video){
-    var videoEndpoint = getApiPrefix(`videos`) + '/' + video.mid + '/' + video.filename
-    downloadFile(videoEndpoint,video.filename)
+    var { videoEndpoint, endpointType } = buildVideoEndpoint(video)
+    downloadFile(videoEndpoint + endpointType,video.filename)
 }
 async function downloadVideos(videos){
     for (let i = 0; i < videos.length; i++) {
