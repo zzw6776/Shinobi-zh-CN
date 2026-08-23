@@ -761,48 +761,48 @@ async function drawMatrices(event, options, autoRemoveTimeout, drawTrails){
         html += `<div class="stream-detected-object fresh-detected-object" name="${escapeHtml(objectTagGroup)}" style="height:${newHeight}px;width:${newWidth}px;top:${heightRatio * matrix.y}px;left:${widthRatio * matrix.x}px;border-color: ${escapeHtml(matrix.color)};">`
         if(matrix.tag)html += `<span class="tag">${escapeHtml(matrix.tag)}${!isNaN(matrix.id) ? ` <small class="label label-default">${escapeHtml(matrix.id)}</small>`: ''} (${matrix.confidence.toFixed(2) || 0})</span>`
         if(matrix.notice)html += `<div class="matrix-info" style="color:yellow">${escapeHtml(matrix.notice)}</div>`;
-        if(matrix.missingNear && matrix.missingNear.length > 0){
-            html += `<div class="matrix-info yellow"><small>Missing Near</small><br>${matrix.missingRecently.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)}) by ${escapeHtml(item.missedNear.tag)} (${escapeHtml(item.missedNear.id)})`).join(', ')}</div>`;
-        }
-        if(matrix.missingRecentlyNearHands && matrix.missingRecentlyNearHands.length > 0){
-            html += `<div class="matrix-info yellow"><small>Missing Recently</small><br>${matrix.missingRecentlyNearHands.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
-        }
-        if(matrix.pose){
-            var pose = matrix.pose;
-            html += `<div class="matrix-info text-left">`;
-            if(pose.isPersonFallen)html += `<div><small>Stance</small><br>${escapeHtml(pose.isPersonFallen)}</div>`;
-            if(pose.isPersonReaching){
-                html += `<div><small>Left Hand</small><br>${escapeHtml(pose.isPersonReaching.left.pose)}</div>`;
-                html += `<div><small>Right Hand</small><br>${escapeHtml(pose.isPersonReaching.right.pose)}</div>`;
-            }
-            // if(pose.isPersonTouchingWaistOrHips)html += `<div>Waist or Hips : ${pose.isPersonTouchingWaistOrHips}</div>`;
-            html += `</div>`;
-            // console.log(matrix.poseInference)
-        }
+        // if(matrix.missingNear && matrix.missingNear.length > 0){
+        //     html += `<div class="matrix-info yellow"><small>Missing Near</small><br>${matrix.missingRecently.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)}) by ${escapeHtml(item.missedNear.tag)} (${escapeHtml(item.missedNear.id)})`).join(', ')}</div>`;
+        // }
+        // if(matrix.missingRecentlyNearHands && matrix.missingRecentlyNearHands.length > 0){
+        //     html += `<div class="matrix-info yellow"><small>Missing Recently</small><br>${matrix.missingRecentlyNearHands.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
+        // }
+        // if(matrix.pose){
+        //     var pose = matrix.pose;
+        //     html += `<div class="matrix-info text-left">`;
+        //     if(pose.isPersonFallen)html += `<div><small>Stance</small><br>${escapeHtml(pose.isPersonFallen)}</div>`;
+        //     if(pose.isPersonReaching){
+        //         html += `<div><small>Left Hand</small><br>${escapeHtml(pose.isPersonReaching.left.pose)}</div>`;
+        //         html += `<div><small>Right Hand</small><br>${escapeHtml(pose.isPersonReaching.right.pose)}</div>`;
+        //     }
+        //     // if(pose.isPersonTouchingWaistOrHips)html += `<div>Waist or Hips : ${pose.isPersonTouchingWaistOrHips}</div>`;
+        //     html += `</div>`;
+        //     // console.log(matrix.poseInference)
+        // }
         if(matrix.poseInference)moreMatrices.push(...buildPosePoints(matrix.poseInference.keypoints,matrix.x,matrix.y))
-        if(matrix.nearHands){
-            var leftHand = matrix.nearHands.leftWrist;
-            var rightHand = matrix.nearHands.rightWrist;
-            html += `<div class="matrix-info text-left">`
-                html += `<div><small>Left Interact</small><br>${leftHand.matrices.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
-                html += `<div><small>Right Interact</small><br>${rightHand.matrices.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
-            html += `</div>`
-        }
-        if(matrix.nearBy){
-            html += `<div class="matrix-info">`
-            matrix.nearBy.forEach((nearMatrix) => {
-                html += `<div class="mb-1">${escapeHtml(nearMatrix.tag)} <small class="label label-default">${escapeHtml(nearMatrix.id)}</small> (${nearMatrix.overlapPercent.toFixed(2)}%)</div>`
-            });
-            html += `</div>`
-        }
-        if(matrix.redAlert){
-            var monitor = loadedMonitors[monitorId]
-            redAlertNotify({
-                title: `${escapeHtml(monitor.name)}`,
-                text: `${escapeHtml(matrix.tag)} (${escapeHtml(matrix.id)})<br>${escapeHtml(matrix.notice)}`,
-                type: 'danger'
-            });
-        }
+        // if(matrix.nearHands){
+        //     var leftHand = matrix.nearHands.leftWrist;
+        //     var rightHand = matrix.nearHands.rightWrist;
+        //     html += `<div class="matrix-info text-left">`
+        //         html += `<div><small>Left Interact</small><br>${leftHand.matrices.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
+        //         html += `<div><small>Right Interact</small><br>${rightHand.matrices.map(item => `${escapeHtml(item.tag)} (${escapeHtml(item.id)})`).join(', ')}</div>`;
+        //     html += `</div>`
+        // }
+        // if(matrix.nearBy){
+        //     html += `<div class="matrix-info">`
+        //     matrix.nearBy.forEach((nearMatrix) => {
+        //         html += `<div class="mb-1">${escapeHtml(nearMatrix.tag)} <small class="label label-default">${escapeHtml(nearMatrix.id)}</small> (${nearMatrix.overlapPercent.toFixed(2)}%)</div>`
+        //     });
+        //     html += `</div>`
+        // }
+        // if(matrix.redAlert){
+        //     var monitor = loadedMonitors[monitorId]
+        //     redAlertNotify({
+        //         title: `${escapeHtml(monitor.name)}`,
+        //         text: `${escapeHtml(matrix.tag)} (${escapeHtml(matrix.id)})<br>${escapeHtml(matrix.notice)}`,
+        //         type: 'danger'
+        //     });
+        // }
         html += '</div>'
     }
     $.each(event.details.matrices, processMatrix);
