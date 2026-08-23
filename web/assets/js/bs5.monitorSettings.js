@@ -1272,7 +1272,10 @@ monitorEditorWindow.find('.save_config').click(function(e){
         monitorId='NewMonitor'
     }
     form.details = safeJsonParse(form.details)
-    downloadJSON(form,'Shinobi_'+monitorId+'_config.json')
+    askToStripCredentialsBeforeExport(function(stripCredentials){
+        var exportedForm = stripCredentials ? stripCredentialsFromMonitorConfig(form) : form
+        downloadJSON(exportedForm,'Shinobi_'+monitorId+'_config.json')
+    })
 });
 monitorEditorWindow.find('.add-input-to-monitor-settings').click(function(e){
     showInputMappingFields()
@@ -1651,7 +1654,10 @@ editorForm.find('[name="type"]').change(function(e){
         var validation = getMonitorEditFormFields()
         var monitorConfig = validation.monitorConfig
         monitorConfig.details = safeJsonParse(monitorConfig.details)
-        downloadJSON(monitorConfig,`${monitorConfig.name}_${monitorConfig.mid}_${formattedTime(new Date(),true)}.json`)
+        askToStripCredentialsBeforeExport(function(stripCredentials){
+            var exportedConfig = stripCredentials ? stripCredentialsFromMonitorConfig(monitorConfig) : monitorConfig
+            downloadJSON(exportedConfig,`${exportedConfig.name}_${exportedConfig.mid}_${formattedTime(new Date(),true)}.json`)
+        })
     })
     .on('click','.open-monitor-settings',function(){
         var monitorId

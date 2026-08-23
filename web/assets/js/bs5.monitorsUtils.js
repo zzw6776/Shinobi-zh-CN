@@ -363,11 +363,79 @@ function getDbColumnsForMonitor(monitor){
     return row
 }
 
-function downloadMonitorConfigurationsToDisk(monitorIds){
+var exportedUsernamePlaceholder = 'USERNAME'
+var exportedPasswordPlaceholder = 'PASSWORD'
+function stripCredentialsFromUrl(value){
+    if(typeof value !== 'string' || value.indexOf('@') === -1)return value
+    return value.replace(/([a-zA-Z][a-zA-Z0-9+.\-]*:\/\/)([^\/?#@]+)@/g,function(match,scheme,userInfo){
+        var replacement = userInfo.indexOf(':') > -1 ? `${exportedUsernamePlaceholder}:${exportedPasswordPlaceholder}` : exportedUsernamePlaceholder
+        return `${scheme}${replacement}@`
+    })
+}
+function stripCredentialsFromValue(value){
+    if(value instanceof Array){
+        return value.map(stripCredentialsFromValue)
+    }
+    if(value instanceof Object){
+        var cleaned = {}
+        $.each(value,function(key,subValue){
+            switch(key){
+                case'muser':
+                    cleaned[key] = subValue ? exportedUsernamePlaceholder : subValue
+                break;
+                case'mpass':
+                    cleaned[key] = subValue ? exportedPasswordPlaceholder : subValue
+                break;
+                default:
+                    cleaned[key] = stripCredentialsFromValue(subValue)
+                break;
+            }
+        })
+        return cleaned
+    }
+    return stripCredentialsFromUrl(value)
+}
+function stripCredentialsFromMonitorConfig(monitor){
+    var detailsAreString = typeof monitor.details === 'string'
+    var cleaned = stripCredentialsFromValue(Object.assign({},monitor,{
+        details: detailsAreString ? safeJsonParse(monitor.details) : monitor.details
+    }))
+    if(detailsAreString)cleaned.details = JSON.stringify(cleaned.details)
+    return cleaned
+}
+function askToStripCredentialsBeforeExport(onChosen){
+    $.confirm.create({
+        title: lang['Export'],
+        body: `<p>${lang.RemoveCredentialsBeforeExportText}</p>`,
+        clickOptions: [
+            {
+                title: lang['Remove Usernames and Passwords'],
+                class: 'btn-success',
+                callback: function(){
+                    onChosen(true)
+                }
+            },
+            {
+                title: lang['Keep Usernames and Passwords'],
+                class: 'btn-warning',
+                callback: function(){
+                    onChosen(false)
+                }
+            }
+        ]
+    })
+}
+function downloadMonitorConfigurationsToDisk(monitorIds,stripCredentials){
+    if(stripCredentials === undefined){
+        askToStripCredentialsBeforeExport(function(chosenStripCredentials){
+            downloadMonitorConfigurationsToDisk(monitorIds,chosenStripCredentials)
+        })
+        return
+    }
     var selectedMonitors = []
     $.each(monitorIds,function(n,monitorId){
         var monitor = monitorId instanceof Object ? monitorId : loadedMonitors[monitorId]
-        if(monitor)selectedMonitors.push(monitor)
+        if(monitor)selectedMonitors.push(stripCredentials ? stripCredentialsFromMonitorConfig(monitor) : monitor)
     })
     var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(selectedMonitors));
     $('#temp').html('<a></a>')
