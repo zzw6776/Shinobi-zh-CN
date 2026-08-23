@@ -223,7 +223,12 @@ module.exports = function(s,config,lang,app,io){
                         s.closeJsonResponse(res,endData)
                         return
                     }
-                    form.enabled = parseInt(form.enabled) || 1;
+                    // `parseInt(x) || 1` turned an explicit 0 back into 1, so a schedule could
+                    // never be saved disabled -- and it is `schedule.enabled === 1` at the top
+                    // of this file that decides whether one runs at all. Absent means enabled
+                    // (the old default for callers that omit the field); an explicit 0 stays 0.
+                    const parsedEnabled = parseInt(form.enabled)
+                    form.enabled = isNaN(parsedEnabled) ? 1 : (parsedEnabled ? 1 : 0);
                     s.findSchedule(req.params.ke,req.params.name,function(notFound,preset){
                         if(notFound === true){
                             endData.msg = lang["Inserted Schedule Configuration"]
