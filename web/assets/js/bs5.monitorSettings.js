@@ -189,28 +189,34 @@ function generateDefaultMonitorSettings(){
                 "id": eventFilterId,
                 "enabled": "1",
                 "filter_name": "Standard Object Detection Filter",
+                // Whitelist form : keep the event when any box matches one of the
+                // wanted tags, drop it otherwise. `halt` must be "2" (drop on
+                // condition failure) with OR'd `indexOf` conditions. The inverted
+                // spelling (`!indexOf` + "&&" + halt "1") does NOT whitelist - halt
+                // "1" deletes matrices per-condition, so each condition would strip
+                // the tags the other conditions are trying to keep.
                 "where": [
                   {
                     "p1": "tag",
-                    "p2": "!indexOf",
+                    "p2": "indexOf",
                     "p3": "person",
-                    "p4": "&&"
+                    "p4": "||"
                   },
                   {
                     "p1": "tag",
-                    "p2": "!indexOf",
+                    "p2": "indexOf",
                     "p3": "car",
-                    "p4": "&&"
+                    "p4": "||"
                   },
                   {
                     "p1": "tag",
-                    "p2": "!indexOf",
+                    "p2": "indexOf",
                     "p3": "truck",
-                    "p4": "&&"
+                    "p4": "||"
                   }
                 ],
                 "actions": {
-                  "halt": "1",
+                  "halt": "2",
                   "save": "",
                   "indifference": "",
                   "webhook": "",

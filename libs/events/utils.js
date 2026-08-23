@@ -233,12 +233,16 @@ module.exports = (s,config,lang) => {
             Object.keys(filters).forEach(function(key){
                 var conditionChain = {}
                 var dFilter = filters[key]
-                const haltState = dFilter.actions.halt
-                if(dFilter.enabled === '0')return;
+                // These flags are strings when the filter came from the settings
+                // form, but numbers when it came from an import, the API or another
+                // client. Stringify so the comparisons can't silently miss - a
+                // numeric halt used to make the filter evaluate and then do nothing.
+                const haltState = `${dFilter.actions.halt || '0'}`
+                if(`${dFilter.enabled}` === '0')return;
                 var numberOfOpenAndCloseBrackets = 0
                 dFilter.where.forEach(function(condition,place){
-                    const hasOpenBracket = condition.openBracket === '1';
-                    const hasCloseBracket = condition.closeBracket === '1';
+                    const hasOpenBracket = `${condition.openBracket}` === '1';
+                    const hasCloseBracket = `${condition.closeBracket}` === '1';
                     conditionChain[place] = {
                         ok: false,
                         next: condition.p4,
@@ -252,6 +256,14 @@ module.exports = (s,config,lang) => {
                     var modifyFilters = function(toCheck,matrixPosition){
                         var param = toCheck[condition.p1]
                         var pass = function(){
+                            // Position 0 deliberately falls through to the `ok` branch
+                            // rather than being deleted. Every stored filter of the
+                            // "!indexOf X && !indexOf Y" whitelist shape depends on it:
+                            // the first matrix decides the condition chain (drop the
+                            // event when it matches none of the wanted tags) while
+                            // matrices 1..n are stripped individually. "Fixing" this to
+                            // `matrixPosition !== undefined` deletes the deciding matrix
+                            // too, empties the array, and drops every object event.
                             if(matrixPosition && haltState === '1'){
                                 delete(d.details.matrices[matrixPosition])
                             }else{
