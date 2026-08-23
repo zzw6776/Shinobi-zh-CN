@@ -26,7 +26,9 @@ $(document).ready(function(e){
     var sideLinkListBox = $('#side-menu-link-timelapseViewer ul')
     var dateSelector = $('#timelapsejpeg_date')
     var fpsSelector = $('#timelapseJpegFps')
-    var playBackViewImage = timelapseWindow.find('.playBackView img')
+    var preloadSelector = $('#timelapsePreloadFrames')
+    var playBackBuffers = timelapseWindow.find('.playBackView img')
+    var playBackViewImage = playBackBuffers.eq(0)
     var liveStreamView = timelapseWindow.find('.liveStreamView')
     var monitorsList = timelapseWindow.find('.monitors_list')
     var downloadButton = timelapseWindow.find('.download_mp4')
@@ -43,16 +45,50 @@ $(document).ready(function(e){
     var buildProgressBox = timelapseWindow.find('.timelapseBuildProgress')
     var buildProgressStage = buildProgressBox.find('.timelapseBuildStage')
     var buildProgressBar = buildProgressBox.find('.progress-bar')
+    var preloadStatusInfo = timelapseWindow.find('.timelapsePreloadStatus')
     var currentPlaylist = {}
     var currentPlaylistArray = []
     var frameSelected = null
     var playIntervalTimer = null
     var canPlay = false;
+    // --- Playback clock ---------------------------------------------------------------
+    // Frame n of a run is due at anchorTime + n * (1000/fps), measured from the moment Play
+    // was pressed. The old loop chained each timer onto the previous image's load event, so
+    // the real period was "load time + 1000/fps" and the selected FPS was never what played.
+    var playAnchorTime = 0
+    var playAnchorNumber = 0
+    var playSlot = 0
+    // A run this far behind schedule is a backgrounded tab or a stalled machine, not drift.
+    // Catching up would dump the whole backlog on screen at once, so the clock restarts.
+    var playCatchUpLimitMs = 1000
+    // --- Frame cache ------------------------------------------------------------------
+    // Frames ahead of the playhead are fetched as blobs so playback never touches the
+    // network. Insertion order in the Map is the LRU order - a read moves the entry back to
+    // the end. Everything here is dropped, and its object URLs revoked, whenever the monitor
+    // or date range changes.
+    var frameCache = new Map()
+    var frameCacheBytes = 0
+    var framesInFlight = new Map()
+    var preloadQueue = []
+    var preloadWindowFilenames = new Set()
+    var lastPreloadCenter = null
+    var preloadStatusTimer = null
+    var defaultPreloadDepth = 150
+    var maxCacheBytes = 300 * 1024 * 1024
+    var maxConcurrentLoads = 6
+    // Rising each time a frame is painted. A load that finishes after its token is stale
+    // missed its slot, and is discarded rather than shown late.
+    var paintToken = 0
+    var frontBufferIndex = 0
     // Wall-clock bounds the ticks are laid out across. Everything that maps a frame to an
     // x-position on the strip - drawing, click-to-seek, drag selection - goes through these
     // two numbers, so the three always agree.
     var stripStartTime = 0
     var stripEndTime = 0
+    // The ticks actually in the DOM, with their positions already parsed. Rebuilt whenever
+    // the strip is redrawn, and read every painted frame - so it stays out of the DOM.
+    var drawnTicks = []
+    var currentTickElement = null
     // null means "no range drawn", which is the same thing as every frame being selected.
     var selectionRange = null
     var buildInProgress = false
@@ -117,18 +153,18 @@ $(document).ready(function(e){
     }
     function markUnselectedTicks(){
         if(!selectionRange){
-            frameStripTicks.find('.timelapse-strip-tick').removeClass('is-unselected')
+            drawnTicks.forEach(function(tick){ tick.element.classList.remove('is-unselected') })
             return
         }
         var lowPercent = Math.min(selectionRange.start,selectionRange.end)
         var highPercent = Math.max(selectionRange.start,selectionRange.end)
-        frameStripTicks.find('.timelapse-strip-tick').each(function(){
-            var tick = $(this)
-            var percent = parseFloat(tick.attr('data-left')) || 0
-            tick.toggleClass('is-unselected',percent < lowPercent || percent > highPercent)
+        drawnTicks.forEach(function(tick){
+            tick.element.classList.toggle('is-unselected',tick.percent < lowPercent || tick.percent > highPercent)
         })
     }
     function drawFrameStrip(){
+        drawnTicks = []
+        currentTickElement = null
         if(currentPlaylistArray.length === 0){
             frameStripTicks.html(`<div class="timelapse-strip-empty">${lang['No Data']}</div>`)
             stripStartLabel.text('')
@@ -156,36 +192,49 @@ $(document).ready(function(e){
                 + ` title="${label}"></div>`
         })
         frameStripTicks.html(ticksHtml)
+        // The drawn ticks are read back once, here, into plain numbers. Finding the current
+        // tick used to re-query the DOM and parse an attribute off all 600 of them on every
+        // painted frame - unnoticeable at the rate playback used to manage, and the single
+        // biggest cost per frame once it actually runs at 60 FPS.
+        drawnTicks = Array.prototype.map.call(frameStripTicks[0].children,function(element,n){
+            return {
+                element: element,
+                percent: getFramePercent(drawnFrames[n]),
+                filename: drawnFrames[n].filename,
+            }
+        })
         stripStartLabel.text(moment(stripStartTime).format('YYYY-MM-DD HH:mm:ss'))
         stripEndLabel.text(moment(stripEndTime).format('YYYY-MM-DD HH:mm:ss'))
         markCurrentTick()
         drawSelectionInfo()
     }
     function markCurrentTick(){
-        frameStripTicks.find('.timelapse-strip-tick.is-current').removeClass('is-current')
+        if(currentTickElement){
+            currentTickElement.classList.remove('is-current')
+            currentTickElement = null
+        }
         if(!frameSelected)return;
         var frame = currentPlaylist[frameSelected]
         if(!frame)return;
         var framePercent = getFramePercent(frame)
         frameStripPlayhead.css('left',`${framePercent}%`)
-        var exactTick = frameStripTicks.find(`.timelapse-strip-tick[data-filename="${frameSelected}"]`)
-        if(exactTick.length > 0){
-            exactTick.addClass('is-current')
-            return
-        }
         // The strip only draws a sample of large frame sets, so the current frame often has
         // no tick of its own. Marking the nearest one keeps the highlight from flickering
         // in and out during playback.
-        var closestTick = null
         var closestDiff = Infinity
-        frameStripTicks.find('.timelapse-strip-tick').each(function(){
-            var diff = Math.abs((parseFloat(this.getAttribute('data-left')) || 0) - framePercent)
+        for(var n = 0;n < drawnTicks.length;n++){
+            var tick = drawnTicks[n]
+            if(tick.filename === frameSelected){
+                currentTickElement = tick.element
+                break
+            }
+            var diff = Math.abs(tick.percent - framePercent)
             if(diff < closestDiff){
                 closestDiff = diff
-                closestTick = this
+                currentTickElement = tick.element
             }
-        })
-        if(closestTick)$(closestTick).addClass('is-current');
+        }
+        if(currentTickElement)currentTickElement.classList.add('is-current');
     }
     function drawTimelapseWindowElements(selectedMonitor,startDate,endDate){
         var dateRange = getSelectedTime(dateSelector)
@@ -193,6 +242,10 @@ $(document).ready(function(e){
         if(!endDate)endDate = dateRange.endDate
         if(!selectedMonitor)selectedMonitor = monitorsList.val()
         pauseTimelapse()
+        // A new monitor or date range makes every buffered blob dead weight. Dropping them
+        // here - and revoking their object URLs - is what keeps a long session from growing
+        // a copy of every range the user has looked at.
+        clearFrameCache()
         getTimelapseFrames(selectedMonitor,startDate,endDate,'noLimit').then((data) => {
             currentPlaylist = {}
             currentPlaylistArray = []
@@ -218,53 +271,235 @@ $(document).ready(function(e){
             }
         })
     }
-    var setPlayBackFrame = function(href,callback){
-        playBackViewImage
-        .off('load').on('load',function(){
-            playBackViewImage.off('error')
+    // --- Frame cache ------------------------------------------------------------------
+    function getPreloadDepth(){
+        var value = parseInt(preloadSelector.val(),10)
+        if(isNaN(value) || value < 0)value = defaultPreloadDepth;
+        return Math.min(2000,value)
+    }
+    function getCachedFrame(filename){
+        var entry = frameCache.get(filename)
+        if(!entry)return null;
+        // Re-inserting moves the entry to the newest end of the Map, which is the LRU order
+        // eviction walks. Touching on read is what keeps the playhead's own frames alive.
+        frameCache.delete(filename)
+        frameCache.set(filename,entry)
+        return entry
+    }
+    function releaseCachedFrame(filename){
+        var entry = frameCache.get(filename)
+        if(!entry)return;
+        URL.revokeObjectURL(entry.blobUrl)
+        frameCacheBytes -= entry.bytes
+        frameCache.delete(filename)
+    }
+    function evictFromCache(){
+        if(frameCacheBytes <= maxCacheBytes)return;
+        for(var filename of Array.from(frameCache.keys())){
+            if(frameCacheBytes <= maxCacheBytes)break;
+            // Never evict what the current window is actively holding, or a deep preload on a
+            // memory budget it cannot fit would spend the whole run re-fetching itself.
+            if(preloadWindowFilenames.has(filename))continue;
+            releaseCachedFrame(filename)
+        }
+    }
+    function clearFrameCache(){
+        framesInFlight.forEach(function(controller){ controller.abort() })
+        framesInFlight.clear()
+        frameCache.forEach(function(entry){ URL.revokeObjectURL(entry.blobUrl) })
+        frameCache.clear()
+        frameCacheBytes = 0
+        preloadQueue = []
+        preloadWindowFilenames.clear()
+        lastPreloadCenter = null
+        drawPreloadStatus()
+    }
+    function fetchFrameToCache(frame){
+        if(frameCache.has(frame.filename) || framesInFlight.has(frame.filename))return;
+        var controller = new AbortController()
+        framesInFlight.set(frame.filename,controller)
+        fetch(frame.href,{ signal: controller.signal, credentials: 'same-origin' })
+        .then(function(response){
+            if(!response.ok)throw new Error(`${response.status}`);
+            return response.blob()
+        })
+        .then(function(blob){
+            framesInFlight.delete(frame.filename)
+            // A search or monitor change while this was in the air replaces every frame
+            // object, so an identity check tells us whether this blob is still wanted.
+            if(currentPlaylist[frame.filename] !== frame)return;
+            frameCache.set(frame.filename,{ blobUrl: URL.createObjectURL(blob), bytes: blob.size })
+            frameCacheBytes += blob.size
+            evictFromCache()
+            drawPreloadStatus()
+            pumpPreloadQueue()
+        })
+        .catch(function(){
+            framesInFlight.delete(frame.filename)
+            pumpPreloadQueue()
+        })
+    }
+    function pumpPreloadQueue(){
+        while(framesInFlight.size < maxConcurrentLoads && preloadQueue.length > 0){
+            // A full cache with nothing evictable means the requested depth is larger than
+            // the memory budget allows. Stop pulling rather than thrash blobs in and out.
+            if(frameCacheBytes >= maxCacheBytes)break;
+            var frame = preloadQueue.shift()
+            if(!frame || frameCache.has(frame.filename) || framesInFlight.has(frame.filename))continue;
+            fetchFrameToCache(frame)
+        }
+    }
+    function schedulePreload(fromNumber,force){
+        var depth = getPreloadDepth()
+        if(depth === 0 || currentPlaylistArray.length === 0){
+            framesInFlight.forEach(function(controller){ controller.abort() })
+            framesInFlight.clear()
+            preloadQueue = []
+            preloadWindowFilenames.clear()
+            lastPreloadCenter = null
+            drawPreloadStatus()
+            return
+        }
+        // Rebuilding the window on every painted frame would cost more than the fetching
+        // does at 60 FPS. It only moves once the playhead has eaten a quarter of the buffer,
+        // or the moment it jumps backwards - a seek needs the window rebuilt around it.
+        var slide = Math.max(1,Math.floor(depth / 4))
+        var moved = lastPreloadCenter === null ? null : fromNumber - lastPreloadCenter
+        if(!force && moved !== null && moved >= 0 && moved < slide)return;
+        // A little behind the playhead too, so stepping back on the strip is instant.
+        var behind = Math.min(10,Math.floor(depth / 4))
+        var start = Math.max(0,fromNumber - behind)
+        var end = Math.min(currentPlaylistArray.length - 1,fromNumber + depth)
+        preloadWindowFilenames = new Set()
+        preloadQueue = []
+        for(var n = start;n <= end;n++){
+            preloadWindowFilenames.add(currentPlaylistArray[n].filename)
+        }
+        // Forwards first : that is the order playback is about to ask for them in.
+        for(var n = fromNumber;n <= end;n++)preloadQueue.push(currentPlaylistArray[n]);
+        for(var n = fromNumber - 1;n >= start;n--)preloadQueue.push(currentPlaylistArray[n]);
+        framesInFlight.forEach(function(controller,filename){
+            if(!preloadWindowFilenames.has(filename))controller.abort();
+        })
+        lastPreloadCenter = fromNumber
+        evictFromCache()
+        pumpPreloadQueue()
+        drawPreloadStatus()
+    }
+    function drawPreloadStatus(){
+        // Fetches land in bursts, and this is a status line, not a readout worth a reflow
+        // each time one completes.
+        if(preloadStatusTimer)return;
+        preloadStatusTimer = setTimeout(function(){
+            preloadStatusTimer = null
+            if(currentPlaylistArray.length === 0 || getPreloadDepth() === 0){
+                preloadStatusInfo.text('')
+                return
+            }
+            var ready = 0
+            preloadWindowFilenames.forEach(function(filename){
+                if(frameCache.has(filename))++ready;
+            })
+            var megabytes = (frameCacheBytes / 1024 / 1024).toFixed(0)
+            preloadStatusInfo.text(`${lang['Buffered']} ${ready} / ${preloadWindowFilenames.size} - ${megabytes} MB`)
+        },200)
+    }
+    // --- Painting ---------------------------------------------------------------------
+    function swapPlayBackBuffers(){
+        playBackBuffers.eq(frontBufferIndex).addClass('is-back')
+        frontBufferIndex = 1 - frontBufferIndex
+        playBackBuffers.eq(frontBufferIndex).removeClass('is-back')
+    }
+    var setPlayBackFrame = function(frame,callback){
+        var token = ++paintToken
+        if(!frame){
+            playBackBuffers.off('load error').each(function(){ this.removeAttribute('src') })
+            if(callback)callback();
+            return
+        }
+        var cached = getCachedFrame(frame.filename)
+        // Uncached frames are still painted at their scheduled moment, straight from the
+        // URL - the clock is never made to wait on one. If it arrives after the next frame
+        // has been asked for, its token is stale and the paint is simply dropped, leaving
+        // the frame already on screen in place. That dropping is what holds the rate.
+        var source = cached ? cached.blobUrl : frame.href
+        var backBuffer = playBackBuffers[1 - frontBufferIndex]
+        var finish = function(){
+            if(token !== paintToken)return;
+            swapPlayBackBuffers()
+            if(callback)callback();
+        }
+        if(backBuffer.getAttribute('src') === source && backBuffer.complete && backBuffer.naturalWidth > 0){
+            return finish()
+        }
+        $(backBuffer)
+        .off('load error')
+        .one('load',finish)
+        .one('error',function(){
+            if(token !== paintToken)return;
             if(callback)callback()
         })
-        .off('error').on('error',function(){
-            if(callback)callback()
-        })
-        playBackViewImage[0].src = href
+        backBuffer.src = source
+    }
+    function showFrame(frame){
+        if(!frame)return;
+        frameSelected = frame.filename
+        markCurrentTick()
+        setPlayBackFrame(frame)
+        schedulePreload(frame.number)
     }
     function selectFrame(filename){
         var frame = currentPlaylist[filename]
         if(!frame)return;
-        frameSelected = filename
-        markCurrentTick()
-        setPlayBackFrame(frame.href)
+        showFrame(frame)
     }
-    var startPlayLoop = function(){
-        var selectedFrame = currentPlaylist[frameSelected]
-        if(!selectedFrame)return pauseTimelapse();
-        var selectedFrameNumber = selectedFrame.number
-        setPlayBackFrame(selectedFrame.href,function(){
-            frameSelected = selectedFrame.filename
-            markCurrentTick()
-            clearTimeout(playIntervalTimer)
-            playIntervalTimer = setTimeout(function(){
-                if(!canPlay)return
-                ++selectedFrameNumber
-                var newSelectedFrame = currentPlaylistArray[selectedFrameNumber]
-                if(!newSelectedFrame)return pauseTimelapse();
-                frameSelected = newSelectedFrame.filename
-                startPlayLoop()
-            },1000/(parseInt(fpsSelector.val(),10) || 1))
-        })
+    // --- Playback ---------------------------------------------------------------------
+    function getPlaybackFps(){
+        return Math.max(1,Math.min(60,parseInt(fpsSelector.val(),10) || 10))
+    }
+    function anchorPlayback(frameNumber){
+        playAnchorNumber = frameNumber
+        playAnchorTime = Date.now()
+        playSlot = 0
+    }
+    var scheduleNextPlaySlot = function(){
+        if(!canPlay)return;
+        var frameDuration = 1000 / getPlaybackFps()
+        var nextSlot = playSlot + 1
+        var target = playAnchorTime + nextSlot * frameDuration
+        var now = Date.now()
+        if(now - target > playCatchUpLimitMs){
+            anchorPlayback(playAnchorNumber + playSlot)
+            nextSlot = 1
+            target = playAnchorTime + frameDuration
+        }
+        playSlot = nextSlot
+        clearTimeout(playIntervalTimer)
+        playIntervalTimer = setTimeout(function(){
+            if(!canPlay)return;
+            var nextFrame = currentPlaylistArray[playAnchorNumber + playSlot]
+            if(!nextFrame)return pauseTimelapse();
+            showFrame(nextFrame)
+            scheduleNextPlaySlot()
+        },Math.max(0,target - now))
     }
     var playTimelapse = function(){
         if(currentPlaylistArray.length === 0)return;
+        var startFrame = currentPlaylist[frameSelected] || currentPlaylistArray[0]
+        // Restarting from the end would play nothing at all.
+        if(!currentPlaylistArray[startFrame.number + 1])startFrame = currentPlaylistArray[0];
         var playPauseText = timelapseWindow.find('.playPauseText')
         canPlay = true
         playPauseText.html(`<i class="fa fa-pause"></i> ${lang.Pause}`)
-        startPlayLoop()
+        anchorPlayback(startFrame.number)
+        showFrame(startFrame)
+        scheduleNextPlaySlot()
     }
     var destroyTimelapse = function(){
-        playBackViewImage.off('load')
+        playBackBuffers.off('load error')
         frameSelected = null
         pauseTimelapse()
+        clearFrameCache()
         frameStripTicks.empty()
         setPlayBackFrame(null)
     }
@@ -308,6 +543,9 @@ $(document).ready(function(e){
     }
     function removeFramesFromPlaylist(filenames){
         filenames.forEach(function(filename){
+            releaseCachedFrame(filename)
+            var controller = framesInFlight.get(filename)
+            if(controller)controller.abort();
             delete currentPlaylist[filename]
         })
         currentPlaylistArray = currentPlaylistArray.filter(function(frame){
@@ -322,7 +560,14 @@ $(document).ready(function(e){
             stripEndTime = getFrameTime(currentPlaylistArray[currentPlaylistArray.length - 1])
         }
         drawFrameStrip()
-        if(!frameSelected && currentPlaylistArray[0])selectFrame(currentPlaylistArray[0].filename);
+        // Every frame after a deletion has been renumbered, so the preload window no longer
+        // describes anything real and has to be laid out again from wherever we land.
+        lastPreloadCenter = null
+        if(!frameSelected && currentPlaylistArray[0]){
+            selectFrame(currentPlaylistArray[0].filename)
+        }else if(frameSelected && currentPlaylist[frameSelected]){
+            schedulePreload(currentPlaylist[frameSelected].number,true)
+        }
     }
     function deleteSelectedFrames(){
         var frames = getSelectedRows()
@@ -473,7 +718,10 @@ $(document).ready(function(e){
         if(!frame)return;
         frameStripPreview.find('.timelapse-strip-preview-caption').text(tick.attr('data-label') || '')
         var img = frameStripPreview.find('img')
-        if(img.attr('src') !== frame.href)img.attr('src',frame.href);
+        // Buffered frames make scrubbing the strip instant too, for free.
+        var cached = getCachedFrame(frame.filename)
+        var source = cached ? cached.blobUrl : frame.href
+        if(img.attr('src') !== source)img.attr('src',source);
         frameStripPreview.addClass('is-visible')
         // Clamp inside the strip so the card never runs off either end.
         var stripWidth = frameStrip[0].getBoundingClientRect().width
@@ -519,6 +767,20 @@ $(document).ready(function(e){
         selectionRange = null
         drawSelectionInfo()
     });
+    // Slots are counted off the anchor, so a rate changed mid-run has to re-anchor or the
+    // next slot lands somewhere arbitrary relative to the frame on screen.
+    fpsSelector.on('change input',function(){
+        if(!canPlay)return;
+        anchorPlayback(playAnchorNumber + playSlot)
+        scheduleNextPlaySlot()
+    })
+    preloadSelector.on('change',function(){
+        var depth = getPreloadDepth()
+        preloadSelector.val(depth)
+        dashboardOptions('timelapsePreloadFrames',`${depth}`)
+        var currentFrame = currentPlaylist[frameSelected]
+        schedulePreload(currentFrame ? currentFrame.number : 0,true)
+    })
     cancelBuildButton.click(function(){
         requestBuildCancel()
     })
@@ -682,6 +944,10 @@ $(document).ready(function(e){
         el.remove()
     })
     setDownloadButtonLabel(lang['Build Video'], 'database')
+    // The right depth depends on the machine and on how big this deployment's frames are,
+    // so whatever the user settles on is remembered rather than re-tuned every visit.
+    var savedPreloadDepth = parseInt(dashboardOptions().timelapsePreloadFrames,10)
+    preloadSelector.val(isNaN(savedPreloadDepth) ? defaultPreloadDepth : savedPreloadDepth)
     addOnTabOpen('timelapseViewer', function () {
         if(!monitorsList.val()){
             drawMonitorListToSelector(monitorsList)

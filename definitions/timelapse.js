@@ -33,6 +33,20 @@ module.exports = (s,config,lang,Theme) => {
                        "form-group-class": "me-3 mb-0",
                        "style": "width:90px",
                    },
+                   // How far ahead of the playhead frames are fetched and held as blobs. The
+                   // cost of a deep buffer is browser memory, which varies wildly with frame
+                   // size and range length, so it is left in reach rather than hardcoded.
+                   {
+                       "id": "timelapsePreloadFrames",
+                       "field": lang["Preload"],
+                       "fieldType": "number",
+                       "default": "150",
+                       "numberMin": "0",
+                       "numberMax": "2000",
+                       "attribute": `title="${lang['timelapsePreloadHint']}"`,
+                       "form-group-class": "me-3 mb-0",
+                       "style": "width:100px",
+                   },
                    {
                       "fieldType": "btn-group",
                       "form-group-class-pre-layer": "me-3 mb-0",
@@ -99,7 +113,10 @@ module.exports = (s,config,lang,Theme) => {
                  {
                      "fieldType": "div",
                      "class": "playBackView",
-                     "divContent": "<img>"
+                     // Two buffers. The frame being played is in the front one while the next
+                     // decodes unseen in the back, so a swap is instant and never shows a
+                     // blank or half-drawn image mid-playback.
+                     "divContent": `<img><img class="is-back">`
                  },
                  // Live narration of a running build. Hidden until a build is requested, and
                  // the only place the Cancel action is offered while work is in flight.
@@ -126,6 +143,7 @@ module.exports = (s,config,lang,Theme) => {
                          <a class="btn btn-danger btn-sm me-2 delete-selected-frames">${lang['Delete selected']}</a>
                          <a class="btn btn-primary btn-sm me-2 zip-selected-frames">${lang['Zip and Download']}</a>
                          <div class="flex-grow-1 small text-muted frameSelectionInfo"></div>
+                         <div class="small text-muted timelapsePreloadStatus ms-2"></div>
                          <label class="small mb-0 ms-2">
                              <input type="checkbox" class="form-check-input select-all" checked> ${lang['Select All']}
                          </label>

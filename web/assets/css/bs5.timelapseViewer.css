@@ -2,11 +2,24 @@
     width: 100%;
     background:#333;
     text-align: center;
+    position: relative;
 }
 #tab-timelapseViewer .playBackView img{
     max-width:100%;
     max-height: 60vh;
     border-radius: 4px;
+    transition: none;
+}
+/* The back buffer. It is out of flow and invisible so the frame decoding into it costs no
+   layout and cannot be seen half-drawn, but it still loads - which is the whole point. The
+   two images trade this class on every swap, so the one in flow is always a finished frame. */
+#tab-timelapseViewer .playBackView img.is-back{
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
 }
 #tab-timelapseViewer .liveStreamView{
     position:absolute;
