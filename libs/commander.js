@@ -137,6 +137,26 @@ module.exports = function(s,config,lang,app){
         })
     }
     /**
+    * API : Superuser : Get current P2P configuration
+    */
+    // The web panel gets these values server-rendered into easyRemoteAccess.ejs, so it never
+    // needed a read route. An API client has no such injection point and would otherwise have
+    // to present the form blank and silently overwrite whatever is configured on save.
+    // Only the P2P fields are returned -- `config` also holds database credentials.
+    addSharedRoute('get','p2p','/config','use_remote_access', async (req,res,resp) => {
+        s.closeJsonResponse(res,{
+            ok: true,
+            config: {
+                p2pEnabled: config.p2pEnabled === true,
+                p2pApiKey: config.p2pApiKey || '',
+                p2pServerList: config.p2pServerList || {},
+                p2pHostSelected: config.p2pHostSelected || '',
+                p2pHostMultiSelected: config.p2pHostMultiSelected || [],
+                useBetterP2P: !!config.useBetterP2P,
+            }
+        })
+    })
+    /**
     * API : Superuser : Save P2P Server choice
     */
     // Also reachable from the dashboard by accounts granted `use_remote_access`.
