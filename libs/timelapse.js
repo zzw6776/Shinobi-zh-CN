@@ -207,6 +207,16 @@ module.exports = function(s,config,lang,app,io){
         const buildId = getTimelapseBuildId(job.ke,job.mid)
         if(activeTimelapseBuilds[buildId] === job)delete activeTimelapseBuilds[buildId];
     }
+    // A percent that is not a real number between 0 and 100 is a bug in whatever produced it,
+    // and the dashboard clamps whatever it is handed into range - so an Infinity from a stray
+    // division arrives looking like a finished build. Nothing unusable is sent in the first
+    // place.
+    function cleanBuildPercent(percent){
+        if(percent === undefined || percent === null)return null;
+        const parsed = parseFloat(percent)
+        if(!isFinite(parsed))return null;
+        return Math.max(0,Math.min(100,parsed)).toFixed(1)
+    }
     // The dashboard shows one line of text and a bar while a build runs. ffmpeg only starts
     // reporting once it is actually encoding, so every step before that (database read, frame
     // stat-ing, stitching, saving) sends its own stage instead of leaving the user with a
@@ -219,7 +229,7 @@ module.exports = function(s,config,lang,app,io){
             mid: job.mid,
             name: job.name,
             stage: stage,
-            percent: percent === undefined || percent === null ? null : `${percent}`,
+            percent: cleanBuildPercent(percent),
         },'GRP_'+job.ke);
     }
     function trackTimelapseBuildTempFile(job,filePath){
@@ -330,18 +340,31 @@ module.exports = function(s,config,lang,app,io){
             const mid = frames[0].mid
             const concatListFile = options.listFile
             resolved = false
-            function doResolve(){
-                if(!resolved)resolve()
+            // Callers need to know whether a segment actually got written. Resolving bare on
+            // exit meant a segment that died in milliseconds looked exactly like one that
+            // encoded fine, so a wholly failed build walked through every set, on through
+            // stitching, and only fell over at the final stat with an ENOENT in the console
+            // that the dashboard never heard about.
+            function doResolve(result){
+                if(!resolved)resolve(result || { ok: true })
                 resolved = true
             }
-            if(job && job.cancelled)return doResolve();
+            if(job && job.cancelled)return doResolve({ ok: true, cancelled: true });
             createTemporaryInputFile(frames,concatListFile).then((framesAccepted) => {
-                if(job && job.cancelled)return doResolve();
+                if(job && job.cancelled)return doResolve({ ok: true, cancelled: true });
                 var completionTimeout
+                var stderrTail = ''
                 const framesPerSecond = options.fps
                 const finalMp4OutputLocation = options.output
-                const onPercentChange = options.onPercentChange
+                const onFrameProgress = options.onFrameProgress
                 const numberOfFrames = framesAccepted.length
+                // Nothing on disk for this set means an empty concat list. ffmpeg would only
+                // error out on it, and the old progress maths divided by this - which is what
+                // sent the dashboard bar straight to 100% on the very first report.
+                if(numberOfFrames === 0){
+                    s.debugLog('No readable frames in set, skipping',concatListFile)
+                    return doResolve({ ok: false, msg: lang['No Data'] })
+                }
                 const commandString = `-y -threads 1 -re -f concat -safe 0 -r ${framesPerSecond} -i "${concatListFile}" -q:v 1 -c:v libx264 -preset ultrafast -r ${framesPerSecond} "${finalMp4OutputLocation}"`
                 // console.log("ffmpeg",commandString)
                 const videoBuildProcess = spawn(config.ffmpegDir,splitForFFMPEG(commandString))
@@ -351,28 +374,56 @@ module.exports = function(s,config,lang,app,io){
                 })
                 videoBuildProcess.stderr.on('data',function(data){
                     const text = data.toString()
-                    if(text.startsWith('frame=')){
-                        const currentFrame = parseInt(text.split(/(\s+)/)[2])
-                        const percent = (currentFrame / numberOfFrames * 100).toFixed(1)
-                        onPercentChange(percent,currentFrame)
+                    // Kept only so a failure can say what ffmpeg actually complained about.
+                    stderrTail = `${stderrTail}${text}`.slice(-2000)
+                    // ffmpeg rewrites one progress line in place with a carriage return, so
+                    // only the first update of a run ever begins a chunk - every later one
+                    // arrives as "\rframe=..." and a startsWith() test threw them all away.
+                    // The padding is not dependable either : ffmpeg 6 and up print "frame=12"
+                    // where older builds printed "frame=   12", and splitting on whitespace
+                    // read the next field instead of the number. A chunk can also carry
+                    // several updates at once, in which case only the newest is of interest.
+                    var currentFrame = null
+                    var frameMatcher = /frame=\s*(\d+)/g
+                    var match
+                    while((match = frameMatcher.exec(text)) !== null){
+                        currentFrame = parseInt(match[1],10)
+                    }
+                    if(currentFrame !== null && !isNaN(currentFrame)){
+                        onFrameProgress(Math.min(currentFrame,numberOfFrames),numberOfFrames)
                     }
                     clearTimeout(completionTimeout)
                     completionTimeout = setTimeout(function(){
                         s.debugLog('videoBuildProcess completionTimeout',finalMp4OutputLocation)
                         processKill(videoBuildProcess)
-                        doResolve()
+                        doResolve({ ok: false, msg: lang['Timed Out'], stderr: stderrTail })
                     },20000)
                 })
-                videoBuildProcess.on('exit',function(data){
+                videoBuildProcess.on('error',function(err){
+                    clearTimeout(completionTimeout)
+                    doResolve({ ok: false, msg: err.message, stderr: stderrTail })
+                })
+                videoBuildProcess.on('exit',function(code){
                     clearTimeout(completionTimeout)
                     if(job && job.currentProcess === videoBuildProcess)job.currentProcess = null;
-                    doResolve()
                     fs.promises.unlink(concatListFile).catch(function(){
 
+                    })
+                    if(job && job.cancelled)return doResolve({ ok: true, cancelled: true });
+                    // A non-zero exit is the obvious failure, but ffmpeg can also exit clean
+                    // having written nothing, so the segment it was asked for has to be there.
+                    fs.promises.stat(finalMp4OutputLocation).then((fileStats) => {
+                        if(code !== 0 || fileStats.size === 0){
+                            return doResolve({ ok: false, code: code, stderr: stderrTail })
+                        }
+                        doResolve({ ok: true })
+                    }).catch(() => {
+                        doResolve({ ok: false, code: code, stderr: stderrTail })
                     })
                 })
             }).catch((err) => {
                 console.error(err)
+                doResolve({ ok: false, msg: err.message })
             })
         })
     }
@@ -386,10 +437,23 @@ module.exports = function(s,config,lang,app,io){
         const concatListFile = options.listFile
         const framesPerSecond = options.fps
         const finalMp4OutputLocation = options.output
-        const onPercentChange = options.onPercentChange
         const frameChunks = splitArrayIntoMultiple(frames,80)
         const numberOfSets = frameChunks.length
         const filePathsList = []
+        // Progress is measured in frames encoded out of every frame the user selected, not in
+        // sets finished. Sets are equal in frame count but not in time, and the per-set
+        // fraction it used to report said nothing about how much of the job was actually done.
+        const totalFrames = frames.length
+        // Encoding is the long part but not the last : stitching and saving still have to run,
+        // so encoding tops out short of 100 and the bar cannot claim done before the file is.
+        const encodingPercentCeiling = 95
+        let framesEncodedInFinishedSets = 0
+        function getOverallEncodePercent(framesEncoded){
+            const percent = totalFrames > 0
+                ? Math.max(0,Math.min(encodingPercentCeiling,framesEncoded / totalFrames * encodingPercentCeiling))
+                : 0
+            return percent.toFixed(1)
+        }
         function isCancelled(){
             return !!(job && job.cancelled)
         }
@@ -409,35 +473,48 @@ module.exports = function(s,config,lang,app,io){
                 set: i + 1,
                 sets: numberOfSets,
                 frames: numberOfFrames,
-            },(i * (100 / numberOfSets)).toFixed(1))
+                framesDone: framesEncodedInFinishedSets,
+                framesTotal: totalFrames,
+            },getOverallEncodePercent(framesEncodedInFinishedSets))
             // console.log(`STARTED buildVideoSegmentFromFrames`, `${concatListFile}${i}`)
-            await buildVideoSegmentFromFrames({
+            const framesBeforeThisSet = framesEncodedInFinishedSets
+            const segmentResult = await buildVideoSegmentFromFrames({
                 job: job,
                 frames: frameSet,
                 listFile: `${concatListFile}${i}`,
                 fps: framesPerSecond,
                 output: segmentFileOutput,
-                onPercentChange: (percent,currentFrame) => {
+                onFrameProgress: (currentFrame,framesInSet) => {
                     if(isCancelled())return;
-                    const overallPercent = ((percent / numberOfSets) + (i * (100 / numberOfSets))).toFixed(1);
+                    const framesEncoded = framesBeforeThisSet + currentFrame
                     s.tx({
                         f: 'timelapse_build_percent',
                         ke: ke,
                         mid: mid,
                         name: finalFileName,
-                        percent: overallPercent,
+                        percent: cleanBuildPercent(getOverallEncodePercent(framesEncoded)),
+                        framesDone: framesEncoded,
+                        framesTotal: totalFrames,
                     },'GRP_'+ke);
-                    if(percent == 100){
-                        s.debugLog('videoBuildProcess 100%',finalMp4OutputLocation)
-                    }
-                    s.debugLog(`Piece ${i}`,`${currentFrame} / ${numberOfFrames}`,`${percent}%`)
+                    s.debugLog(`Piece ${i}`,`${currentFrame} / ${framesInSet}`,`overall ${framesEncoded} / ${totalFrames}`)
                 },
             })
+            if(isCancelled())return;
+            // Marching on past a segment that never got written is what let a build fail in
+            // milliseconds while the bar sailed to the end, then die at the closing stat with
+            // nothing but a console ENOENT to show for it. One bad segment ends the build.
+            if(segmentResult && segmentResult.ok === false){
+                if(segmentResult.stderr)s.debugLog('Timelapse segment ffmpeg output',segmentResult.stderr);
+                throw new Error(segmentResult.msg || `${lang['Encoding']} ${lang.Failed} (${i + 1}/${numberOfSets})`)
+            }
+            // Counted from the set's own size rather than from what ffmpeg last reported, so
+            // frames missing off disk cannot leave the total permanently short of 100%.
+            framesEncodedInFinishedSets += numberOfFrames
             // console.log(`ENDED buildVideoSegmentFromFrames`, `${concatListFile}${i}`)
         }
         if(isCancelled())return;
         s.debugLog('videoBuildProcess Stitching...',finalMp4OutputLocation)
-        sendTimelapseBuildStage(job,{ key: 'Stitching' },'99.0')
+        sendTimelapseBuildStage(job,{ key: 'Stitching' },'97.0')
         await createTemporaryInputFileForStitched(filePathsList,concatListFile)
         if(isCancelled())return;
         await stitchMp4Files({
@@ -459,9 +536,19 @@ module.exports = function(s,config,lang,app,io){
         if(job)job.tempFiles = [];
         s.debugLog('videoBuildProcess Stitching Complete!',finalMp4OutputLocation)
     }
+    // The dashboard's FPS box carries its default as a placeholder rather than a value, so an
+    // untouched box posts an empty string. `!isNaN('')` is true - Number('') is 0 - so the old
+    // check handed that empty string straight through to ffmpeg as `-r  -i`, where -r ate the
+    // -i and every segment died on the spot. Anything not a usable number becomes the default
+    // the field advertises.
+    function cleanFramesPerSecond(framesPerSecond){
+        const parsed = parseInt(framesPerSecond,10)
+        if(isNaN(parsed) || parsed < 1)return 10;
+        return Math.min(60,parsed)
+    }
     async function createVideoFromTimelapse(timelapseFrames,framesPerSecond,existingJob){
         s.debugLog("Building Timelapse Frames Video",timelapseFrames.length)
-        framesPerSecond = !isNaN(framesPerSecond) ? framesPerSecond : parseInt(framesPerSecond) || 2
+        framesPerSecond = cleanFramesPerSecond(framesPerSecond)
         const frames = timelapseFrames.reverse()
         const numberOfFrames = timelapseFrames.length
         const ke = frames[0].ke
@@ -523,6 +610,9 @@ module.exports = function(s,config,lang,app,io){
             s.debugLog('videoBuildProcess exit',finalMp4OutputLocation)
             sendTimelapseBuildStage(job,{ key: 'Saving' },'100.0')
             const timeNow = new Date()
+            if(!fs.existsSync(finalMp4OutputLocation)){
+                throw new Error(lang['timelapseBuildProducedNoFileText'])
+            }
             const fileStats = await fs.promises.stat(finalMp4OutputLocation)
             const details = {
                 start: frames[0].time,
@@ -558,10 +648,23 @@ module.exports = function(s,config,lang,app,io){
             delete(activeMonitor.buildingTimelapseVideo)
             endTimelapseBuildJob(job)
             s.debugLog("Timelapse Frames Video Done!",finalMp4OutputLocation)
-        }).catch((err) => {
+        }).catch(async (err) => {
             console.error(err)
+            // The build was announced to the dashboard, so its failure has to be too. Without
+            // this the progress bar just sat wherever it had got to, with the reason for the
+            // failure visible only in the server console.
+            const wasCancelled = job.cancelled
+            await cleanUpTimelapseBuildFiles(job)
             delete(activeMonitor.buildingTimelapseVideo)
             endTimelapseBuildJob(job)
+            if(wasCancelled)return;
+            s.tx({
+                f: 'timelapse_build_failed',
+                ke: ke,
+                mid: mid,
+                name: finalFileName,
+                msg: err.message || lang['Build Failed'],
+            },'GRP_'+ke);
         })
         response.ok = true
         response.msg = `${lang.Building}... ${lang['Please Wait...']}`
@@ -892,7 +995,17 @@ module.exports = function(s,config,lang,app,io){
             break;
             case'timelapseVideoCancel':
                 d.ke = connection.ke
-                cancelTimelapseVideoBuild(d.ke,d.mid)
+                // Every cancel gets an answer, including one that found nothing running. The
+                // dashboard shows "Cancelling..." until it hears back, and this response being
+                // dropped on the floor is what left it saying that forever.
+                cancelTimelapseVideoBuild(d.ke,d.mid).then((cancelResponse) => {
+                    s.tx({
+                        f: 'timelapse_build_cancel_response',
+                        ke: d.ke,
+                        mid: d.mid,
+                        cancelResponse: cancelResponse,
+                    },'GRP_'+d.ke);
+                })
             break;
         }
     })

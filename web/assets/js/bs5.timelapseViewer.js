@@ -604,6 +604,11 @@ $(document).ready(function(e){
             case'Preparing':
                 return `${lang['Preparing']} ${stage.frames} ${lang['Frames']}...`
             case'Encoding':
+                // Sets are an implementation detail of how the build is chunked. Frames are
+                // what the user picked, so that is what the count is quoted against.
+                if(stage.framesTotal){
+                    return `${lang['Encoding']} ${stage.framesDone} / ${stage.framesTotal} ${lang['Frames']}...`
+                }
                 return `${lang['Encoding']} ${stage.set}/${stage.sets}...`
             case'Stitching':
                 return `${lang['Stitching']}...`
@@ -622,10 +627,14 @@ $(document).ready(function(e){
     function setBuildProgress(stageText,percent){
         if(buildIsCancelling)return;
         if(stageText !== undefined && stageText !== null)buildProgressStage.text(stageText);
-        if(percent !== undefined && percent !== null){
-            var rounded = Math.max(0,Math.min(100,parseFloat(percent) || 0)).toFixed(1)
-            buildProgressBar.css('width',`${rounded}%`).text(`${rounded}%`)
-        }
+        if(percent === undefined || percent === null)return;
+        // Clamping a nonsense number used to turn it into a plausible one - an Infinity from
+        // a divide-by-zero on the server read as a finished build. An unusable percent now
+        // leaves the bar where it was rather than inventing a position for it.
+        var parsed = parseFloat(percent)
+        if(!isFinite(parsed))return;
+        var rounded = Math.max(0,Math.min(100,parsed)).toFixed(1)
+        buildProgressBar.css('width',`${rounded}%`).text(`${rounded}%`)
     }
     function hideBuildProgress(){
         buildInProgress = false
@@ -786,7 +795,11 @@ $(document).ready(function(e){
     })
     downloadButton.click(function(){
         if(buildInProgress)return;
-        var fps = fpsSelector.val()
+        // The FPS box carries its default as a placeholder, not a value, so an untouched box
+        // reads back as an empty string. Posting that got as far as ffmpeg, where "-r  -i"
+        // made -r swallow the input flag and every segment died immediately.
+        var fps = getPlaybackFps()
+        fpsSelector.val(fps)
         var selectedMonitor = monitorsList.val()
         window.askedForTimelapseVideoBuild = true
         var parsedFrames = getSelectedRows().map(function(frame){
@@ -884,6 +897,31 @@ $(document).ready(function(e){
                     type: 'info'
                 });
             break;
+            case'timelapse_build_cancel_response':
+                if(!isForSelectedMonitor(data))return;
+                // A successful cancel already arrives as timelapse_build_cancelled. This only
+                // has to deal with a cancel that found nothing to stop - which means the build
+                // ended without the dashboard being told, so this bar is stale either way.
+                if(!data.cancelResponse || !data.cancelResponse.ok){
+                    hideBuildProgress()
+                    window.askedForTimelapseVideoBuild = false
+                    new PNotify({
+                        title: lang['Timelapse Frames Video'],
+                        text: (data.cancelResponse || {}).msg || lang['Nothing to Cancel'],
+                        type: 'info'
+                    });
+                }
+            break;
+            case'timelapse_build_failed':
+                if(!isForSelectedMonitor(data))return;
+                hideBuildProgress()
+                window.askedForTimelapseVideoBuild = false
+                new PNotify({
+                    title: lang['Timelapse Frames Video'],
+                    text: data.msg || lang['Build Failed'],
+                    type: 'danger'
+                });
+            break;
             case'timelapse_build_requested':
                 console.log(data)
                 var response = data.buildResponse;
@@ -948,6 +986,9 @@ $(document).ready(function(e){
     // so whatever the user settles on is remembered rather than re-tuned every visit.
     var savedPreloadDepth = parseInt(dashboardOptions().timelapsePreloadFrames,10)
     preloadSelector.val(isNaN(savedPreloadDepth) ? defaultPreloadDepth : savedPreloadDepth)
+    // Give the FPS box a real value rather than only the placeholder it renders with, so both
+    // playback and the build request read a number back out of it from the first moment.
+    if(!fpsSelector.val())fpsSelector.val(getPlaybackFps());
     addOnTabOpen('timelapseViewer', function () {
         if(!monitorsList.val()){
             drawMonitorListToSelector(monitorsList)
