@@ -719,9 +719,14 @@ module.exports = (s,config,lang) => {
                 let outputMap = `-map 0:0 `
                 const analyzeDuration = parseInt(monitorDetails.event_record_aduration) || 1000
                 const probeSize = parseInt(monitorDetails.event_record_probesize) || 32
-                const audioCodec = monitorDetails.detector_buffer_acodec;
+                const monitorHasNoAudioSource = monitorConfig.type === 'mjpeg' || monitorConfig.type === 'jpeg' || monitorConfig.type === 'socket';
+                let audioCodec = monitorDetails.detector_buffer_acodec;
+                if(!audioCodec || audioCodec === 'auto'){
+                    // the buffer carries whatever the camera sent (pcm_alaw, pcm_mulaw, etc)
+                    // and mp4 cannot hold most of those, so transcode rather than copy
+                    audioCodec = monitorHasNoAudioSource ? 'no' : 'aac'
+                }
                 const noAudio = audioCodec === 'no';
-                const autoAudio = !audioCodec || audioCodec === 'auto';
                 s.userLog(d,{
                     type: logTitleText,
                     msg: lang["Started"]
@@ -731,18 +736,13 @@ module.exports = (s,config,lang) => {
                     extender(monitorConfig,filename)
                 }
                 //-t 00:'+s.timeObject(new Date(detector_timeout * 1000 * 60)).format('mm:ss')+'
-                if(
-                    audioCodec &&
-                    audioCodec !== 'no' &&
-                    audioCodec !== 'auto' &&
-                    audioCodec !== 'aac'
-                ){
-                    outputMap += `-map 0:1 `
+                if(!noAudio){
+                    outputMap += `-map 0:a:0? `
                 }
                 if(config.noEventBasedRecordingMaps)outputMap = '';
                 const secondsBefore = parseInt(monitorDetails.detector_buffer_seconds_before) || 5
                 let LiveStartIndex = parseInt(secondsBefore / 2 + 1)
-                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : autoAudio ? '' : `-c:a ${audioCodec}`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
+                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : `-c:a ${audioCodec}`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
                 s.debugLog(ffmpegCommand)
                 activeMonitor.eventBasedRecording[fileTime].process = spawn(
                     config.ffmpegDir,

@@ -339,6 +339,17 @@ Run "npm install ffbinaries" to get this static FFmpeg downloader.`
         return response
     }
     //ffmpeg version
+    // "5.1.9-0+deb12u1" -> 5.1, "n6.0" -> 6.0, "N-113804-gf1b0f0d" (git master) -> Infinity
+    const parseFfmpegVersion = function(versionString){
+        const matched = `${versionString || ''}`.match(/(\d+)\.(\d+)/)
+        if(!matched)return Infinity;
+        return parseFloat(`${matched[1]}.${matched[2]}`)
+    }
+    // assume newest until checkVersion has run so gates never wrongly emit legacy flags
+    s.ffmpegVersionNumber = Infinity
+    const ffmpegVersionAtLeast = function(minimumVersion){
+        return (s.ffmpegVersionNumber || Infinity) >= minimumVersion
+    }
     const checkVersion = function(callback){
         s.debugLog('ffmpeg.js : checkVersion')
         const response = {
@@ -346,12 +357,11 @@ Run "npm install ffbinaries" to get this static FFmpeg downloader.`
         }
         try{
             s.ffmpegVersion = execSync(config.ffmpegDir+" -version").toString().split('Copyright')[0].replace('ffmpeg version','').trim()
-            if(s.ffmpegVersion.indexOf(': 2.')>-1){
-                s.systemLog('FFMPEG is too old : '+s.ffmpegVersion+', Needed : 3.2+',err)
-                throw (new Error())
-            }else{
-                response.ok = true
+            s.ffmpegVersionNumber = parseFfmpegVersion(s.ffmpegVersion)
+            if(s.ffmpegVersionNumber < 4.2){
+                s.systemLog('FFmpeg is too old : '+s.ffmpegVersion+', Needed : 4.2+')
             }
+            response.ok = true
         }catch(err){
             console.log('No FFmpeg found.')
             // process.exit()
@@ -430,6 +440,8 @@ Run "npm install ffbinaries" to get this static FFmpeg downloader.`
         checkForFfbinary: checkForFfbinary,
         checkStaticBuilds: checkStaticBuilds,
         checkVersion: checkVersion,
+        parseFfmpegVersion: parseFfmpegVersion,
+        ffmpegVersionAtLeast: ffmpegVersionAtLeast,
         checkHwAccelMethods: checkHwAccelMethods,
         getWarningChangesForMonitor,
         isMonitorTargetSelfOrMetadata,
