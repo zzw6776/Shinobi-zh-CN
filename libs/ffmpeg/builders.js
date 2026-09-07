@@ -737,7 +737,7 @@ module.exports = (s,config,lang) => {
             const outputFilters = []
             var videoCodec = e.details.detector_buffer_vcodec
             var liveStartIndex = e.details.detector_buffer_live_start_index || '-3'
-            var audioCodec = e.details.detector_buffer_acodec ? e.details.detector_buffer_acodec : 'no'
+            var audioCodec = e.details.detector_buffer_acodec ? e.details.detector_buffer_acodec : 'auto'
             const videoCodecisCopy = videoCodec === 'copy'
             const videoFps = !isNaN(parseFloat(e.details.stream_fps)) && e.details.stream_fps !== '0' ? parseFloat(e.details.stream_fps) : null
             const inputMap = buildInputMap(e,e.details.input_map_choices.detector_sip_buffer)
@@ -761,9 +761,12 @@ module.exports = (s,config,lang) => {
             if(audioCodec === 'auto'){
                 if(e.type === 'mjpeg' || e.type === 'jpeg' || e.type === 'socket'){
                     audioCodec = `no`
-                }else if(e.type === 'h264' || e.type === 'hls' || e.type === 'mp4'){
-                    audioCodec = 'copy'
                 }else{
+                    // This buffer is only ever muxed into an mp4 event recording.
+                    // Cameras overwhelmingly send G.711 (pcm_alaw/pcm_mulaw), which mp4
+                    // cannot carry, so `copy` would silently drop the track later on.
+                    // Transcoding 8kHz mono to AAC here costs almost nothing and makes
+                    // the recording work no matter what the camera sends.
                     audioCodec = 'aac'
                 }
             }
