@@ -1011,6 +1011,11 @@ $(document).ready(function () {
         "type": "boolean",
         "default": false
       },
+      "dropCompletedVideoFrames": {
+        "title": lang["dropCompletedVideoFrames"],
+        "type": "boolean",
+        "default": false
+      },
       "disableAutoCompressVideos": {
         "title": lang["disableAutoCompressVideos"],
         "type": "boolean",

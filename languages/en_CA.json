@@ -2442,6 +2442,7 @@
    "deleteFileBinsOverMax": "Purge FileBin Archives When Over Max Storage",
    "hideCloudSaveUrls": "Hide Cloud Save URLs in Logs",
    "dropTimeLapseFrames": "Disable Timelapse Frame Capture",
+   "dropCompletedVideoFrames": "Disable Frame Capture from Completed Videos",
    "disableAutoCompressVideos": "Disable Automatic Video Compression",
    "autoBuildTimelapseVideosDaily": "Auto-Build Timelapse Videos Daily",
 

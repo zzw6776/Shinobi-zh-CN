@@ -77,6 +77,7 @@ require a restart of Shinobi to take effect.
 | `deleteFileBinsOverMax` | boolean | `true` | Purge FileBin archives when an account exceeds its FileBin storage share. |
 | `hideCloudSaveUrls` | boolean | `true` | Hide cloud-storage URLs from logs. |
 | `dropTimeLapseFrames` | boolean | `false` | Disable timelapse frame capture entirely. |
+| `dropCompletedVideoFrames` | boolean | `false` | Disable grabbing a timelapse frame from each completed video. Stops one extra ffmpeg spawn per finished recording segment; timelapse frames from the `record_timelapse` monitor setting are unaffected. |
 | `disableAutoCompressVideos` | boolean | `false` | Disable automatic video compression. |
 | `autoBuildTimelapseVideosDaily` | boolean | `false` | Automatically compile a timelapse video once per day. |
 | `autoDropCache` | boolean | `false` | Periodically ask the OS to drop its disk cache (memory-constrained systems only). |

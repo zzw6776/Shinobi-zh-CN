@@ -1013,7 +1013,9 @@ module.exports = (s,config,lang) => {
             //     // });
             // }
             // await saveVideoFrameToTimelapse(video, 0)
-            await saveVideoFrameToTimelapse(video, 7)
+            if(config.dropCompletedVideoFrames !== true){
+                await saveVideoFrameToTimelapse(video, 7)
+            }
             return true;
         } catch (error) {
             console.error('Error processing MP4 file:', error);
