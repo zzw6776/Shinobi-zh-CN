@@ -192,6 +192,7 @@ $(document).ready(function(){
             html += `<div class="timeline-video open-video col-${timelineGridSizing} p-0 m-0 no-video" data-mid="${monitorId}" data-ke="${monitor.ke}" style="background-color:${itemColor}">
                 <div class="film"></div>
                 <div class="event-objects"></div>
+                <div class="timeline-video-tags"></div>
             </div>`
             preBufferHtml += `<div class="timeline-video-buffer" data-mid="${monitorId}" data-ke="${monitor.ke}"></div>`
         })
@@ -448,6 +449,7 @@ $(document).ready(function(){
         loadedVideosOnCanvas[monitorId] = null
         loadedVideoElsOnCanvas[monitorId] = null
         clearTimeout(loadedVideoEndingTimeouts[monitorId])
+        getVideoContainerInCanvas(oldVideo).find('.timeline-video-tags').empty()
         var container = getVideoContainerInCanvas(oldVideo).addClass('no-video').find('.film')
         var videoEl = container.find('video')
         videoEl.attr('src','')
@@ -468,6 +470,7 @@ $(document).ready(function(){
         var monitorId = newVideo.mid
         var container = getVideoContainerInCanvas(newVideo)
         .removeClass('no-video').find('.film').html(`<video muted src="${newVideo.href}"></video>`)
+        getVideoContainerInCanvas(newVideo).find('.timeline-video-tags').html(buildVideoTagsBlockHtml(newVideo))
         var vidEl = getVideoElInCanvas(newVideo)
         var objectContainer = getObjectContainerInCanvas(newVideo)
         vidEl.playbackRate = timelineSpeed
@@ -701,6 +704,15 @@ $(document).ready(function(){
     }
     function downloadAllPlayingVideos(){
         zipVideosAndDownloadWithConfirm(getLoadedVideosOnCanvas())
+    }
+    // Every video currently drawn on the canvas, one per monitor slot.
+    function editTagsOfAllPlayingVideos(){
+        var videos = getLoadedVideosOnCanvas()
+        openVideoTagEditor(videos,{
+            onDone: function(){
+                videos.forEach(drawVideoTagsToView)
+            }
+        })
     }
     async function jumpTimeline(amountInMs,direction){
         timeStripPlay(true)
@@ -1020,6 +1032,9 @@ $(document).ready(function(){
                 if(featureIsActivated(true)){
                     downloadAllPlayingVideos()
                 }
+            break;
+            case'editTagsAll':
+                editTagsOfAllPlayingVideos()
             break;
             case'jumpLeft':
                 jumpTimeline(5000,'left')

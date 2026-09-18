@@ -75,6 +75,21 @@ $(document).ready(function(){
         });
         return false;
     })
+    .on('click','.edit-video-tags',function(e){
+        e.preventDefault()
+        var el = $(this).parents('[data-mid]')
+        var monitorId = el.attr('data-mid')
+        var videoTime = el.attr('data-time')
+        var type = el.attr('data-type')
+        var video = loadedVideosInMemory[`${monitorId}${videoTime}${type}`]
+        if(!video)return false;
+        openVideoTagEditor([video],{
+            onDone: function(){
+                drawVideoTagsToView(video)
+            }
+        })
+        return false;
+    })
     .on('click','.compress-video',function(e){
         e.preventDefault()
         var el = $(this).parents('[data-mid]')

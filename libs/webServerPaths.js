@@ -1952,6 +1952,41 @@ p{color:#9fb3d1;font-size:14px;max-width:420px}
                                 console.log(err)
                             })
                         break;
+                        case'tags':
+                            // `objects` is the comma separated tag list shown as "Objects Found".
+                            // :f selects how the submitted list is applied - set (default), add, remove.
+                            const submittedTags = `${s.getPostData(req,'tags') || ''}`.split(',').map(tag => tag.trim()).filter(tag => !!tag)
+                            const currentTags = `${r.objects || ''}`.split(',').map(tag => tag.trim()).filter(tag => !!tag)
+                            var newTags
+                            switch(req.params.f){
+                                case'add':
+                                    newTags = [...new Set(currentTags.concat(submittedTags))]
+                                break;
+                                case'remove':
+                                    newTags = currentTags.filter(tag => !submittedTags.includes(tag))
+                                break;
+                                default:
+                                    newTags = [...new Set(submittedTags)]
+                                break;
+                            }
+                            // column is varchar(510), same cap the recorder uses on insert
+                            const newTagString = newTags.join(',').substring(0,509)
+                            await new Promise((resolve) => {
+                                s.knexQuery({
+                                    action: "update",
+                                    table: videoSet,
+                                    update: {
+                                        objects: newTagString
+                                    },
+                                    where: whereQuery
+                                },resolve)
+                            })
+                            r.objects = newTagString
+                            r.f = videoParam === 'cloudVideos' ? 'video_edit_cloud' : 'video_edit'
+                            s.tx(r,'GRP_'+r.ke)
+                            response.ok = true
+                            response.tags = newTagString
+                        break;
                         case'status':
                             r.f = 'video_edit'
                             switch(videoParam){

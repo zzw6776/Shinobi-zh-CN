@@ -23,7 +23,7 @@ module.exports = (s,config,lang,Theme) => {
                    },
                    {
                       "id": "videosTable_tag_search",
-                      "field": lang["Search Object Tags"],
+                      "field": lang["Search Tags"],
                       "example": "person",
                       "form-group-class": "me-3 mb-0",
                    },

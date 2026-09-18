@@ -91,6 +91,7 @@
    "Accuracy Mode": "Accuracy Mode",
    "Client ID": "Client ID",
    "Tags": "Tags",
+   "Search Tags": "Search Tags",
    "addTagText": "Add Tags to your monitors to get more choices here.",
    "tagsCannotAddText": "Cannot add Tag",
    "tagsTriggerCannotAddText": "Trigger tags must match an existing tag that was added to a Monitor previously or is pending to be added to this monitor that is currently being edited.",
@@ -1595,6 +1596,7 @@
    "Object Tag": "Object Tag",
    "Search Object Tags": "Search Object Tags",
    "Objects or Reason": "Objects or Reason",
+   "Tags or Reason": "Tags or Reason",
    "Noise Filter": "Noise Filter",
    "Noise Filter Range": "Noise Filter Range",
    "TV Channel": "TV Channel",
@@ -2495,5 +2497,12 @@
    "Remove Container": "Remove Container",
    "confirmRemoveDockerContainer": "Do you want to remove this plugin's Docker container?",
    "Connected Plugins": "Connected Plugins",
-   "No Plugins Connected": "No Plugins Connected"
+   "No Plugins Connected": "No Plugins Connected",
+   "Replace": "Replace",
+   "noTagsText": "No Tags",
+   "editVideoTagsText": "Modify the tags saved on this video.",
+   "editVideoTagsBulkText": "Modify the tags saved on the selected videos.",
+   "commaSeparatedTagsText": "Separate tags with a comma.",
+   "noVideosSelectedForTags": "No videos selected.",
+   "editTagsOfVideosOnScreen": "Edit Tags of Videos on Screen"
 }

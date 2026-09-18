@@ -50,7 +50,7 @@ module.exports = (s,config,lang,Theme) => {
                                 <a class="btn btn-sm btn-default" timeline-action="gridSize" size="md-4">3</a>
                             </div>
                             <div class="btn-group">
-                                <input class="form-control form-control-sm" id="timeline-video-object-search" placeholder="${lang['Search Object Tags']}">
+                                <input class="form-control form-control-sm" id="timeline-video-object-search" placeholder="${lang['Search Tags']}">
                             </div>
                             <div class="btn-group">
                                 <select class="form-control form-control-sm" id="timeline-video-type">
@@ -66,6 +66,7 @@ module.exports = (s,config,lang,Theme) => {
                             </div>
                             <div class="btn-group">
                                 <a class="btn btn-sm btn-success" timeline-action="downloadAll" title="${lang.Download}"><i class="fa fa-download"></i></a>
+                                <a class="btn btn-sm btn-primary" timeline-action="editTagsAll" title="${lang.editTagsOfVideosOnScreen}"><i class="fa fa-tags"></i></a>
                             </div>
                             <div class="btn-group">
                                 <a class="btn btn-sm btn-default" class_toggle="show-non-playing" data-target="#timeline-video-canvas" icon-toggle="fa-eye fa-eye-slash" icon-child="i" title="${lang['Show Only Playing']}"><i class="fa fa-eye-slash"></i></a>

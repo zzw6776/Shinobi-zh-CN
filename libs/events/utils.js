@@ -1095,7 +1095,7 @@ module.exports = (s,config,lang) => {
     // JSON `details` blob, so this matches with a substring LIKE against that
     // column directly. Same simple substring-match philosophy as the video
     // search (not a strict JSON field match), so it matches both object tags and
-    // the event's `reason` (which is why the field is labelled "Objects or Reason").
+    // the event's `reason` (which is why the field is labelled "Tags or Reason").
     // Reasons are not always lower case - ONVIF events store the topic name as the
     // reason (e.g. "CellMotionDetector") - and Postgres LIKE is case sensitive,
     // so ILIKE is used there to keep a typed "motion" matching regardless of DB.

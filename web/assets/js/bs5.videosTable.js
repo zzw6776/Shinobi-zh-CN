@@ -143,7 +143,7 @@ $(document).ready(function(e){
                 },
                 {
                     field: 'objects',
-                    title: lang['Objects Found']
+                    title: lang['Tags']
                 },
                 {
                     field: 'tags',
@@ -182,7 +182,7 @@ $(document).ready(function(e){
                            <div>${timeAgo(file.time)}</div>
                            <div><small><b>${lang.Start} :</b> ${formattedTime(file.time, !use24HourTime)}</small></div>
                            <div><small><b>${lang.End} :</b> ${formattedTime(file.end, !use24HourTime)}</small></div>`,
-                    objects: `<div style="word-break: break-word;max-width:125px;">${file.objects}</div>`,
+                    objects: `<div style="word-break: break-word;max-width:125px;">${buildVideoTagsBlockHtml(file)}</div>`,
                     tags: `
                         ${file.ext ? `<span class="badge badge-${file.ext ==='webm' ? `primary` : 'danger'}">${file.ext}</span>` : ''}
                         ${!isLocalVideo ? `<span class="badge badge-success">${file.type}</span>` : ''}
@@ -390,6 +390,17 @@ $(document).ready(function(e){
                 })
             }
         });
+        return false;
+    })
+    .on('click','.edit-tags-selected-videos',function(e){
+        e.preventDefault()
+        // loaded rows so the editor can prefill/merge against the tags already on them
+        var videos = getSelectedRows(true)
+        openVideoTagEditor(videos,{
+            onDone: function(){
+                videos.forEach(drawVideoTagsToView)
+            }
+        })
         return false;
     })
     .on('click','.compress-selected-videos',function(e){

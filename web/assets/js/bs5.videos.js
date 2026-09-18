@@ -724,6 +724,124 @@ async function unarchiveVideos(videos){
         await unarchiveVideo(video)
     }
 }
+// Tags of a video are the comma separated `objects` column, the same list shown as
+// "Objects Found". These helpers let a user set them by hand rather than only having
+// the detector fill them in.
+function getVideoTags(video){
+    return `${(video || {}).objects || ''}`.split(',').map(tag => tag.trim()).filter(tag => !!tag)
+}
+function getKnownVideoTags(videos){
+    var foundTags = []
+    var addTags = function(video){
+        getVideoTags(video).forEach(function(tag){
+            if(foundTags.indexOf(tag) === -1)foundTags.push(tag)
+        })
+    }
+    Object.values(loadedVideosInMemory || {}).forEach(addTags)
+    ;(videos || []).forEach(addTags)
+    return foundTags.sort()
+}
+function setVideoTags(video,tags,mode){
+    return new Promise((resolve) => {
+        var { videoEndpoint, endpointType } = buildVideoEndpoint(video)
+        var queries = [`tags=${encodeURIComponent(tags.join(','))}`]
+        if(endpointType)queries.push(endpointType.replace('?',''));
+        $.getJSON(`${videoEndpoint}/tags/${mode || 'set'}?${queries.join('&')}`,function(data){
+            notifyIfActionFailed(data)
+            if(data.ok){
+                video.objects = data.tags
+                var inMemory = loadedVideosInMemory[`${video.mid}${video.time}${video.type}`]
+                if(inMemory)inMemory.objects = data.tags;
+            }
+            resolve(data)
+        })
+    })
+}
+async function setVideoTagsForVideos(videos,tags,mode){
+    for (let i = 0; i < videos.length; i++) {
+        await setVideoTags(videos[i],tags,mode)
+    }
+}
+function canEditVideoTags(video){
+    return permissionCheck('video_delete',video.mid)
+}
+function buildVideoTagBadgesHtml(video){
+    var tags = getVideoTags(video)
+    if(tags.length === 0)return `<small class="text-muted">${lang.noTagsText}</small>`;
+    return tags.map(tag => `<span class="badge badge-primary badge-sm">${tag}</span>`).join(' ')
+}
+/**
+ * Tag list plus its edit button. The wrapper carries the video's identifiers so the
+ * global `.edit-video-tags` handler can find the video from anywhere it is drawn.
+ */
+function buildVideoTagsBlockHtml(video,options){
+    options = options || {}
+    return `<div class="video-tags-block d-inline-block" data-mid="${video.mid}" data-time="${video.time}" data-type="${video.type}">
+        <span class="video-tags-list">${buildVideoTagBadgesHtml(video)}</span>
+        ${canEditVideoTags(video) ? `<a class="badge btn btn-sm btn-default edit-video-tags cursor-pointer" title="${lang['Edit Tags']}"><i class="fa fa-tags"></i>${options.withLabel ? ` ${lang['Edit Tags']}` : ''}</a>` : ''}
+    </div>`
+}
+function drawVideoTagsToView(video){
+    $(`.video-tags-block[data-mid="${video.mid}"][data-time="${video.time}"]`)
+        .find('.video-tags-list')
+        .html(buildVideoTagBadgesHtml(video))
+}
+/**
+ * Opens the tag editor for one or many videos.
+ * @param videos {array} - videos to modify
+ * @param options.onDone {function} - called once every video has been updated
+ */
+function openVideoTagEditor(videos,options){
+    options = options || {}
+    videos = (videos || []).filter(item => !!item)
+    if(videos.length === 0){
+        new PNotify({
+            title: lang['Edit Tags'],
+            text: lang.noVideosSelectedForTags,
+            type: 'danger',
+        })
+        return
+    }
+    var isSingle = videos.length === 1
+    var currentTags = isSingle ? getVideoTags(videos[0]) : []
+    var knownTags = getKnownVideoTags(videos)
+    var html = `${isSingle ? lang.editVideoTagsText : lang.editVideoTagsBulkText}
+    <div style="margin-top: 15px;">
+        <div class="form-group">
+            <input type="text" class="form-control form-control-sm video-tags-value" list="video-tags-known-list" value="${currentTags.join(',')}" placeholder="${lang.Tags}">
+            <datalist id="video-tags-known-list">
+                ${knownTags.map(tag => `<option value="${tag}"></option>`).join('')}
+            </datalist>
+            <small class="text-muted">${lang.commaSeparatedTagsText}</small>
+        </div>
+        <div class="form-group" style="margin-top: 10px;">
+            <select class="form-control form-control-sm video-tags-mode">
+                <option ${isSingle ? 'selected' : ''} value="set">${lang.Replace}</option>
+                <option ${isSingle ? '' : 'selected'} value="add">${lang.Add}</option>
+                <option value="remove">${lang.Remove}</option>
+            </select>
+        </div>
+        <div style="margin-top: 10px;">
+            <small class="text-muted">${videos.length} ${lang.Videos}</small>
+        </div>
+    </div>`
+    $.confirm.create({
+        title: lang['Edit Tags'],
+        body: html,
+        clickOptions: [
+            {
+                title: lang['Save'],
+                class: 'btn-success',
+                callback: async function(){
+                    var mode = $.confirm.e.find('.video-tags-mode').val()
+                    var tags = `${$.confirm.e.find('.video-tags-value').val() || ''}`.split(',').map(tag => tag.trim()).filter(tag => !!tag)
+                    await setVideoTagsForVideos(videos,tags,mode)
+                    if(options.onDone)options.onDone(videos,tags,mode);
+                }
+            },
+        ],
+    })
+}
 function buildDefaultVideoMenuItems(file,options){
     var isLocalVideo = !file.videoSet || file.videoSet === 'videos'
     var href = file.href// + `${!isLocalVideo ? `?type=${file.type}` : ''}`
@@ -733,6 +851,7 @@ function buildDefaultVideoMenuItems(file,options){
     ${options.play ? `<li><a class="dropdown-item open-video" href="${href}">${lang.Play}</a></li>` : ``}
     <li><hr class="dropdown-divider"></li>
     ${isLocalVideo && permissionCheck('video_delete',file.mid) ? `<li><a class="dropdown-item open-video-studio" href="${href}">${lang.Slice}</a></li>` : ``}
+    ${permissionCheck('video_delete',file.mid) ? `<li><a class="dropdown-item edit-video-tags cursor-pointer">${lang['Edit Tags']}</a></li>` : ``}
     ${permissionCheck('video_delete',file.mid) ? `<li><a class="dropdown-item delete-video" href="${href}">${lang.Delete}</a></li>` : ``}
     ${isLocalVideo && permissionCheck('video_delete',file.mid) ? `<li><a class="dropdown-item compress-video" href="${href}">${lang.Compress}</a></li>` : ``}
 `

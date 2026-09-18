@@ -24,7 +24,7 @@ module.exports = (s,config,lang,Theme) => {
                    {
                       "id": "eventsTable_tag_search",
                       "field": lang["Search"],
-                      "placeholder": lang["Objects or Reason"],
+                      "placeholder": lang["Tags or Reason"],
                       "form-group-class": "me-3 mb-0",
                    },
                    {
