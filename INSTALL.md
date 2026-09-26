@@ -117,6 +117,7 @@ require a restart of Shinobi to take effect.
 | `noEventTriggerForOnvifEvent` | boolean | `false` | Don't create an event when an ONVIF device event fires. |
 | `noEventBasedRecordingMaps` | boolean | `false` | Disable event-based recording map generation. |
 | `noDefaultRecordingSegmentFormatOptions` | boolean | `false` | Skip the default ffmpeg segment-format flags. |
+| `maxRecordingSegmentLength` | number | `15` | Upper limit (minutes) for a monitor's Recording Segment Interval (`cutoff`). Raise it to allow longer video files; more footage is lost if the process dies before a file is closed. |
 | `peopleTags` | array | `["person","Person","Man","Woman","Boy","Girl"]` | Object labels treated as a "person" for tagging/icon purposes. |
 | `disableSSRFSelfTargetFilter` | boolean | `false` | Disables the filter that blocks camera/plugin URLs from targeting the Shinobi server itself. Security-sensitive; leave off unless you understand the risk. |
 | `enableFaceManager` | boolean | `false` | Enables the Face Manager feature. |
