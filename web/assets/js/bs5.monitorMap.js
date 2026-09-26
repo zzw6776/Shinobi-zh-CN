@@ -66,14 +66,16 @@ $(document).ready(function(){
     function getPinsFromMonitors(){
         var points = []
         var n = 0;
+        // Monitors with no geolocation of their own are stacked around the account's default.
+        var accountDefault = getAccountDefaultGeolocationParts()
         $.each(loadedMonitors,function(monitorId,monitor){
             var geolocation = monitor.details.geolocation
             var modeIsOn = monitor.mode === 'record' || monitor.mode === 'start'
             var point = {
-                coords: [49.2578298 + n,-123.2634732 + n],
-                direction: 90,
-                fov: 60,
-                range: 1,
+                coords: [accountDefault.lat + n,accountDefault.lng + n],
+                direction: accountDefault.direction,
+                fov: accountDefault.fov,
+                range: accountDefault.range,
                 title: `${monitor.name} (${monitor.host})`,
                 html: buildPinPopupHtml(monitor)
             };
@@ -119,9 +121,10 @@ $(document).ready(function(){
     }
     function loadMap(){
         console.log('Load Map')
+        var accountDefault = getAccountDefaultGeolocationParts()
         var monitorMapInfo = dashboardOptions().monitorMap || {
-            center: { lat:49.2578298, lng:-123.2634732 },
-            zoom: 13
+            center: { lat: accountDefault.lat, lng: accountDefault.lng },
+            zoom: accountDefault.zoom
         };
         var center = monitorMapInfo.center
         var lat = center.lat

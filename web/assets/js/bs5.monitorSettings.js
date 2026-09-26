@@ -46,7 +46,7 @@ function generateDefaultMonitorSettings(){
            "notes": "",
            "dir": "",
            "ptz_id": "",
-           "geolocation": "",
+           "geolocation": typeof getAccountDefaultGeolocation === 'function' ? getAccountDefaultGeolocation() : "",
            "auto_compress_videos": "0",
            "rtmp_key": "",
            "auto_host_enable": "1",

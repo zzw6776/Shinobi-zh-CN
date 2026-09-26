@@ -32,13 +32,37 @@ function setMapMarkerFov(fovEl,{
     fovEl.setLatLngs(calculateFOV([lat, lng], direction, fov, range));
 }
 
+// The last-resort position, used when neither the monitor nor the account has one set.
+var fallbackGeolocationParts = {
+    lat: 49.2578298,
+    lng: -123.2634732,
+    zoom: 13,
+    direction: 90,
+    fov: 60,
+    range: 1,
+}
+function getAccountDefaultGeolocation(){
+    try{
+        return $user.details.default_geolocation || ''
+    }catch(err){
+        return ''
+    }
+}
+// The account's own default is parsed against the hardcoded fallback, everything else is
+// parsed against the account's default.
+function getAccountDefaultGeolocationParts(){
+    return parseGeolocationParts(getAccountDefaultGeolocation(),fallbackGeolocationParts)
+}
 function getGeolocationParts(geolocation){
-    var defaultLat = 49.2578298
-    var defaultLng = -123.2634732
-    var defaultZoom = 13
-    var defaultDirection = 90
-    var defaultFov = 60
-    var defaultRange = 1
+    return parseGeolocationParts(geolocation,getAccountDefaultGeolocationParts())
+}
+function parseGeolocationParts(geolocation,fallback){
+    var defaultLat = fallback.lat
+    var defaultLng = fallback.lng
+    var defaultZoom = fallback.zoom
+    var defaultDirection = fallback.direction
+    var defaultFov = fallback.fov
+    var defaultRange = fallback.range
     try{
         var parts = geolocation.split(',')
         var lat = !parts[0] ? defaultLat : parseFloat(parts[0].trim().replace('@','')) || defaultLat
