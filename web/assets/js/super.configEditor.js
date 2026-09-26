@@ -950,6 +950,12 @@ $(document).ready(function () {
         "type": "boolean",
         "default": false
       },
+      "maxRecordingSegmentLength": {
+        "title": lang["maxRecordingSegmentLength"],
+        "description": lang["maxRecordingSegmentLengthDes"],
+        "type": "number",
+        "default": 15
+      },
       "peopleTags": {
         "type": "array",
         "format": "table",

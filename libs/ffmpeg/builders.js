@@ -8,6 +8,7 @@ const {
 module.exports = (s,config,lang) => {
     const {
         validateDimensions,
+        getSegmentLengthInMinutes,
         isMonitorTargetSelfOrMetadata,
         ffmpegVersionAtLeast,
     } = require('./utils.js')(s,config,lang)
@@ -566,8 +567,7 @@ module.exports = (s,config,lang) => {
             const audioCodec = e.details.acodec === 'default' ? defaultAudioCodec : e.details.acodec ? e.details.acodec : defaultAudioCodec
             const videoQuality = e.details.crf ? e.details.crf : '1'
             const videoFps = !isNaN(parseFloat(e.fps)) && e.fps !== '0' ? parseFloat(e.fps) : null
-            let segmentLengthInMinutes = parseFloat(e.details.cutoff) || 15
-            segmentLengthInMinutes = segmentLengthInMinutes < 1 ? 1 : segmentLengthInMinutes > 15 ? 15 : segmentLengthInMinutes
+            const segmentLengthInMinutes = getSegmentLengthInMinutes(e)
             const inputMap = buildInputMap(e,e.details.input_map_choices.record)
             const { videoWidth, videoHeight } = validateDimensions(e.details.record_scale_x,e.details.record_scale_y)
             const isNotCertainHwAccel = videoCodec !== 'h264_nvmpi' && videoCodec !== 'h264_vaapi';

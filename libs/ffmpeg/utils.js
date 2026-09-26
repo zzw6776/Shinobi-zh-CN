@@ -193,6 +193,16 @@ module.exports = (s,config,lang) => {
             videoHeight: height,
         }
     }
+    // Recording segment length in minutes. Long segments mean a long window of
+    // footage is lost if the process dies mid-file, so the requested `cutoff` is
+    // capped. `maxRecordingSegmentLength` in conf.json raises that ceiling.
+    const getSegmentLengthInMinutes = (monitorConfig) => {
+        const configuredMax = parseFloat(config.maxRecordingSegmentLength)
+        const maxLength = configuredMax > 0 ? configuredMax : 15
+        const requestedLength = parseFloat((monitorConfig.details || {}).cutoff) || 15
+        if(requestedLength < 1)return 1
+        return requestedLength > maxLength ? maxLength : requestedLength
+    }
     const sanitizedFfmpegCommand = (e,ffmpegCommandString) => {
         var sanitizedCmd = `${ffmpegCommandString}`
         if(e.details.muser && e.details.mpass){
@@ -431,6 +441,7 @@ Run "npm install ffbinaries" to get this static FFmpeg downloader.`
         applyPartialToConfiguration: applyPartialToConfiguration,
         repairConfiguration: repairConfiguration,
         validateDimensions: validateDimensions,
+        getSegmentLengthInMinutes: getSegmentLengthInMinutes,
         sanitizedFfmpegCommand: sanitizedFfmpegCommand,
         createPipeArray: createPipeArray,
         splitForFFMPEG: splitForFFMPEG,

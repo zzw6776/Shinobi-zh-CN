@@ -17,6 +17,7 @@ module.exports = (s,config,lang) => {
         createPipeArray,
         splitForFFMPEG,
         sanitizedFfmpegCommand,
+        getSegmentLengthInMinutes,
     } = require('../ffmpeg/utils.js')(s,config,lang)
     const {
         buildSubstreamString,
@@ -1169,7 +1170,7 @@ module.exports = (s,config,lang) => {
         const monitorId = e.mid || e.id
         const activeMonitor = getActiveMonitor(groupKey,monitorId)
         clearTimeout(activeMonitor.recordingChecker)
-        const segmentLengthInMinutes = !isNaN(parseFloat(e.details.cutoff)) ? parseFloat(e.details.cutoff) : '15'
+        const segmentLengthInMinutes = getSegmentLengthInMinutes(e)
         const segmentLength = e.type === 'dashcam' ? segmentLengthInMinutes * 100 : segmentLengthInMinutes
         const monitorConfig = getMonitorConfiguration(groupKey,monitorId);
         activeMonitor.recordingChecker = setTimeout(function(){
