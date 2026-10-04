@@ -260,14 +260,15 @@ $(document).ready(function(){
         //
         nameField.val("")
         hostField.val("")
-        tagsField.val("")
+        tagsField.val([])
         statusField.val("")
     }
     function applyAdvancedSearchFilters({ server, name, host, tags, status }, monitors = getLoadedMonitors()){
         var matchedMonitors = {}
         var useName = !!name;
         var useHost = !!host;
-        var useTags = !!tags;
+        const tagList = [].concat(tags || []).flatMap(tag => `${tag}`.split(',')).map(tag => tag.trim()).filter(Boolean)
+        var useTags = tagList.length > 0;
         var useStatus = !!status;
         $.each(monitors,function(monitorLiveId, monitor){
             try{
@@ -282,7 +283,8 @@ $(document).ready(function(){
                     matchedHost = monitor.host.includes(host)
                 }
                 if(useTags){
-                    matchedTags = monitor.tags.includes(tags)
+                    const monitorTags = (monitor.tags || '').split(',').map(tag => tag.trim())
+                    matchedTags = tagList.some(tag => monitorTags.includes(tag))
                 }
                 if(useStatus){
                     matchedStatus = monitor.code == status
