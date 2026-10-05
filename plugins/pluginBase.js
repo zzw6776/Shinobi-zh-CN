@@ -155,17 +155,56 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
   }
 
   // ───────────────────────────────── processImage wrapper ─────────────────────────
+  // Shinobi sends every frame it has, with no backpressure. If a plugin can't keep up,
+  // frames that are still waiting on detection pile up without limit (in this process
+  // and often in a backend like a Python server), and memory climbs until the host
+  // runs out. Each monitor gets at most `maxInFlightPerMonitor` frames in detection at
+  // once, and any more are dropped. A slot is freed when the plugin calls `done`, when
+  // its detectObject promise settles, or after `detectTimeout` ms, whichever comes
+  // first, so a plugin that misses `done` on some code path can't stall a monitor forever.
+  const maxInFlightPerMonitor = config.maxInFlightPerMonitor ?? 2;
+  const detectTimeout = config.detectTimeout ?? 30_000;
+  const inFlightPerMonitor = new Map(); // Map<monitorKey,number>
   let overallProcessingCount = 0;
   async function processImage(buffer, d, tx, frameLocation) {
+    const mKey = `${d.ke}${d.id}`;
+    const inFlight = inFlightPerMonitor.get(mKey) || 0;
+    if (inFlight >= maxInFlightPerMonitor) {
+      if (frameLocation) fs.rm(frameLocation, () => {});
+      return;
+    }
+    inFlightPerMonitor.set(mKey, inFlight + 1);
+
     const socket = s.getWebsocket();
     ++overallProcessingCount;
     socket?.emit("processCount", overallProcessingCount);
 
-    // async detectObject ➜ user‑provided
-    s.detectObject?.(buffer, d, tx, frameLocation, () => {
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      clearTimeout(watchdog);
+      const left = (inFlightPerMonitor.get(mKey) || 1) - 1;
+      if (left > 0) inFlightPerMonitor.set(mKey, left);
+      else inFlightPerMonitor.delete(mKey);
       --overallProcessingCount;
       socket?.emit("processCount", overallProcessingCount);
-    });
+    };
+    const watchdog = setTimeout(release, detectTimeout);
+
+    // async detectObject ➜ user‑provided
+    try {
+      const result = s.detectObject?.(buffer, d, tx, frameLocation, release);
+      if (result && typeof result.then === "function") {
+        result.then(release, (err) => {
+          console.error("detectObject error", err);
+          release();
+        });
+      }
+    } catch (err) {
+      console.error("detectObject error", err);
+      release();
+    }
   }
 
   // placeholder overridable

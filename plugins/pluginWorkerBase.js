@@ -94,13 +94,45 @@ module.exports = function(__dirname, config){
     s.detectObject = (buffer,d,tx,frameLocation) => {
         console.log('detectObject handler not set')
     }
+    // Shinobi sends every frame with no backpressure. Cap the frames each monitor
+    // can have in detection at once and drop the rest, otherwise a plugin that can't
+    // keep up queues frames forever and memory climbs until the host runs out. A slot
+    // is freed by the plugin's callback, its detectObject promise settling, or the
+    // timeout, whichever comes first.
+    const maxInFlightPerMonitor = config.maxInFlightPerMonitor || 2
+    const detectTimeout = config.detectTimeout || 30000
+    const inFlightPerMonitor = {}
     const processImage = async (buffer,d,tx,frameLocation) => {
+        const monitorKey = d.ke + d.id
+        if((inFlightPerMonitor[monitorKey] || 0) >= maxInFlightPerMonitor){
+            if(frameLocation)fs.rm(frameLocation,() => {})
+            return
+        }
+        inFlightPerMonitor[monitorKey] = (inFlightPerMonitor[monitorKey] || 0) + 1
         ++overAllProcessingCount
         sendToParentPort('processCount',overAllProcessingCount)
-        s.detectObject(buffer,d,tx,frameLocation,() => {
+        let released = false
+        const release = () => {
+            if(released)return
+            released = true
+            clearTimeout(watchdog)
+            if(--inFlightPerMonitor[monitorKey] <= 0)delete(inFlightPerMonitor[monitorKey])
             --overAllProcessingCount
             sendToParentPort('processCount',overAllProcessingCount)
-        })
+        }
+        const watchdog = setTimeout(release,detectTimeout)
+        try{
+            const result = s.detectObject(buffer,d,tx,frameLocation,release)
+            if(result && typeof result.then === 'function'){
+                result.then(release,(err) => {
+                    console.error('detectObject error',err)
+                    release()
+                })
+            }
+        }catch(err){
+            console.error('detectObject error',err)
+            release()
+        }
     }
     const getCpuUsage = (callback) => {
         var k = {}
