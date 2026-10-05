@@ -25,8 +25,7 @@
           </div>
           <div class="form-group">
               <label><%- lang.Status %></label>
-              <select name="status" class="form-control">
-                  <option value=""><%- lang['Any Status'] %></option>
+              <select name="status" class="form-control" multiple>
                   <optgroup label="<%- lang.Status %>">
                       <%- Object.keys(define['Monitor Status Codes']).filter(code => !code.startsWith('i') && !code.startsWith('c')).map(code => `<option value="${code}">${define['Monitor Status Codes'][code]}</option>`) %>
                   </optgroup>

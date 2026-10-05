@@ -261,7 +261,7 @@ $(document).ready(function(){
         nameField.val("")
         hostField.val("")
         tagsField.val([])
-        statusField.val("")
+        statusField.val([])
     }
     function applyAdvancedSearchFilters({ server, name, host, tags, status }, monitors = getLoadedMonitors()){
         var matchedMonitors = {}
@@ -269,7 +269,8 @@ $(document).ready(function(){
         var useHost = !!host;
         const tagList = [].concat(tags || []).flatMap(tag => `${tag}`.split(',')).map(tag => tag.trim()).filter(Boolean)
         var useTags = tagList.length > 0;
-        var useStatus = !!status;
+        const statusList = [].concat(status || []).map(item => `${item}`).filter(Boolean)
+        var useStatus = statusList.length > 0;
         $.each(monitors,function(monitorLiveId, monitor){
             try{
                 var matchedName = true
@@ -287,7 +288,7 @@ $(document).ready(function(){
                     matchedTags = tagList.some(tag => monitorTags.includes(tag))
                 }
                 if(useStatus){
-                    matchedStatus = monitor.code == status
+                    matchedStatus = statusList.includes(`${monitor.code}`)
                 }
                 if(matchedName && matchedHost && matchedTags && matchedStatus){
                     matchedMonitors[monitorLiveId] = monitor
