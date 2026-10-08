@@ -44,6 +44,14 @@ module.exports = function(s,config,lang,app,io){
     s.detectorPluginArray = []
     s.isAtleatOneDetectorPluginConnected = false
     s.addDetectorPlugin = function(name,d){
+        const alreadyConnected = s.connectedDetectorPlugins[d.plug]
+        if(alreadyConnected && alreadyConnected.id !== d.id){
+            // Two copies sharing one plugin folder (e.g. enabled in the Plugin Manager
+            // and also started as its own process) each get every frame, double every
+            // detection and fight over the same ports - say so instead of letting it
+            // show up only as high CPU and duplicate events.
+            s.systemLog(`Detector plugin "${d.plug}" connected again while already connected. It may be running twice (Plugin Manager worker and a separate process).`)
+        }
         const newDetector = {
             started: s.timeObject(),
             id: d.id,

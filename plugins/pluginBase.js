@@ -99,26 +99,67 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
   };
 
   // ───────────────────────────── image buffering & guard ──────────────────────────
-  const imageBuffers = new Map(); // Map<monitorKey,{chunks:Buffer[], ts:number}>
+  // Frames arrive as raw ffmpeg pipe chunks, which don't line up with JPEG boundaries:
+  // under load one chunk can carry the end of one frame and the start of the next.
+  // Only checking whether a chunk *ends* in EOI then kept appending frame after frame
+  // until a chunk happened to line up, so the buffer could grow without limit. A frame
+  // is complete at an EOI (FF D9) that ends the chunk or is directly followed by the
+  // next frame's SOI (FF D8); an EOI anywhere else (an EXIF thumbnail) is not a boundary.
+  const imageBuffers = new Map(); // Map<monitorKey,{chunks:Buffer[], bytes:number, tail:Buffer, started:number}>
   const MAX_IMG_AGE_MS = 5_000; // drop partial frames after 5 s
+  const maxFrameBytes = config.maxFrameBytes || 16 * 1024 * 1024;
+  const JPEG_FRAME_BOUNDARY = Buffer.from([0xff, 0xd9, 0xff, 0xd8]);
+  const newImageEntry = (now, first) => ({
+    chunks: first ? [first] : [],
+    bytes: first ? first.length : 0,
+    // last bytes held, so a marker split across two chunks is still found
+    tail: first ? Buffer.from(first.subarray(-3)) : Buffer.alloc(0),
+    started: now,
+  });
 
   function appendImageChunk(monitorKey, chunk) {
-    const entry = imageBuffers.get(monitorKey) || { chunks: [], ts: Date.now() };
-    entry.chunks.push(chunk);
-    entry.ts = Date.now();
-    imageBuffers.set(monitorKey, entry);
-
-    // older than MAX_IMG_AGE_MS ➜ discard
+    const now = Date.now();
+    // a frame that started over MAX_IMG_AGE_MS ago is never finishing ➜ discard
     for (const [k, v] of imageBuffers) {
-      if (Date.now() - v.ts > MAX_IMG_AGE_MS) imageBuffers.delete(k);
+      if (now - v.started > MAX_IMG_AGE_MS) imageBuffers.delete(k);
+    }
+    let entry = imageBuffers.get(monitorKey);
+    if (!entry) {
+      entry = newImageEntry(now);
+      imageBuffers.set(monitorKey, entry);
     }
 
-    if (chunk.at(-2) === 0xff && chunk.at(-1) === 0xd9) {
-      const buf = Buffer.concat(entry.chunks);
-      imageBuffers.delete(monitorKey);
-      return buf;
+    const probe = entry.tail.length ? Buffer.concat([entry.tail, chunk]) : chunk;
+    let split = -1; // offset in probe just past the frame's EOI
+    if (probe.at(-2) === 0xff && probe.at(-1) === 0xd9) {
+      split = probe.length;
+    } else {
+      const boundary = probe.lastIndexOf(JPEG_FRAME_BOUNDARY);
+      if (boundary !== -1) split = boundary + 2;
     }
-    return null;
+    entry.chunks.push(chunk);
+    entry.bytes += chunk.length;
+    entry.tail = Buffer.from(probe.subarray(-3));
+
+    if (split === -1) {
+      if (entry.bytes > maxFrameBytes) {
+        dbgLog(`Frame for ${monitorKey} passed ${maxFrameBytes} bytes without an end marker, discarding`);
+        imageBuffers.delete(monitorKey);
+      }
+      return null;
+    }
+
+    const held = Buffer.concat(entry.chunks);
+    const end = held.length - probe.length + split;
+    let frame = held.subarray(0, end);
+    // several whole frames arrived at once ➜ keep only the newest
+    const previous = frame.lastIndexOf(JPEG_FRAME_BOUNDARY, frame.length - 4);
+    if (previous !== -1) frame = frame.subarray(previous + 2);
+
+    // whatever follows the boundary is the start of the next frame
+    if (end < held.length) imageBuffers.set(monitorKey, newImageEntry(now, held.subarray(end)));
+    else imageBuffers.delete(monitorKey);
+    return frame;
   }
 
   // ───────────────────────────────── cpu / nvidia helpers ─────────────────────────
@@ -361,7 +402,8 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
       }
 
       case "frame": {
-        const mKey = `${d.id}${d.ke}`;
+        // same key monitorUpdate uses, so a config change actually clears a half-built frame
+        const mKey = `${d.ke}${d.id}`;
         const buf = appendImageChunk(mKey, d.frame);
         if (buf) processImage(buf, d, tx);
         break;

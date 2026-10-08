@@ -32,7 +32,68 @@ module.exports = function(__dirname, config){
     if(!config.hostPort){config.hostPort = 8082}
     if(config.systemLog === undefined){config.systemLog = true}
     if(config.connectionType === undefined)config.connectionType = 'websocket'
+    // Frames arrive as raw ffmpeg pipe chunks, which don't line up with JPEG boundaries:
+    // under load one chunk can carry the end of one frame and the start of the next.
+    // Only checking whether a chunk *ends* in EOI then kept appending frame after frame
+    // until a chunk happened to line up, so the buffer could grow without limit. A frame
+    // is complete at an EOI (FF D9) that ends the chunk or is directly followed by the
+    // next frame's SOI (FF D8); an EOI anywhere else (an EXIF thumbnail) is not a boundary.
     const imageBuffers = {}
+    const maxImageAgeMs = 5000
+    const maxFrameBytes = config.maxFrameBytes || 16 * 1024 * 1024
+    const jpegFrameBoundary = Buffer.from([0xff,0xd9,0xff,0xd8])
+    const newImageEntry = (now,first) => {
+        return {
+            chunks: first ? [first] : [],
+            bytes: first ? first.length : 0,
+            // last bytes held, so a marker split across two chunks is still found
+            tail: first ? Buffer.from(first.subarray(-3)) : Buffer.alloc(0),
+            started: now,
+        }
+    }
+    const appendImageChunk = (monitorKey,rawChunk) => {
+        // postMessage hands Buffers over as plain Uint8Arrays, whose lastIndexOf
+        // only finds single bytes - view the same memory as a Buffer
+        const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk.buffer,rawChunk.byteOffset,rawChunk.byteLength)
+        const now = Date.now()
+        for(const key in imageBuffers){
+            if(now - imageBuffers[key].started > maxImageAgeMs)delete(imageBuffers[key])
+        }
+        if(!imageBuffers[monitorKey])imageBuffers[monitorKey] = newImageEntry(now)
+        const entry = imageBuffers[monitorKey]
+        const probe = entry.tail.length ? Buffer.concat([entry.tail,chunk]) : chunk
+        // offset in probe just past the frame's EOI
+        let split = -1
+        if(probe[probe.length-2] === 0xFF && probe[probe.length-1] === 0xD9){
+            split = probe.length
+        }else{
+            const boundary = probe.lastIndexOf(jpegFrameBoundary)
+            if(boundary !== -1)split = boundary + 2
+        }
+        entry.chunks.push(chunk)
+        entry.bytes += chunk.length
+        entry.tail = Buffer.from(probe.subarray(-3))
+        if(split === -1){
+            if(entry.bytes > maxFrameBytes){
+                s.debugLog(`Frame for ${monitorKey} passed ${maxFrameBytes} bytes without an end marker, discarding`)
+                delete(imageBuffers[monitorKey])
+            }
+            return null
+        }
+        const held = Buffer.concat(entry.chunks)
+        const end = held.length - probe.length + split
+        let frame = held.subarray(0,end)
+        // several whole frames arrived at once, keep only the newest
+        const previous = frame.lastIndexOf(jpegFrameBoundary,frame.length - 4)
+        if(previous !== -1)frame = frame.subarray(previous + 2)
+        // whatever follows the boundary is the start of the next frame
+        if(end < held.length){
+            imageBuffers[monitorKey] = newImageEntry(now,held.subarray(end))
+        }else{
+            delete(imageBuffers[monitorKey])
+        }
+        return frame
+    }
     s = {
         group: {},
         monitors: {},
@@ -262,27 +323,17 @@ module.exports = function(__dirname, config){
                 if(!s.group[d.ke][d.id]){
                     s.group[d.ke][d.id] = {}
                 }
-                processImage(buffer,d,tx,d.frameLocation)
+                processImage(d.buffer,d,tx,d.frameLocation)
             break;
             case'frame':
+                // same key monitorUpdate uses, so a config change actually clears a half-built frame
+                var frameMonitorKey = `${d.ke}${d.id}`
                 try{
-                    const monitorKey = `${d.id}${d.ke}`;
-                    imageBuffers[monitorKey]
-                    if(!imageBuffers[monitorKey]){
-                      imageBuffers[monitorKey] = [d.frame];
-                    }else{
-                      imageBuffers[monitorKey].push(d.frame)
-                    }
-                    if(d.frame[d.frame.length-2] === 0xFF && d.frame[d.frame.length-1] === 0xD9){
-                        var buffer = Buffer.concat(imageBuffers[monitorKey]);
-                        processImage(buffer,d,tx)
-                        imageBuffers[monitorKey] = null
-                    }
+                    const frame = appendImageChunk(frameMonitorKey,d.frame)
+                    if(frame)processImage(frame,d,tx)
                 }catch(err){
-                    if(err){
-                        s.systemLog(err)
-                        delete(imageBuffers[monitorKey])
-                    }
+                    s.systemLog(err)
+                    delete(imageBuffers[frameMonitorKey])
                 }
             break;
         }
