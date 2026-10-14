@@ -132,10 +132,15 @@ onWebSocketEvent(function (d){
         break;
     }
 })
+var dashboardReadyExecuted = false
 $(document).ready(function(){
     onInitWebsocket(function(){
         loadMonitorsIntoMemory(function(data){
             setInterfaceCounts(data)
+            // init_success fires again on every websocket reconnect; only run ready actions once
+            // so reconnects don't navigate the user away (openTab('initial') / openLiveGrid)
+            if(dashboardReadyExecuted)return;
+            dashboardReadyExecuted = true
             onDashboardReadyExecute()
         })
     });
