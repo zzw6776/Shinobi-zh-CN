@@ -54,14 +54,19 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
   if (!config.plug) throw new Error("config.plug is required");
 
   // basic defaults ----------------------------------------------------------------
-  Object.assign(config, {
+  // only fill what conf.json left out - assigning these over the top made every
+  // plugin connect to port 8080 no matter what its config said
+  const defaults = {
     dirname: ".",
     port: 8080,
     hostPort: 8082,
     systemLog: true,
     connectionType: "websocket",
     streamDir: config.streamDir || (process.platform === "win32" ? config.windowsTempDir : "/dev/shm"),
-  });
+  };
+  for (const key in defaults) {
+    if (config[key] === undefined || config[key] === null || config[key] === "") config[key] = defaults[key];
+  }
   config.streamDir = ensureTrailing(config.streamDir || path.join(config.dirname, "streams"));
 
   // logging helpers ----------------------------------------------------------------
@@ -297,26 +302,41 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
   // client mode --------------------------------------------------------------------
   function startClient() {
     let retry = 0;
-    const MAX_RETRY = parseInt(config.maxRetryConnection, 10) || 5;
+    let reconnectTimer = null;
+    // Keep trying until Shinobi answers. Shinobi can take minutes to start (it scans
+    // storage and starts every monitor first), so giving up after a few quick tries
+    // left a plugin started alongside it (e.g. `pm2 restart all`) disconnected for
+    // good until it was restarted by hand. Only an explicit maxRetryConnection stops it.
+    const MAX_RETRY = parseInt(config.maxRetryConnection, 10) || Infinity;
+    const retryDelay = () => Math.min(3_000 * 2 ** Math.min(retry - 1, 4), 30_000); // 3s, 6s, 12s, 24s, then 30s
     const url = `ws://${config.host || "localhost"}:${config.port}`;
 
     function connect() {
-        cleanupSocket(io)
-      const sock = SocketIOClient(url, { transports: ["websocket"] });
+      reconnectTimer = null;
+      cleanupSocket(io)
+      // reconnection is handled below with a fresh socket; letting socket.io also
+      // reconnect this one could leave two live connections to Shinobi
+      const sock = SocketIOClient(url, { transports: ["websocket"], reconnection: false, forceNew: true });
       io = sock;
 
+      // a single failure can fire connect_error, error and disconnect - only the
+      // first one schedules a retry
       const reconnect = () => {
-          if(stayDisconnected)return;
+        if (stayDisconnected || reconnectTimer || io !== sock) return;
         if (++retry > MAX_RETRY){
             stayDisconnected = true;
             s.disconnectWebSocket()
             return plugLog("Max retries reached");
         }
-        setTimeout(connect, 3_000);
+        const delay = retryDelay();
+        plugLog(`Not connected to Shinobi at ${url}, retrying in ${delay / 1000}s (attempt ${retry})`);
+        reconnectTimer = setTimeout(connect, delay);
       };
 
+      let connectedAt = 0;
       sock.once("connect", () => {
         retry = 0;
+        connectedAt = Date.now();
         plugLog("Connected to host");
         sock.emit("ocv", { f: "init", plug: config.plug, notice: config.notice, type: config.type, connectionType: config.connectionType, pluginKey: config.key });
       });
@@ -328,7 +348,7 @@ module.exports = function makePluginBase(__dirname, cfg = {}) {
         // A repeating connect -> immediate "io server disconnect" -> retry
         // loop almost always means config.key here doesn't match this
         // plugin's entry in Shinobi's conf.json pluginKeys.
-        if (reason === "io server disconnect") {
+        if (reason === "io server disconnect" && Date.now() - connectedAt < 2_000) {
           plugLog(`Disconnected by host immediately after connecting - check that this plugin's key matches conf.json's pluginKeys."${config.plug}" on the Shinobi server.`);
         }
         reconnect();
