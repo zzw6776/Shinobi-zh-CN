@@ -737,7 +737,11 @@ module.exports = (s,config,lang) => {
             const outputFilters = []
             var videoCodec = e.details.detector_buffer_vcodec
             var liveStartIndex = e.details.detector_buffer_live_start_index || '-3'
-            var audioCodec = e.details.detector_buffer_acodec ? e.details.detector_buffer_acodec : 'auto'
+            // Blank means "No Audio" - it is what the monitor settings page shows for an
+            // unset field. Treating blank as auto put camera audio into the buffer of
+            // every older monitor that never chose audio, which costs a transcode per
+            // camera and broke their event recordings. Picking Auto still gets AAC.
+            var audioCodec = e.details.detector_buffer_acodec ? e.details.detector_buffer_acodec : 'no'
             const videoCodecisCopy = videoCodec === 'copy'
             const videoFps = !isNaN(parseFloat(e.details.stream_fps)) && e.details.stream_fps !== '0' ? parseFloat(e.details.stream_fps) : null
             const inputMap = buildInputMap(e,e.details.input_map_choices.detector_sip_buffer)
