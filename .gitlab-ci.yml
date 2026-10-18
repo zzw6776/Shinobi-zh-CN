@@ -2,7 +2,7 @@ docker-latest-build:
   image: docker:latest
   stage: build
   variables:
-    BASE_IMAGE: "node:20-bullseye-slim"
+    BASE_IMAGE: "node:20-bookworm-slim"
   services:
     - docker:dind
   before_script:
