@@ -616,11 +616,17 @@ module.exports = (s,config,lang) => {
             const videoLength = parseInt(monitorConfig.details.detector_send_video_length) || 10
             const recordingDirectory = s.getVideoDirectory(monitorConfig)
             const filename = `${fileTime}.mp4`
+            // Wait for the recording to finish, not for one ffmpeg process to exit:
+            // a recording that is waiting out a restart delay has no live process,
+            // and its old one already exited, so 'exit' would never fire.
+            await new Promise((resolve) => {
+                if(eventBasedRecording.finalized)return resolve();
+                if(!eventBasedRecording.finishWaiters)eventBasedRecording.finishWaiters = []
+                eventBasedRecording.finishWaiters.push(() => setTimeout(resolve, 1000))
+            })
+            if(eventBasedRecording.empty)return response;
             response.filename = filename
             response.filePath = `${recordingDirectory}${filename}`
-            await new Promise((resolve) => {
-                eventBasedRecording.process.once('exit', () => setTimeout(resolve, 1000))
-            })
             if(!getNonCut && !isNaN(videoLength)){
                 try{
                     const cutResponse = await cutVideoLength({ke: groupKey, mid: monitorId, filePath: response.filePath, cutLength: videoLength})
@@ -697,83 +703,79 @@ module.exports = (s,config,lang) => {
             if(activeMonitor.eventBasedRecording[fileTime].secondsRan < 15 * 1000 * 60){
                 clearTimeout(activeMonitor.eventBasedRecording[fileTime].timeout)
                 activeMonitor.eventBasedRecording[fileTime].timeout = setTimeout(function(){
-                    activeMonitor.eventBasedRecording[fileTime].allowEnd = true
-                    try{
-                        activeMonitor.eventBasedRecording[fileTime].process.stdin.setEncoding('utf8')
-                        activeMonitor.eventBasedRecording[fileTime].process.stdin.write('q')
-                    }catch(err){
-                        s.debugLog(err)
+                    const recording = activeMonitor.eventBasedRecording[fileTime]
+                    if(!recording)return;
+                    recording.allowEnd = true
+                    delete(recording.timeout)
+                    clearTimeout(recording.restartTimer)
+                    const proc = recording.process
+                    if(proc && proc.exitCode === null && proc.signalCode === null){
+                        try{
+                            proc.stdin.setEncoding('utf8')
+                            proc.stdin.write('q')
+                        }catch(err){
+                            s.debugLog(err)
+                        }
+                        proc.kill('SIGINT')
+                    }else if(recording.finish){
+                        // ffmpeg died and is waiting out its restart delay - nothing
+                        // running to stop, so wrap up whatever was recorded
+                        recording.finish()
                     }
-                    activeMonitor.eventBasedRecording[fileTime].process.kill('SIGINT')
-                    delete(activeMonitor.eventBasedRecording[fileTime].timeout)
                 }, detectorTimeoutSeconds)
             }
         }
         if(!activeMonitor.eventBasedRecording[fileTime].process){
-            activeMonitor.eventBasedRecording[fileTime].allowEnd = false;
+            const recording = activeMonitor.eventBasedRecording[fileTime]
+            recording.allowEnd = false;
+            recording.failedStarts = 0;
+            recording.audioDisabled = false;
             activeMonitor.eventBasedRecordingLastFileTime = `${fileTime}`;
-            const runRecord = function(){
-                var ffmpegError = ''
-                var error
-                var filename = fileTime + '.mp4'
-                let outputMap = `-map 0:0 `
-                const analyzeDuration = parseInt(monitorDetails.event_record_aduration) || 1000
-                const probeSize = parseInt(monitorDetails.event_record_probesize) || 32
-                const monitorHasNoAudioSource = monitorConfig.type === 'mjpeg' || monitorConfig.type === 'jpeg' || monitorConfig.type === 'socket';
-                let audioCodec = monitorDetails.detector_buffer_acodec;
-                if(!audioCodec || audioCodec === 'auto'){
-                    // the buffer carries whatever the camera sent (pcm_alaw, pcm_mulaw, etc)
-                    // and mp4 cannot hold most of those, so transcode rather than copy
-                    audioCodec = monitorHasNoAudioSource ? 'no' : 'aac'
+            const filename = fileTime + '.mp4'
+            const videoPath = s.getVideoDirectory(monitorConfig) + filename
+            const monitorHasNoAudioSource = monitorConfig.type === 'mjpeg' || monitorConfig.type === 'jpeg' || monitorConfig.type === 'socket';
+            // Matches the buffer's audio (libs/ffmpeg/builders.js): blank means no audio.
+            // Otherwise always transcode here: the tiny probe below (-probesize 32) can't
+            // learn the buffer's sample rate, so `-c:a copy` fails to write the mp4
+            // header and leaves a 0KB file. Decoding works it out. `copy` and auto
+            // become aac - with `copy` the buffer holds whatever the camera sent (AAC,
+            // G.711, ...), and `-c:a copy` into the mp4 failed exactly that way.
+            let audioCodec
+            switch(monitorDetails.detector_buffer_acodec){
+                case'no':case'':case null:case undefined:
+                    audioCodec = 'no'
+                break;
+                case'copy':case'auto':
+                    audioCodec = 'aac'
+                break;
+                default:
+                    audioCodec = monitorDetails.detector_buffer_acodec
+                break;
+            }
+            if(monitorHasNoAudioSource)audioCodec = 'no';
+            const finishRecording = function(){
+                if(recording.finished)return;
+                recording.finished = true
+                clearTimeout(recording.timeout)
+                clearTimeout(recording.restartTimer)
+                if(recording.process)recording.process.removeAllListeners()
+                if(!overlappingRecordings)delete(activeMonitor.eventBasedRecordingLastFileTime)
+                clearTimeout(activeMonitor.recordingChecker)
+                if(activeMonitor.eventBasedRecording[fileTime] === recording)delete(activeMonitor.eventBasedRecording[fileTime]);
+                const secondBefore = (parseInt(monitorDetails.detector_buffer_seconds_before) || 5) + 1
+                const endTime = moment(new Date()).subtract(secondBefore,'seconds')._d
+                const releaseWaiters = () => {
+                    recording.finalized = true
+                    const waiters = recording.finishWaiters || []
+                    delete(recording.finishWaiters)
+                    waiters.forEach((resolve) => resolve())
                 }
-                const noAudio = audioCodec === 'no';
-                s.userLog(d,{
-                    type: logTitleText,
-                    msg: lang["Started"]
-                })
-                for (var i = 0; i < s.onEventBasedRecordingStartExtensions.length; i++) {
-                    const extender = s.onEventBasedRecordingStartExtensions[i]
-                    extender(monitorConfig,filename)
-                }
-                //-t 00:'+s.timeObject(new Date(detector_timeout * 1000 * 60)).format('mm:ss')+'
-                if(!noAudio){
-                    outputMap += `-map 0:a:0? `
-                }
-                if(config.noEventBasedRecordingMaps)outputMap = '';
-                const secondsBefore = parseInt(monitorDetails.detector_buffer_seconds_before) || 5
-                let LiveStartIndex = parseInt(secondsBefore / 2 + 1)
-                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : `-c:a ${audioCodec}`} -strict -2 -strftime 1 -y "${s.getVideoDirectory(monitorConfig) + filename}"`
-                s.debugLog(ffmpegCommand)
-                activeMonitor.eventBasedRecording[fileTime].process = spawn(
-                    config.ffmpegDir,
-                    splitForFFMPEG(ffmpegCommand)
-                )
-                activeMonitor.eventBasedRecording[fileTime].process.stdout.on('data',function(data){
-                    s.userLog(d,{
-                        type: `${logTitleText} : STDOUT`,
-                        msg: data.toString()
-                    })
-                })
-                activeMonitor.eventBasedRecording[fileTime].process.stderr.on('data',function(data){
-                    s.userLog(d,{
-                        type: `${logTitleText} : STDERR`,
-                        msg: data.toString()
-                    })
-                })
-                activeMonitor.eventBasedRecording[fileTime].process.on('close',function(){
-                    if(!activeMonitor.eventBasedRecording[fileTime].allowEnd){
-                        s.userLog(d,{
-                            type: `${logTitleText} : ${lang["Detector Recording Process Exited Prematurely. Restarting."]}`,
-                            msg: ffmpegCommand
-                        })
-                        runRecord()
-                        return
-                    }
-                    const secondBefore = (parseInt(monitorDetails.detector_buffer_seconds_before) || 5) + 1
+                fs.stat(videoPath).then((stats) => {
+                    if(!stats.size)throw new Error('empty')
                     s.insertCompletedVideo(monitorConfig,{
                         file : filename,
                         objects: overlappingRecordings && d.details && d.details.matrices instanceof Array ? d.details.matrices : undefined,
-                        endTime: moment(new Date()).subtract(secondBefore,'seconds')._d,
+                        endTime: endTime,
                     },function(err,response){
                         const autoCompressionEnabled = !config.disableAutoCompressVideos && monitorDetails.auto_compress_videos === '1';
                         if(autoCompressionEnabled){
@@ -793,16 +795,117 @@ module.exports = (s,config,lang) => {
                         type: logTitleText,
                         msg: lang["Detector Recording Complete"]
                     });
+                    releaseWaiters()
+                }).catch(() => {
+                    // ffmpeg never wrote anything - don't list an empty 0KB video
+                    recording.empty = true
+                    releaseWaiters()
+                    fs.unlink(videoPath).catch(() => {})
                     s.userLog(d,{
                         type: logTitleText,
-                        msg: lang["Clear Recorder Process"]
+                        msg: lang["Detector Recording was empty and was not saved."] || 'Detector Recording was empty and was not saved.'
                     });
-                    const proc = activeMonitor.eventBasedRecording[fileTime].process
-                    proc.removeAllListeners()
-                    if(!overlappingRecordings)delete(activeMonitor.eventBasedRecordingLastFileTime)
-                    clearTimeout(activeMonitor.eventBasedRecording[fileTime].timeout)
-                    clearTimeout(activeMonitor.recordingChecker)
-                    delete(activeMonitor.eventBasedRecording[fileTime])
+                })
+                s.userLog(d,{
+                    type: logTitleText,
+                    msg: lang["Clear Recorder Process"]
+                });
+            }
+            recording.finish = finishRecording
+            // 1s, 2s, 5s, then 10s between restarts; give up after this many quick
+            // failures in a row. Restarting instantly with no limit spawned ffmpeg in
+            // a tight loop for the whole detector timeout when it could not start,
+            // pegging the CPU and truncating the file to 0KB on every attempt (-y).
+            const restartDelays = [1000, 2000, 5000, 10000]
+            const maxFailedStarts = 6
+            const runRecord = function(){
+                if(recording.finished || recording.allowEnd)return;
+                let ffmpegError = ''
+                // pick video by type, not position: over RTMP (e.g. Reolink) the camera's
+                // audio can be stream 0 of the buffer, and `-map 0:0` then recorded the
+                // audio track as "video" - or, with -an, nothing at all
+                let outputMap = `-map 0:v:0 `
+                const analyzeDuration = parseInt(monitorDetails.event_record_aduration) || 1000
+                const probeSize = parseInt(monitorDetails.event_record_probesize) || 32
+                const noAudio = audioCodec === 'no' || recording.audioDisabled;
+                s.userLog(d,{
+                    type: logTitleText,
+                    msg: lang["Started"]
+                })
+                for (var i = 0; i < s.onEventBasedRecordingStartExtensions.length; i++) {
+                    const extender = s.onEventBasedRecordingStartExtensions[i]
+                    extender(monitorConfig,filename)
+                }
+                //-t 00:'+s.timeObject(new Date(detector_timeout * 1000 * 60)).format('mm:ss')+'
+                if(!noAudio){
+                    // trailing ? keeps this working for cameras with no audio track
+                    outputMap += `-map 0:a:0? `
+                }
+                if(config.noEventBasedRecordingMaps)outputMap = '';
+                const secondsBefore = parseInt(monitorDetails.detector_buffer_seconds_before) || 5
+                let LiveStartIndex = parseInt(secondsBefore / 2 + 1)
+                const ffmpegCommand = `-threads 1 -loglevel warning -live_start_index -${LiveStartIndex} -analyzeduration ${analyzeDuration} -probesize ${probeSize} -re -i "${s.dir.streams+groupKey+'/'+monitorId}/detectorStream.m3u8" ${outputMap}-movflags faststart -fflags +genpts+igndts -c:v copy ${noAudio ? '-an' : `-c:a ${audioCodec}`} -strict -2 -strftime 1 -y "${videoPath}"`
+                s.debugLog(ffmpegCommand)
+                const proc = spawn(
+                    config.ffmpegDir,
+                    splitForFFMPEG(ffmpegCommand)
+                )
+                recording.process = proc
+                recording.processStarted = Date.now()
+                // writing "q" to stop it races ffmpeg exiting on its own, which raises
+                // EPIPE here asynchronously - try/catch around write() can't catch that
+                proc.stdin.on('error',function(err){
+                    s.debugLog(`${logTitleText} : stdin`,err.code || err)
+                })
+                proc.stdout.on('data',function(data){
+                    s.userLog(d,{
+                        type: `${logTitleText} : STDOUT`,
+                        msg: data.toString()
+                    })
+                })
+                proc.stderr.on('data',function(data){
+                    ffmpegError = (ffmpegError + data.toString()).slice(-2000)
+                    s.userLog(d,{
+                        type: `${logTitleText} : STDERR`,
+                        msg: data.toString()
+                    })
+                })
+                proc.on('close',function(){
+                    if(recording.process !== proc)return;
+                    if(recording.allowEnd){
+                        finishRecording()
+                        return
+                    }
+                    // a process that ran a while was working - only count quick failures
+                    const failedQuickly = Date.now() - recording.processStarted <= 30000
+                    if(!failedQuickly)recording.failedStarts = 0;
+                    ++recording.failedStarts
+                    if(!noAudio && failedQuickly){
+                        // Camera audio that ffmpeg can't probe, decode or mux is the usual
+                        // reason this dies right away, so keep the video and drop audio.
+                        recording.audioDisabled = true
+                    }
+                    if(recording.failedStarts > maxFailedStarts){
+                        s.userLog(d,{
+                            type: `${logTitleText} : ${lang["Detector Recording Failed"] || 'Detector Recording Failed'}`,
+                            msg: ffmpegError || ffmpegCommand
+                        })
+                        recording.allowEnd = true
+                        finishRecording()
+                        return
+                    }
+                    const restartDelay = restartDelays[Math.min(recording.failedStarts - 1, restartDelays.length - 1)]
+                    s.userLog(d,{
+                        type: `${logTitleText} : ${lang["Detector Recording Process Exited Prematurely. Restarting."]}`,
+                        msg: {
+                            attempt: recording.failedStarts,
+                            restartingInSeconds: restartDelay / 1000,
+                            audio: recording.audioDisabled ? 'disabled for retry' : (noAudio ? 'none' : audioCodec),
+                            error: ffmpegError,
+                            command: ffmpegCommand,
+                        }
+                    })
+                    recording.restartTimer = setTimeout(runRecord, restartDelay)
                 })
             }
             runRecord()
@@ -812,10 +915,18 @@ module.exports = (s,config,lang) => {
         const activeMonitor = s.group[e.ke].activeMonitors[e.id]
         const eventBasedRecordings = activeMonitor.eventBasedRecording;
         for(const fileTime in eventBasedRecordings){
-            if(eventBasedRecordings[fileTime].process){
-                clearTimeout(eventBasedRecordings[fileTime].timeout)
-                eventBasedRecordings[fileTime].allowEnd = true
-                eventBasedRecordings[fileTime].process.kill('SIGTERM')
+            const recording = eventBasedRecordings[fileTime]
+            const proc = recording.process
+            if(proc){
+                clearTimeout(recording.timeout)
+                clearTimeout(recording.restartTimer)
+                recording.allowEnd = true
+                if(proc.exitCode === null && proc.signalCode === null){
+                    proc.kill('SIGTERM')
+                }else if(recording.finish){
+                    // between restarts - nothing left running to stop
+                    recording.finish()
+                }
             }
         }
         // var stackedProcesses = s.group[e.ke].activeMonitors[e.id].eventBasedRecording.stackable
