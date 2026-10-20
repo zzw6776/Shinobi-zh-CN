@@ -38,16 +38,24 @@ $(document).ready(async function(){
                 </div>
             </div>
         </div>`
-        $('.disk-indicator-bars').append(html)
+        return $(html).appendTo('.disk-indicator-bars')
+    }
+    function cacheIndicator(el){
+        return {
+            value: el.find('.value'),
+            percent: el.find('.indicator-percent'),
+            progressBar: el.find('.progress-bar'),
+        }
     }
     function drawAddStorageIndicators(peerConnectKey){
+        // storage names can contain spaces, so keep the element instead of looking it up by an id selector later
         $.each(addStorage,function(n,storage){
-            drawIndicatorBar({
+            loadedIndicators[storage.name] = cacheIndicator(drawIndicatorBar({
                 multiple: true,
                 icon: 'hdd-o',
-                name: storage.name,
+                id: `indicator-addStorage-${n}`,
                 label: `<span style="text-transform:capitalize">${storage.name}</span> : <span class="value"></span>`,
-            })
+            }))
         })
     }
     function drawCloudStorageIndicators(peerConnectKey){
@@ -65,19 +73,8 @@ $(document).ready(async function(){
     }
     function drawIndicatorBars(){
         drawAddStorageIndicators()
-        cacheAddStorageIndicators()
         drawCloudStorageIndicators()
         cacheUploaderIndicators()
-    }
-    function cacheAddStorageIndicators(){
-        $.each(addStorage,function(n,storage){
-            var el = $(`#indicator-${storage.name}`)
-            loadedIndicators[storage.name] = {
-                value: el.find('.value'),
-                percent: el.find('.indicator-percent'),
-                progressBar: el.find('.progress-bar'),
-            }
-        })
     }
     function cacheUploaderIndicators(){
         $.each(uploaders,function(uploaderId,storage){
@@ -243,6 +240,7 @@ $(document).ready(async function(){
                 if(d.addStorage){
                     $.each(d.addStorage,function(n, { name, sizeLimit, usedSpace, usedSpaceVideos, usedSpaceTimelapseFrames }){
                         var diskIndicator = loadedIndicators[name]
+                        if(!diskIndicator)return;
                         var diskIndicatorBars = diskIndicator.progressBar
                         setOtherDiskUsed({
                              name, sizeLimit, usedSpace, usedSpaceVideos, usedSpaceTimelapseFrames,
