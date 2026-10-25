@@ -22,13 +22,13 @@ node tools/auditChineseLanguage.mjs
 
 ## 自动构建
 
-推送 `dev` 分支中与中文镜像相关的文件后，GitHub Actions 会构建并发布 Docker Hub 公开镜像：
+推送 `dev` 分支中与中文镜像相关的文件后，GitHub Actions 会构建并发布公开 GHCR 镜像：
 
 ```text
-zzw6776/shinobi-zh-cn:latest
-zzw6776/shinobi-zh-cn:sha-<commit>
+ghcr.io/zzw6776/shinobi-zh-cn:latest
+ghcr.io/zzw6776/shinobi-zh-cn:sha-<commit>
 ```
 
-构建方式与 EcoPaste 一致：GitHub Actions 使用仓库变量 `DOCKERHUB_USERNAME` 和仓库密钥 `DOCKERHUB_TOKEN` 登录 Docker Hub，服务器只拉取镜像并重建容器，不在服务器本地构建。
+GitHub Actions 使用仓库自带的 `GITHUB_TOKEN` 发布镜像；服务器只拉取镜像并重建容器，不在服务器本地构建。
 
 镜像基于已经验证的官方 ShinobiDocker v2 固定摘要，只覆盖完整中文文件，并保留当前服务器要求的 MySQL TLS、默认中文和启动日志密码脱敏配置。
