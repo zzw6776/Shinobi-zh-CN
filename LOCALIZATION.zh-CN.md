@@ -10,7 +10,15 @@
 node tools/buildChineseLanguage.mjs
 ```
 
-生成后必须检查 JSON、键完整性和常用界面词，再提交。自动翻译只能作为完整初稿，具体页面发现不自然的表达时应直接修正 `languages/zh.json`。
+自动翻译只用于生成完整初稿。术语和人工审校结果保存在 `tools/buildChineseLanguage.mjs` 的人工覆盖表中，不能只修改生成后的 `languages/zh.json`，否则下次生成时会丢失。
+
+生成后必须运行审计：
+
+```bash
+node tools/auditChineseLanguage.mjs
+```
+
+审计会检查 2490 个词条的键覆盖、空值、HTML 标签、链接、`class` 属性、`<code>` 技术内容、变量占位符、品牌误译和核心术语。GitHub Actions 会在构建镜像前执行同一审计，审计失败时不会发布镜像。
 
 ## 自动构建
 

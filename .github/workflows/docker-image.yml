@@ -9,6 +9,8 @@ on:
       - Dockerfile.zh-CN
       - languages/en_CA.json
       - languages/zh.json
+      - tools/auditChineseLanguage.mjs
+      - tools/buildChineseLanguage.mjs
   workflow_dispatch:
 
 permissions:
@@ -29,6 +31,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Audit Simplified Chinese language pack
+        run: node tools/auditChineseLanguage.mjs
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
