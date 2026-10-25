@@ -1,6 +1,6 @@
-# Shinobi 简体中文私有构建
+# Shinobi 简体中文构建
 
-本仓库从 Shinobi Systems 的 `dev` 分支同步，仅供仓库所有者个人部署使用。Shinobi Pro 使用自定义许可证，不是 MIT、Apache 或 GPL 等标准开源许可证；不要把本仓库或生成的容器镜像改为公开可见，也不要移除上游版权声明。
+本仓库从 Shinobi Systems 的 `dev` 分支同步，仅供仓库所有者个人部署使用。Shinobi Pro 使用自定义许可证，不是 MIT、Apache 或 GPL 等标准开源许可证；使用和分发时必须遵守上游许可证，且不得移除上游版权声明。
 
 ## 中文文件
 
@@ -22,11 +22,13 @@ node tools/auditChineseLanguage.mjs
 
 ## 自动构建
 
-推送 `dev` 分支中与中文镜像相关的文件后，GitHub Actions 会构建并发布私有镜像：
+推送 `dev` 分支中与中文镜像相关的文件后，GitHub Actions 会构建并发布 Docker Hub 公开镜像：
 
 ```text
-ghcr.io/zzw6776/shinobi-zh-cn:latest
-ghcr.io/zzw6776/shinobi-zh-cn:sha-<commit>
+zzw6776/shinobi-zh-cn:latest
+zzw6776/shinobi-zh-cn:sha-<commit>
 ```
+
+构建方式与 EcoPaste 一致：GitHub Actions 使用仓库变量 `DOCKERHUB_USERNAME` 和仓库密钥 `DOCKERHUB_TOKEN` 登录 Docker Hub，服务器只拉取镜像并重建容器，不在服务器本地构建。
 
 镜像基于已经验证的官方 ShinobiDocker v2 固定摘要，只覆盖完整中文文件，并保留当前服务器要求的 MySQL TLS、默认中文和启动日志密码脱敏配置。
