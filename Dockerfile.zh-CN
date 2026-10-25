@@ -1,0 +1,24 @@
+ARG UPSTREAM_IMAGE=registry.gitlab.com/shinobi-systems/shinobidocker@sha256:7afc08a537d96650145fdcfdd989040896fd023d13624b341ae9db39e1946ab6
+FROM ${UPSTREAM_IMAGE}
+
+ENV SHINOBI_LANGUAGE=zh
+
+COPY languages/zh.json /opt/shinobi/languages/zh.json
+
+# Validate that the Chinese file covers every term used by the pinned image.
+RUN node -e 'const fs=require("fs");const base=JSON.parse(fs.readFileSync("/opt/shinobi/languages/en_CA.json"));const zh=JSON.parse(fs.readFileSync("/opt/shinobi/languages/zh.json"));const missing=Object.keys(base).filter((key)=>typeof zh[key]!=="string"||!zh[key]);if(missing.length){console.error(missing);process.exit(1)};console.log(`Chinese translations: ${Object.keys(zh).length}; required by image: ${Object.keys(base).length}`)'
+
+# Keep the server's internal_app account on mandatory TLS, make Chinese the
+# system default, and prevent the upstream configuration tool from writing the
+# database password into Docker logs.
+RUN sed -i '/^DATABASE_CONFIG=/c\
+DATABASE_CONFIG="{\\"host\\":\\"$DB_HOST\\",\\"user\\":\\"$DB_USER\\",\\"password\\":\\"$DB_PASSWORD\\",\\"database\\":\\"$DB_DATABASE\\",\\"port\\":$DB_PORT,\\"ssl\\":{\\"rejectUnauthorized\\":false}}"' /usr/local/bin/shinobi-entrypoint.sh \
+    && sed -i '/^CONFIG_ARGS=(/a\    language="${SHINOBI_LANGUAGE:-zh}"' /usr/local/bin/shinobi-entrypoint.sh \
+    && sed -i '/^node tools\/modifyConfiguration\.js /c\
+node tools/modifyConfiguration.js "${CONFIG_ARGS[@]}" | sed -E '\''s/("password"[[:space:]]*:[[:space:]]*")[^"]*/\\1<redacted>/g'\''' /usr/local/bin/shinobi-entrypoint.sh \
+    && grep -Fq '\"ssl\":{\"rejectUnauthorized\":false}' /usr/local/bin/shinobi-entrypoint.sh \
+    && grep -Fq 'language="${SHINOBI_LANGUAGE:-zh}"' /usr/local/bin/shinobi-entrypoint.sh \
+    && grep -Fq '<redacted>' /usr/local/bin/shinobi-entrypoint.sh
+
+LABEL org.opencontainers.image.source="https://github.com/zzw6776/Shinobi-zh-CN" \
+      org.opencontainers.image.description="Private Simplified Chinese localization of Shinobi for personal use"

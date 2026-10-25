@@ -12,6 +12,7 @@ shinobi.sqlite
 dist
 ._*
 generatedLanguageFiles
+languages/zh.pending.json
 faces
 unknownFaces
 .idea/
